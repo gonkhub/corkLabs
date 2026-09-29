@@ -5,9 +5,15 @@ extends RefCounted
 
 const TAKES_DIR := "res://takes"
 
+## Where takes are read and written. Tests point this somewhere else so
+## they never touch your real takes.
+static var takes_dir := TAKES_DIR
+
 
 # Every take file, sorted by path (timestamps sort oldest -> newest).
-static func list(dir := TAKES_DIR) -> PackedStringArray:
+static func list(dir := "") -> PackedStringArray:
+	if dir.is_empty():
+		dir = takes_dir
 	var out := PackedStringArray()
 	_collect(dir, out)
 	out.sort()
@@ -44,7 +50,7 @@ static func save(take: PerformanceTake, path: String) -> Error:
 # A new timestamped path, e.g. res://takes/take_2026-09-29T14-05-33.res
 static func new_path(sub_dir := "") -> String:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
-	var dir := TAKES_DIR if sub_dir.is_empty() else TAKES_DIR.path_join(sub_dir)
+	var dir := takes_dir if sub_dir.is_empty() else takes_dir.path_join(sub_dir)
 	var path := dir.path_join("take_%s.res" % stamp)
 	var n := 2
 	while FileAccess.file_exists(path):

@@ -7,6 +7,10 @@ extends RefCounted
 const ROBOTS_DIR := "res://robots"
 const ANIMATIONS_DIR := "res://animations"
 
+## Where baked clips go. Tests point this somewhere else so they never
+## touch your real animation libraries.
+static var animations_dir := ANIMATIONS_DIR
+
 
 static func ids() -> PackedStringArray:
 	var out := PackedStringArray()
@@ -35,7 +39,7 @@ static func instantiate(id: String) -> RobotRig:
 
 # Where a robot's baked clips live.
 static func animation_dir(id: String) -> String:
-	return "%s/%s" % [ANIMATIONS_DIR, id]
+	return "%s/%s" % [animations_dir, id]
 
 
 # The AnimationLibrary that collects all of a robot's clips.

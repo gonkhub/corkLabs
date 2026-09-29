@@ -8,6 +8,11 @@ var failures := 0
 
 # _initialize runs once the scene tree is live (so the recorder's _ready runs).
 func _initialize() -> void:
+	# Work in a scratch area so real takes and clips are never touched.
+	TakeStore.takes_dir = "user://test_takes"
+	RobotLibrary.animations_dir = "user://test_animations"
+	for dir in [TakeStore.takes_dir, RobotLibrary.animations_dir]:
+		_wipe(ProjectSettings.globalize_path(dir))
 	var before := TakeStore.list().size()
 	var rec: Node3D = (load("res://recorder/recorder.tscn") as PackedScene).instantiate()
 	get_root().add_child(rec)
@@ -102,6 +107,16 @@ func _pose(rec: Node3D, t: float) -> void:
 	rec.head.transform = Transform3D(Basis(Vector3.UP, sin(t) * 0.4), Vector3(0.03 * sin(t), 1.62, 0))
 	rec.left_hand.transform = Transform3D(Basis(), Vector3(-0.3, 1.1 + 0.2 * sin(t * 3.0), -0.3))
 	rec.right_hand.transform = Transform3D(Basis(Vector3.RIGHT, t), Vector3(0.3, 1.1, -0.35 - 0.1 * sin(t * 2.0)))
+
+
+static func _wipe(path: String) -> void:
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	for d in DirAccess.get_directories_at(path):
+		_wipe(path.path_join(d))
+	for f in DirAccess.get_files_at(path):
+		DirAccess.remove_absolute(path.path_join(f))
+	DirAccess.remove_absolute(path)
 
 
 func _check(ok: bool, what: String) -> void:
