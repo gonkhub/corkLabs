@@ -1,12 +1,16 @@
-[gd_resource type="AnimationLibrary" load_steps=4 format=3]
+[gd_resource type="AnimationLibrary" load_steps=6 format=3]
 
 [ext_resource type="Animation" path="res://animations/hauler/idle_demo.res" id="1_0w7fd"]
 [ext_resource type="Animation" path="res://animations/hauler/act_reach_demo.res" id="2_g0nyh"]
 [ext_resource type="Animation" path="res://animations/hauler/act_wave_demo.res" id="3_m3kf5"]
+[ext_resource type="Animation" path="res://animations/hauler/take_2026-09-29T14-13-10.res" id="4_5p6pa"]
+[ext_resource type="Animation" path="res://animations/hauler/take_2026-09-29T14-15-39_punch_head.res" id="5_36uel"]
 
 [resource]
 _data = {
 "act_reach_demo": ExtResource("2_g0nyh"),
 "act_wave_demo": ExtResource("3_m3kf5"),
-"idle_demo": ExtResource("1_0w7fd")
+"idle_demo": ExtResource("1_0w7fd"),
+"take_2026-09-29T14-13-10": ExtResource("4_5p6pa"),
+"take_2026-09-29T14-15-39_punch_head": ExtResource("5_36uel")
 }

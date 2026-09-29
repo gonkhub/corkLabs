@@ -1,12 +1,18 @@
-[gd_resource type="AnimationLibrary" load_steps=4 format=3]
+[gd_resource type="AnimationLibrary" load_steps=7 format=3]
 
 [ext_resource type="Animation" path="res://animations/tinker/idle_demo.res" id="1_gc21k"]
 [ext_resource type="Animation" path="res://animations/tinker/act_reach_demo.res" id="2_lilh6"]
 [ext_resource type="Animation" path="res://animations/tinker/act_wave_demo.res" id="3_ufhau"]
+[ext_resource type="Animation" path="res://animations/tinker/take_2026-09-29T14-16-54.res" id="4_rr41k"]
+[ext_resource type="Animation" path="res://animations/tinker/take_2026-09-29T14-17-25_punch_head.res" id="5_yb1md"]
+[ext_resource type="Animation" path="res://animations/tinker/take_2026-09-29T14-18-24.res" id="6_itorh"]
 
 [resource]
 _data = {
 "act_reach_demo": ExtResource("2_lilh6"),
 "act_wave_demo": ExtResource("3_ufhau"),
-"idle_demo": ExtResource("1_gc21k")
+"idle_demo": ExtResource("1_gc21k"),
+"take_2026-09-29T14-16-54": ExtResource("4_rr41k"),
+"take_2026-09-29T14-17-25_punch_head": ExtResource("5_yb1md"),
+"take_2026-09-29T14-18-24": ExtResource("6_itorh")
 }
