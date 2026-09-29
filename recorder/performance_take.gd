@@ -14,6 +14,17 @@ const STRIDE := 7
 @export var created := ""   # date and time the take was recorded
 @export var note := ""      # free text, for you
 
+## Which robot this take was performed for (folder name under res://robots/).
+@export var robot_id := ""
+## Name of the baked animation clip, e.g. "idle_scan" or "act_weld".
+## Empty = use the take's file name.
+@export var clip_name := ""
+## Your standing eye height, measured during the countdown. Robots measure
+## head movement relative to this. 0 = unknown (the robot's default is used).
+@export var eye_height := 0.0
+## Cleanup applied before baking. Editable any time; the raw data above never changes.
+@export var recipe: CleanupRecipe
+
 # Seconds since the take started, one per frame. Frames are not perfectly
 # evenly spaced (the headset can drop frames), which is why we keep these.
 @export var sample_times := PackedFloat32Array()
