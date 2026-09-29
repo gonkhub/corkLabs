@@ -36,12 +36,11 @@ func _ready() -> void:
 	if FlatScreen.relaunch_if_xr(self):
 		return
 	take_paths = TakeStore.list()
-	# Start on the newest real take if there is one.
-	take_index = take_paths.size() - 1
-	for i in range(take_paths.size() - 1, -1, -1):
-		if not take_paths[i].contains("/demo/"):
-			take_index = i
-			break
+	# Start on the take asked for (-- --take <path>, used by the naming
+	# window's Preview button), else the newest real take.
+	var args := OS.get_cmdline_user_args()
+	var wanted := args[args.find("--take") + 1] if args.find("--take") >= 0 and args.find("--take") + 1 < args.size() else TakeStore.newest()
+	take_index = maxi(take_paths.find(wanted), 0) if not wanted.is_empty() else take_paths.size() - 1
 	var ids := RobotLibrary.ids()
 	for i in ids.size():
 		var holder := Node3D.new()
