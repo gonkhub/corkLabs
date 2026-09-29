@@ -86,13 +86,12 @@ mesh = SubResource("Mark_mesh")
 surface_material_override/0 = SubResource("Mark_mat")
 
 [node name="Hud" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.75, -1.7)
-pixel_size = 0.0016
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -1.2)
+pixel_size = 0.0013
 billboard = 1
 text = "READY"
 font_size = 40
 outline_size = 10
-horizontal_alignment = 0
 
 [node name="Stage" type="Node3D" parent="."]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 2.5, -2.2)
