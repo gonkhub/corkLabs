@@ -1,3 +1,6 @@
 # Godot's cache folder. It is rebuilt automatically, so never commit it.
 .godot/
 *.tmp
+
+# Local notes for Claude (not shared)
+CLAUDE.md
