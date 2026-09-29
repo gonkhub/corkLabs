@@ -78,6 +78,13 @@ static func apply(entries: Array) -> PackedStringArray:
 			Baker.remove_from_library(robot, old_clip)
 			_retarget_references(path, dest)
 			lines.append("DISCARDED %s -> %s" % [path.get_file(), dest])
+			# A discarded punch-in comp takes its raw punch recording with it.
+			if take.overdub_of.size() >= 2 and path.contains("_punch_") and FileAccess.file_exists(take.overdub_of[1]):
+				var src := take.overdub_of[1]
+				var src_dest := _unique_path(TakeStore.takes_dir.path_join(DISCARD_DIR).path_join(src.get_file()))
+				_move(src, src_dest)
+				_retarget_references(src, src_dest)
+				lines.append("DISCARDED %s -> %s" % [src.get_file(), src_dest])
 			continue
 
 		var clip := make_clip_name(e.get("type", ""), e.get("name", ""))

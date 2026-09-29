@@ -73,6 +73,16 @@ func _init() -> void:
 		"punch-in source moved next to its comp (%s)" % c2.overdub_of[1])
 	_check(TakeNaming.unnamed_takes().is_empty(), "nothing left unnamed")
 
+	# Discarding a punch-in comp also discards its raw punch recording.
+	var src2 := _record("", "take_2026-09-29T11-00-00.res", FakePerformance.wave, "2026-09-29T11:00:00")
+	var comp2_take := TakeComp.comp(TakeStore.load_take(scan), TakeStore.load_take(src2), PackedStringArray(["left"]))
+	comp2_take.overdub_of = PackedStringArray([scan, src2])
+	var comp2 := TakeStore.takes_dir.path_join("take_2026-09-29T11-00-00_punch_left.res")
+	TakeStore.save(comp2_take, comp2)
+	TakeNaming.apply([{"path": comp2, "action": "discard"}])
+	_check(not FileAccess.file_exists(src2) and FileAccess.file_exists(TakeStore.takes_dir.path_join("_discarded/" + src2.get_file())),
+		"discarding a comp moves its raw punch recording to _discarded too")
+
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
 
