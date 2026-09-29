@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene load_steps=14 format=3 uid="uid://mknefea6vxy"]
 
 [ext_resource type="Script" path="res://game/robot_lab.gd" id="1_lab"]
 
@@ -32,16 +32,6 @@ albedo_color = Color(0.4, 0.41, 0.43, 1)
 metallic = 0.8
 roughness = 0.4
 
-[sub_resource type="BoxMesh" id="Mesh_head"]
-size = Vector3(0.18, 0.1, 0.1)
-
-[sub_resource type="BoxMesh" id="Mesh_hand"]
-size = Vector3(0.05, 0.05, 0.1)
-
-[sub_resource type="StandardMaterial3D" id="Mat_ghost"]
-transparency = 1
-albedo_color = Color(0.3, 0.9, 1, 0.5)
-
 [sub_resource type="CylinderMesh" id="Mesh_mark"]
 top_radius = 0.25
 bottom_radius = 0.25
@@ -49,6 +39,16 @@ height = 0.005
 
 [sub_resource type="StandardMaterial3D" id="Mat_mark"]
 albedo_color = Color(1, 0.45, 0.05, 1)
+
+[sub_resource type="BoxMesh" id="Mesh_head"]
+size = Vector3(0.18, 0.1, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_ghost"]
+transparency = 1
+albedo_color = Color(0.3, 0.9, 1, 0.5)
+
+[sub_resource type="BoxMesh" id="Mesh_hand"]
+size = Vector3(0.05, 0.05, 0.1)
 
 [node name="RobotLab" type="Node3D"]
 script = ExtResource("1_lab")

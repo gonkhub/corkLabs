@@ -31,7 +31,8 @@ var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	FlatScreen.disable_xr(get_viewport())
+	if FlatScreen.relaunch_if_xr(self):
+		return
 	_rng.randomize()
 	_use_camera(0)
 	hauler_rider.arrived.connect(_on_hauler_arrived)

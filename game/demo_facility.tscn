@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene load_steps=18 format=3 uid="uid://633fgcqhe26g"]
 
 [ext_resource type="Script" path="res://game/demo_director.gd" id="1_director"]
 [ext_resource type="Script" path="res://game/rail_rider.gd" id="2_rider"]
@@ -39,15 +39,10 @@ height = 2.2
 [sub_resource type="StandardMaterial3D" id="Mat_pod"]
 transparency = 1
 albedo_color = Color(0.3, 0.9, 0.55, 0.35)
+roughness = 0.1
 emission_enabled = true
 emission = Color(0.2, 0.9, 0.5, 1)
 emission_energy_multiplier = 0.6
-roughness = 0.1
-
-[sub_resource type="StandardMaterial3D" id="Mat_rail"]
-albedo_color = Color(0.4, 0.41, 0.43, 1)
-metallic = 0.85
-roughness = 0.35
 
 [sub_resource type="Curve3D" id="Curve_loop"]
 _data = {
@@ -55,6 +50,11 @@ _data = {
 "tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 point_count = 9
+
+[sub_resource type="StandardMaterial3D" id="Mat_rail"]
+albedo_color = Color(0.4, 0.41, 0.43, 1)
+metallic = 0.85
+roughness = 0.35
 
 [sub_resource type="Curve3D" id="Curve_line"]
 _data = {
@@ -68,6 +68,14 @@ size = Vector3(8.6, 0.14, 0.22)
 
 [sub_resource type="ShaderMaterial" id="Mat_cctv"]
 shader = ExtResource("5_cctv")
+shader_parameter/tint = Vector3(0.82, 1, 0.9)
+shader_parameter/desaturate = 0.55
+shader_parameter/scanline_strength = 0.18
+shader_parameter/scanline_count = 360.0
+shader_parameter/grain = 0.06
+shader_parameter/vignette = 0.9
+shader_parameter/fringe = 0.0015
+shader_parameter/band_strength = 0.05
 
 [node name="DemoFacility" type="Node3D"]
 script = ExtResource("1_director")
@@ -84,15 +92,15 @@ shadow_enabled = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 3.8, 0)
 light_color = Color(1, 0.93, 0.8, 1)
 light_energy = 2.0
-omni_range = 7.0
 shadow_enabled = true
+omni_range = 7.0
 
 [node name="Lamp2" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 3.8, 0)
 light_color = Color(1, 0.93, 0.8, 1)
 light_energy = 2.0
-omni_range = 7.0
 shadow_enabled = true
+omni_range = 7.0
 
 [node name="Floor" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_floor")
@@ -151,10 +159,16 @@ mode = 2
 path_node = NodePath("..")
 path_interval_type = 0
 path_interval = 0.25
+path_simplify_angle = 0.0
 path_rotation = 2
+path_local = false
+path_continuous_u = true
+path_u_distance = 1.0
+path_joined = false
 material = SubResource("Mat_rail")
 
 [node name="Rider" type="PathFollow3D" parent="TinkerRail"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -4, 0, -3)
 script = ExtResource("2_rider")
 max_speed = 0.8
 acceleration = 0.6
@@ -167,7 +181,6 @@ swing_damping = 1.8
 [node name="Tinker" type="Node3D" parent="TinkerRail/Rider/Swing"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
 script = ExtResource("3_actor")
-robot_id = "tinker"
 
 [node name="HaulerRail" type="Path3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0.8)
@@ -179,6 +192,7 @@ mesh = SubResource("Mesh_beam")
 surface_material_override/0 = SubResource("Mat_rail")
 
 [node name="Rider" type="PathFollow3D" parent="HaulerRail"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -4, 0, 0)
 loop = false
 script = ExtResource("2_rider")
 max_speed = 0.7
