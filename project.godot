@@ -15,6 +15,11 @@ config/description="Rail-robot facility game. VR puppeteering pipeline lives in 
 run/main_scene="res://recorder/recorder.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 
+[autoload]
+
+Facility="*res://game/sim/facility.gd"
+DevOverlay="*res://game/dev/dev_overlay.gd"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/corklabs_pipeline/plugin.cfg")
