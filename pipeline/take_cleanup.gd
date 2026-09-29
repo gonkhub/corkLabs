@@ -250,6 +250,7 @@ static func _to_take(source: PerformanceTake, frames: Array[PerformanceFrame], r
 	t.robot_id = source.robot_id
 	t.clip_name = source.clip_name
 	t.eye_height = source.eye_height
+	t.overdub_of = source.overdub_of
 	t.recipe = recipe
 	for i in frames.size():
 		t.append(i / rate, frames[i])

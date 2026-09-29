@@ -24,6 +24,9 @@ const STRIDE := 7
 @export var eye_height := 0.0
 ## Cleanup applied before baking. Editable any time; the raw data above never changes.
 @export var recipe: CleanupRecipe
+## Takes that were playing along while this one was recorded (all started
+## at the same moment as this take).
+@export var overdub_of := PackedStringArray()
 
 # Seconds since the take started, one per frame. Frames are not perfectly
 # evenly spaced (the headset can drop frames), which is why we keep these.
