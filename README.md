@@ -28,6 +28,12 @@ First-time headset setup: see [SETUP.md](SETUP.md).
 | `game/demo_facility.tscn` | open it, **F6** | Robots working on rails, seen through security cameras |
 | `recorder/hello_vr.tscn` | open it, **F6** | Phase 1 headset test (cubes + input readouts) |
 
+Robot Lab and the demo run on the monitor. Because VR is on for the whole
+project, they restart themselves once with VR off (`game/flat_screen.gd`).
+The restarted game isn't attached to the editor, so its prints and errors go
+to `%APPDATA%\Godot\app_userdata\corkLabs\logs\godot.log`, not the Output
+panel, and you close it with its window's X rather than the editor's Stop button.
+
 ## Recording (in the headset)
 
 X/Y/A/B are controls only while *not* recording. During a take they're
