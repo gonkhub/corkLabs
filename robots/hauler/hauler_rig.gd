@@ -12,6 +12,9 @@ extends RobotRig
 @export var elbow_hint_right := Vector3(0.7, -0.3, 0.6)
 ## How far above the body's centre the hanger rod attaches.
 @export var hanger_attach_height := 0.28
+## Where the right claw rests relative to the neck when you're relaxed
+## (left is mirrored): out front, ready to work.
+@export var hand_rest := Vector3(0.5, -0.5, -0.45)
 
 var hanger: Node3D
 var body: Node3D
@@ -91,7 +94,8 @@ func drive(f: PerformanceFrame, dt: float) -> void:
 	var body_up := body_q * Vector3.UP
 	for side in ["left", "right"]:
 		var arm: Dictionary = arms[side]
-		var target := follow_vec3(side + "_hand", dt, anchor + hand_offset(f, side),
+		var rest := Vector3(-hand_rest.x, hand_rest.y, hand_rest.z) if side == "left" else hand_rest
+		var target := follow_vec3(side + "_hand", dt, anchor + hand_offset(f, side, rest),
 			p.hand_frequency, p.hand_damping, p.hand_response)
 		var hand_q := follow_quat(side + "_hand_rot", dt, hand_rotation(f, side),
 			p.hand_frequency * 1.5, p.hand_damping, p.hand_response)

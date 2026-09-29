@@ -69,10 +69,17 @@ func head_rotation(f: PerformanceFrame) -> Quaternion:
 	return scale_rotation(f.head.basis.get_rotation_quaternion(), profile.amplitude)
 
 
-# A hand's position relative to your head, scaled to the robot's reach.
-func hand_offset(f: PerformanceFrame, side: String) -> Vector3:
+# Where the robot's hand should go, relative to its anchor (core or neck).
+# Your hand's offset from your head is compared with your relaxed rest pose;
+# only the DIFFERENCE is scaled by reach_scale and added to the robot's own
+# rest pose. So a long-armed robot's arms don't dangle to the floor just
+# because yours hang at your sides; they exaggerate what you actually do.
+func hand_offset(f: PerformanceFrame, side: String, robot_rest: Vector3) -> Vector3:
 	var hand: Transform3D = f.get(side)
-	return (hand.origin - f.head.origin) * profile.reach_scale
+	var rest := profile.performer_rest_hand
+	if side == "left":
+		rest.x = -rest.x
+	return robot_rest + ((hand.origin - f.head.origin) - rest) * profile.reach_scale
 
 
 func hand_rotation(f: PerformanceFrame, side: String) -> Quaternion:

@@ -10,6 +10,9 @@ extends RobotRig
 ## Shortest and longest the telescoping arms can get, in meters.
 @export var min_reach := 0.12
 @export var max_reach := 0.85
+## Where the right hand rests relative to the core when you're relaxed
+## (left is mirrored).
+@export var hand_rest := Vector3(0.24, -0.3, -0.22)
 
 var core: Node3D
 var eye: Node3D
@@ -70,7 +73,8 @@ func drive(f: PerformanceFrame, dt: float) -> void:
 	# the core), telescope to the distance, and copy your wrist's rotation.
 	for side in ["left", "right"]:
 		var arm: Dictionary = arms[side]
-		var target := follow_vec3(side + "_hand", dt, core_pos + hand_offset(f, side),
+		var rest := Vector3(-hand_rest.x, hand_rest.y, hand_rest.z) if side == "left" else hand_rest
+		var target := follow_vec3(side + "_hand", dt, core_pos + hand_offset(f, side, rest),
 			p.hand_frequency, p.hand_damping, p.hand_response)
 		var hand_q := follow_quat(side + "_hand_rot", dt, hand_rotation(f, side),
 			p.hand_frequency * 1.5, p.hand_damping, p.hand_response)

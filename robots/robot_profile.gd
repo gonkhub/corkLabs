@@ -19,6 +19,9 @@ extends Resource
 @export_range(0.0, 2.0, 0.05) var amplitude := 1.0
 ## Eye height used when a take has no calibration.
 @export_range(1.0, 2.2, 0.01) var default_eye_height := 1.65
+## Where YOUR right hand rests relative to your eyes when relaxed (left is
+## mirrored). Movement away from this rest is what gets scaled by reach_scale.
+@export var performer_rest_hand := Vector3(0.22, -0.58, -0.22)
 
 @export_group("Body (slow layer)")
 ## Body/core response speed in Hz. Low = heavy.

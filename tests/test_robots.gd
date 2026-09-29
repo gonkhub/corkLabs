@@ -48,7 +48,8 @@ func _test_ik(id: String, wrist_path: String, rel: Vector3) -> void:
 		anchor = rig.rig_xform(rig.get_node("Body/Neck")).origin
 	else:
 		anchor = rig.get_node("Core").position
-	var target := anchor + rel * rig.profile.reach_scale
+	var robot_rest: Vector3 = rig.hand_rest
+	var target := anchor + robot_rest + (rel - rig.profile.performer_rest_hand) * rig.profile.reach_scale
 	var err := wrist.distance_to(target)
 	_check(err < 0.002, "%s wrist reaches its IK target (off by %.4f m)" % [id, err])
 	# Wrist copies the controller's rotation.
