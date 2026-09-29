@@ -66,6 +66,30 @@ performance inputs (blink, flash, ...).
 When a robot is chosen, every take is saved to `takes/`, cleaned up, baked
 into `animations/<robot>/`, and replayed on the robot straight away.
 
+## Naming takes
+
+When you stop a run that recorded takes, the editor opens **Name your new
+takes**, listing every take that still has its automatic `take_<date>` name
+(also available any time from the Takes panel's **Name takes...** button).
+For each take: **Preview** it in Robot Lab, pick a type, type a name, keep
+or discard. **Save names** then:
+
+| Type | Clip name | Used as |
+| --- | --- | --- |
+| `idle` | `idle_scan` | looping idle (loop is ticked automatically) |
+| `act` | `act_weld_panel` | action, `play_action("act_weld_panel")` |
+| `cs` | `cs_intro_03` | cutscene performance |
+| (none) | `whatever` | anything else |
+
+- the take moves to `takes/<robot>/<clip>.res`
+- the clip is baked to `animations/<robot>/<clip>.res` and added to the robot's library (the old timestamp clip is removed)
+- punch-in raw recordings follow their comp into `takes/<robot>/sources/`
+- duplicate names get `_2`, `_3`...
+- discarded takes move to `takes/_discarded/` (delete that folder yourself when sure)
+
+Names are cleaned to lower_snake_case ("Weld Panel!" → `weld_panel`).
+Leave a name blank to decide later.
+
 ## At the desk
 
 **Takes panel** (editor, top-left dock next to Scene/Import):

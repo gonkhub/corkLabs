@@ -25,6 +25,9 @@ var stop_reach_check: CheckBox
 var log_box: TextEdit
 var detail_box: Control
 
+## Set by the plugin: opens the "Name your new takes" window.
+var open_naming: Callable
+
 var robot_ids := PackedStringArray()
 var selected_path := ""
 var selected: Resource
@@ -40,6 +43,7 @@ func _build_ui() -> void:
 	var bar := HBoxContainer.new()
 	add_child(bar)
 	_button(bar, "Refresh", refresh)
+	_button(bar, "Name takes...", _name_takes)
 	_button(bar, "Bake all", _bake_all)
 	_button(bar, "Open demo", _open_demo)
 
@@ -206,6 +210,15 @@ func _bake_selected() -> void:
 		_log("Pick a robot first.")
 		return
 	_run_bake(["--take", selected_path])
+
+
+func _name_takes() -> void:
+	if open_naming.is_valid():
+		open_naming.call()
+
+
+func log_line(line: String) -> void:
+	_log(line)
 
 
 func _open_demo() -> void:
