@@ -1,0 +1,3 @@
+# Godot's cache folder. It is rebuilt automatically, so never commit it.
+.godot/
+*.tmp

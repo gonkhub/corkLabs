@@ -1,0 +1,132 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://recorder/recorder.gd" id="1_script"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
+sky_top_color = Color(0.12, 0.14, 0.18, 1)
+sky_horizon_color = Color(0.3, 0.32, 0.36, 1)
+ground_bottom_color = Color(0.08, 0.08, 0.09, 1)
+ground_horizon_color = Color(0.3, 0.32, 0.36, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("Sky_mat")
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 3
+tonemap_mode = 2
+
+[sub_resource type="PlaneMesh" id="Floor_mesh"]
+size = Vector2(6, 6)
+
+[sub_resource type="StandardMaterial3D" id="Floor_mat"]
+albedo_color = Color(0.22, 0.23, 0.25, 1)
+
+[sub_resource type="CylinderMesh" id="Mark_mesh"]
+top_radius = 0.25
+bottom_radius = 0.25
+height = 0.005
+
+[sub_resource type="StandardMaterial3D" id="Mark_mat"]
+albedo_color = Color(1, 0.45, 0.05, 1)
+
+[sub_resource type="BoxMesh" id="Hand_mesh"]
+size = Vector3(0.05, 0.05, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="Hand_mat"]
+albedo_color = Color(0.6, 0.6, 0.6, 1)
+
+[sub_resource type="BoxMesh" id="GhostHead_mesh"]
+size = Vector3(0.18, 0.1, 0.1)
+
+[sub_resource type="BoxMesh" id="GhostEye_mesh"]
+size = Vector3(0.12, 0.03, 0.02)
+
+[sub_resource type="StandardMaterial3D" id="GhostHead_mat"]
+transparency = 1
+albedo_color = Color(0.3, 0.9, 1, 0.55)
+
+[sub_resource type="StandardMaterial3D" id="GhostEye_mat"]
+albedo_color = Color(1, 0.45, 0.05, 1)
+
+[sub_resource type="StandardMaterial3D" id="GhostLeft_mat"]
+transparency = 1
+albedo_color = Color(0.3, 0.9, 1, 0.55)
+
+[sub_resource type="StandardMaterial3D" id="GhostRight_mat"]
+transparency = 1
+albedo_color = Color(0.3, 0.9, 1, 0.55)
+
+[node name="Recorder" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 4, 0)
+shadow_enabled = true
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+mesh = SubResource("Floor_mesh")
+surface_material_override/0 = SubResource("Floor_mat")
+
+[node name="FloorMark" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.003, 0)
+mesh = SubResource("Mark_mesh")
+surface_material_override/0 = SubResource("Mark_mat")
+
+[node name="Hud" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, -2)
+pixel_size = 0.002
+text = "READY"
+font_size = 40
+outline_size = 10
+
+[node name="Beeper" type="AudioStreamPlayer" parent="."]
+
+[node name="XROrigin3D" type="XROrigin3D" parent="."]
+
+[node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+
+[node name="LeftHand" type="XRController3D" parent="XROrigin3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.2, -0.3)
+tracker = &"left_hand"
+pose = &"grip"
+
+[node name="Cube" type="MeshInstance3D" parent="XROrigin3D/LeftHand"]
+mesh = SubResource("Hand_mesh")
+surface_material_override/0 = SubResource("Hand_mat")
+
+[node name="RightHand" type="XRController3D" parent="XROrigin3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 1.2, -0.3)
+tracker = &"right_hand"
+pose = &"grip"
+
+[node name="Cube" type="MeshInstance3D" parent="XROrigin3D/RightHand"]
+mesh = SubResource("Hand_mesh")
+surface_material_override/0 = SubResource("Hand_mat")
+
+[node name="Ghost" type="Node3D" parent="."]
+visible = false
+
+[node name="Head" type="Node3D" parent="Ghost"]
+
+[node name="Shell" type="MeshInstance3D" parent="Ghost/Head"]
+mesh = SubResource("GhostHead_mesh")
+surface_material_override/0 = SubResource("GhostHead_mat")
+
+[node name="Eye" type="MeshInstance3D" parent="Ghost/Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.055)
+mesh = SubResource("GhostEye_mesh")
+surface_material_override/0 = SubResource("GhostEye_mat")
+
+[node name="LeftHand" type="MeshInstance3D" parent="Ghost"]
+mesh = SubResource("Hand_mesh")
+surface_material_override/0 = SubResource("GhostLeft_mat")
+
+[node name="RightHand" type="MeshInstance3D" parent="Ghost"]
+mesh = SubResource("Hand_mesh")
+surface_material_override/0 = SubResource("GhostRight_mat")

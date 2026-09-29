@@ -1,0 +1,21 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="corkLabs"
+config/description="Rail-robot facility game. VR puppeteering pipeline lives in res://recorder/."
+run/main_scene="res://recorder/recorder.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[xr]
+
+openxr/enabled=true
+shaders/enabled=true
