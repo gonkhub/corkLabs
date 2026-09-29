@@ -33,6 +33,7 @@ var _dragging := false
 
 
 func _ready() -> void:
+	FlatScreen.disable_xr(get_viewport())
 	take_paths = TakeStore.list()
 	# Start on the newest real take if there is one.
 	take_index = take_paths.size() - 1
