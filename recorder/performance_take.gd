@@ -1,3 +1,4 @@
+@tool
 # A recorded take: every PerformanceFrame captured during one recording,
 # stored as raw data. This is the "source of truth" from the pipeline doc.
 # Robots' animations get baked FROM takes later; takes are never edited.

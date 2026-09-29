@@ -1,3 +1,4 @@
+@tool
 # A robot's "personality": how it turns your performance into its motion.
 # The same take played through two profiles should read as two different
 # machines. Every value can be changed and the takes rebaked. Nothing is

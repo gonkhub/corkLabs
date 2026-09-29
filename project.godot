@@ -19,3 +19,7 @@ config/features=PackedStringArray("4.3", "Forward Plus")
 
 openxr/enabled=true
 shaders/enabled=true
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/corklabs_pipeline/plugin.cfg")

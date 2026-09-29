@@ -1,3 +1,4 @@
+@tool
 # How a take gets cleaned up before baking. Stored inside each take, and
 # non-destructive: the raw recording is never changed, so any setting here
 # can be tweaked and the take rebaked. Think clip gain and fades in a DAW.
