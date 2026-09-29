@@ -4,17 +4,18 @@
 # Gaze cascade in three layers: the body swings round slowly to face where
 # you're looking (yaw only), the head turns on its neck at medium speed, and
 # the eye darts. The long two-segment arms use two-bone IK, with elbows
-# pointing out and back like an excavator.
+# pointing out and up like an excavator.
 extends RobotRig
 
-## Which way each elbow points, in body space (out, down, back).
-@export var elbow_hint_left := Vector3(-0.7, -0.3, 0.6)
-@export var elbow_hint_right := Vector3(0.7, -0.3, 0.6)
+## Which way each elbow points, in body space: out and UP, like an
+## excavator. (Elbows pointing down read as knees, and knees read as legs.)
+@export var elbow_hint_left := Vector3(-0.6, 0.6, 0.2)
+@export var elbow_hint_right := Vector3(0.6, 0.6, 0.2)
 ## How far above the body's centre the hanger rod attaches.
 @export var hanger_attach_height := 0.28
 ## Where the right claw rests relative to the neck when you're relaxed
 ## (left is mirrored): out front, ready to work.
-@export var hand_rest := Vector3(0.5, -0.5, -0.45)
+@export var hand_rest := Vector3(0.45, -0.3, -0.6)
 
 var hanger: Node3D
 var body: Node3D
