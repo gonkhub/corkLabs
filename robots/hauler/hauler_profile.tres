@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="RobotProfile" format=3]
+
+[ext_resource type="Script" path="res://robots/robot_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Hauler"
+description = "Heavy-labour hanger unit. Slow to start, slow to stop, swings when it brakes. Long jointed arms, clamp claws."
+reach_scale = 1.8
+travel_scale = 0.8
+travel_limit = 0.25
+amplitude = 0.8
+default_eye_height = 1.65
+body_frequency = 1.2
+body_damping = 0.5
+body_response = -0.3
+head_frequency = 2.5
+head_damping = 0.6
+head_response = 0.0
+neck_limit_deg = 60.0
+eye_frequency = 6.0
+eye_damping = 0.8
+eye_response = 0.5
+eye_limit_deg = 20.0
+stick_look_yaw_deg = 15.0
+stick_look_pitch_deg = 12.0
+hand_frequency = 1.6
+hand_damping = 0.55
+hand_response = 0.0
+tool_frequency = 3.0
+tool_damping = 0.5
+claw_open_deg = 40.0
+lid_closed_deg = 70.0
+lens_range = 0.25
+blink_release = 0.25
+glow_base = 1.2
+glow_flash = 6.0
+flash_release = 0.6
+retime = 1.25

@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="RobotProfile" format=3]
+
+[ext_resource type="Script" path="res://robots/robot_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Tinker"
+description = "Precision maintenance core. Quick, curious, economical. Telescoping arms, drill-spin tool heads."
+reach_scale = 0.9
+travel_scale = 1.0
+travel_limit = 0.35
+amplitude = 1.15
+default_eye_height = 1.65
+body_frequency = 3.0
+body_damping = 0.85
+body_response = 0.3
+head_frequency = 4.0
+head_damping = 0.8
+head_response = 0.5
+neck_limit_deg = 70.0
+eye_frequency = 12.0
+eye_damping = 0.9
+eye_response = 1.2
+eye_limit_deg = 35.0
+stick_look_yaw_deg = 25.0
+stick_look_pitch_deg = 20.0
+hand_frequency = 5.0
+hand_damping = 0.9
+hand_response = 0.2
+tool_frequency = 12.0
+tool_damping = 1.0
+claw_open_deg = 30.0
+lid_closed_deg = 80.0
+lens_range = 0.35
+blink_release = 0.1
+glow_base = 0.8
+glow_flash = 4.0
+flash_release = 0.35
+retime = 1.0

@@ -1,0 +1,207 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://robots/tinker/tinker_rig.gd" id="1_rig"]
+[ext_resource type="Resource" path="res://robots/tinker/tinker_profile.tres" id="2_profile"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.86, 0.88, 0.9, 1)
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.14, 0.15, 0.17, 1)
+metallic = 0.6
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="Mat_accent"]
+albedo_color = Color(0.1, 0.62, 0.64, 1)
+metallic = 0.3
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_eye"]
+albedo_color = Color(0.2, 0.85, 1, 1)
+emission_enabled = true
+emission = Color(0.2, 0.85, 1, 1)
+emission_energy_multiplier = 2.5
+
+[sub_resource type="BoxMesh" id="Mesh_mount"]
+size = Vector3(0.3, 0.1, 0.3)
+
+[sub_resource type="CylinderMesh" id="Mesh_tether"]
+top_radius = 0.015
+bottom_radius = 0.015
+height = 1.0
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="Mesh_shell"]
+radius = 0.22
+height = 0.44
+
+[sub_resource type="CylinderMesh" id="Mesh_band"]
+top_radius = 0.228
+bottom_radius = 0.228
+height = 0.05
+
+[sub_resource type="CylinderMesh" id="Mesh_socket"]
+top_radius = 0.105
+bottom_radius = 0.105
+height = 0.03
+
+[sub_resource type="CylinderMesh" id="Mesh_lens"]
+top_radius = 0.085
+bottom_radius = 0.085
+height = 0.03
+
+[sub_resource type="BoxMesh" id="Mesh_lid"]
+size = Vector3(0.22, 0.016, 0.12)
+
+[sub_resource type="CylinderMesh" id="Mesh_sleeve"]
+top_radius = 0.035
+bottom_radius = 0.035
+height = 0.2
+radial_segments = 12
+
+[sub_resource type="CylinderMesh" id="Mesh_rod"]
+top_radius = 0.02
+bottom_radius = 0.02
+height = 1.0
+radial_segments = 10
+
+[sub_resource type="BoxMesh" id="Mesh_palm"]
+size = Vector3(0.07, 0.05, 0.06)
+
+[sub_resource type="BoxMesh" id="Mesh_finger"]
+size = Vector3(0.015, 0.015, 0.08)
+
+[node name="Tinker" type="Node3D"]
+script = ExtResource("1_rig")
+profile = ExtResource("2_profile")
+
+[node name="Mount" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("Mesh_mount")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Tether" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
+scale = Vector3(1, 1, 0.65)
+
+[node name="TetherMesh" type="MeshInstance3D" parent="Tether"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.5)
+mesh = SubResource("Mesh_tether")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Core" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.85, 0)
+
+[node name="Shell" type="MeshInstance3D" parent="Core"]
+mesh = SubResource("Mesh_shell")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Band" type="MeshInstance3D" parent="Core"]
+mesh = SubResource("Mesh_band")
+surface_material_override/0 = SubResource("Mat_accent")
+
+[node name="Eye" type="Node3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.2)
+
+[node name="Socket" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0.01)
+mesh = SubResource("Mesh_socket")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Lens" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.012)
+mesh = SubResource("Mesh_lens")
+surface_material_override/0 = SubResource("Mat_eye")
+
+[node name="LidTop" type="Node3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.02)
+
+[node name="LidMesh" type="MeshInstance3D" parent="Core/Eye/LidTop"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -0.04)
+mesh = SubResource("Mesh_lid")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Glow" type="OmniLight3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.08)
+light_color = Color(0.2, 0.85, 1, 1)
+light_energy = 0.8
+omni_range = 0.8
+
+[node name="ArmL" type="Node3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21, -0.06, 0)
+
+[node name="Sleeve" type="MeshInstance3D" parent="Core/ArmL"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.08)
+mesh = SubResource("Mesh_sleeve")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Rod" type="Node3D" parent="Core/ArmL"]
+scale = Vector3(1, 1, 0.35)
+
+[node name="RodMesh" type="MeshInstance3D" parent="Core/ArmL/Rod"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.5)
+mesh = SubResource("Mesh_rod")
+surface_material_override/0 = SubResource("Mat_accent")
+
+[node name="Wrist" type="Node3D" parent="Core/ArmL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.35)
+
+[node name="Palm" type="MeshInstance3D" parent="Core/ArmL/Wrist"]
+mesh = SubResource("Mesh_palm")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="ClawA" type="Node3D" parent="Core/ArmL/Wrist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.03)
+
+[node name="Finger" type="MeshInstance3D" parent="Core/ArmL/Wrist/ClawA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("Mesh_finger")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="ClawB" type="Node3D" parent="Core/ArmL/Wrist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -0.03)
+
+[node name="Finger" type="MeshInstance3D" parent="Core/ArmL/Wrist/ClawB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("Mesh_finger")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="ArmR" type="Node3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21, -0.06, 0)
+
+[node name="Sleeve" type="MeshInstance3D" parent="Core/ArmR"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.08)
+mesh = SubResource("Mesh_sleeve")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Rod" type="Node3D" parent="Core/ArmR"]
+scale = Vector3(1, 1, 0.35)
+
+[node name="RodMesh" type="MeshInstance3D" parent="Core/ArmR/Rod"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.5)
+mesh = SubResource("Mesh_rod")
+surface_material_override/0 = SubResource("Mat_accent")
+
+[node name="Wrist" type="Node3D" parent="Core/ArmR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.35)
+
+[node name="Palm" type="MeshInstance3D" parent="Core/ArmR/Wrist"]
+mesh = SubResource("Mesh_palm")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="ClawA" type="Node3D" parent="Core/ArmR/Wrist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.03)
+
+[node name="Finger" type="MeshInstance3D" parent="Core/ArmR/Wrist/ClawA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("Mesh_finger")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="ClawB" type="Node3D" parent="Core/ArmR/Wrist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -0.03)
+
+[node name="Finger" type="MeshInstance3D" parent="Core/ArmR/Wrist/ClawB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("Mesh_finger")
+surface_material_override/0 = SubResource("Mat_shell")
