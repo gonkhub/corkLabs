@@ -87,6 +87,41 @@ in the Inspector. Every value has a tooltip. The big ones:
 
 Then check it in **Robot Lab** (F6), and **Bake all** when happy.
 
+## Facility time
+
+Facility time **only moves when the player acts**, like Disco Elysium's clock.
+Every player action goes through one call:
+
+```gdscript
+Facility.act("dialogue_line", "Tinker: status report")   # costs 1 facility minute
+Facility.spend(900.0, "Hauler clears the jam")            # or any exact amount
+```
+
+and the facility (robots, scheduled events, shifts) plays out through exactly
+that much time. Costs live in `Facility.COST` (`game/sim/facility.gd`):
+dialogue line 1 min, choice 2 min, interaction 5 min, task 15 min.
+Animations keep running in real time; the facility's *state* waits for you.
+
+Closing the game saves it; opening it resumes at the exact saved moment. The
+corkLabs OS clock shows facility time, never the real clock. A new facility
+starts at Day 1 05:55 (first shift at 06:00).
+
+| Piece | File | Job |
+| --- | --- | --- |
+| `FacilitySim` | `game/sim/facility_sim.gd` | The clock (0.1 s ticks), systems, seeded randomness, save/load. Same save + same actions = same outcome |
+| `EventScheduler` | `game/sim/event_scheduler.gd` | Events booked at exact facility times; ties fire in booking order |
+| `FacilityLog` | `game/sim/facility_log.gd` | The journal: a timestamped line for everything that happens |
+| `Facility` (autoload) | `game/sim/facility.gd` | Session start/save, `spend()` / `act()`, `clock_text()` |
+| `ShiftSchedule` | `game/sim/shift_schedule.gd` | First real system: Day/Swing/Night shifts, and a template for new systems |
+
+**Writing a system** (robots, pipes, pods...): any object with `sim_id`,
+`sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
+`sim_load`. See `shift_schedule.gd`. Pass it to `Facility.start_session([...])`.
+
+**Dev panel: F1** in any scene with a running facility (the demo has one):
+clock, booked events, journal. F5 one tick, F6 +1 min (Shift +1 h), F7 +15 min,
+F8 wipe the save.
+
 ## Folder map
 
 | Folder | Contents |
