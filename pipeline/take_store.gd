@@ -38,6 +38,22 @@ static func _is_take(path: String) -> bool:
 	return r is PerformanceTake
 
 
+# The most recently recorded take (by its recording time, not its file name,
+# since named takes no longer sort by date). Skips demo takes, discarded
+# takes and raw punch-in sources.
+static func newest() -> String:
+	var best := ""
+	var best_created := ""
+	for p in list():
+		if p.contains("/demo/") or p.contains("/_discarded/") or p.contains("/sources/"):
+			continue
+		var t := load_take(p)
+		if t and not t.robot_id.is_empty() and t.created >= best_created:
+			best_created = t.created
+			best = p
+	return best
+
+
 static func load_take(path: String) -> PerformanceTake:
 	return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE) as PerformanceTake
 
