@@ -12,6 +12,10 @@
 #   Right A          replay the last take on the robot / back to live mirror
 #   Right B          robot view: mirror (facing you) <-> behind (facing away)
 #   Right stick in   show/hide the cyan ghost cubes (raw recording)
+#   Left stick in    punch-in mode: off -> right arm -> left arm -> head -> face.
+#                    While punching, the last take plays on the robot and you
+#                    re-perform ONLY that part; the result is comped into a
+#                    new take (the old one is kept).
 #   Space (keyboard) same as MENU, for testing at the desk
 #
 # Takes save to res://takes/. When a robot is chosen, each take is also
@@ -62,6 +66,13 @@ var replay: TakePlayback
 var ghost_time := 0.0
 var ghost_cubes_visible := true
 var status_line := ""
+
+# Punch-in.
+const PUNCH_MODES := ["", "right", "left", "head", "face"]
+var punch_index := 0
+var punch_base: PerformanceTake        # raw take being punched into
+var punch_base_path := ""
+var punch_preview: PerformanceTake     # cleaned, for the live preview
 
 # Play-along.
 var play_along := false
@@ -138,6 +149,12 @@ func _on_left_button(button_name: String) -> void:
 	elif button_name == "by_button":
 		play_along = not play_along
 		_setup_play_along()
+	elif button_name == "primary_click":
+		punch_index = (punch_index + 1) % PUNCH_MODES.size()
+
+
+func _punch_group() -> String:
+	return PUNCH_MODES[punch_index]
 
 
 func _on_right_button(button_name: String) -> void:
@@ -173,6 +190,7 @@ func _toggle_recording() -> void:
 			height_samples.clear()
 			ghost.visible = false
 			_setup_play_along()
+			_setup_punch()
 			_beep(beep_tick)
 		State.COUNTDOWN:
 			state = State.IDLE
@@ -219,7 +237,28 @@ func _drive_live(live: PerformanceFrame, delta: float) -> void:
 	if robot == null:
 		return
 	var f := smoother.smooth(live, delta)
+	# Punch-in: the old take drives everything except the part you're redoing.
+	if punch_base and state != State.IDLE:
+		var t := 0.0
+		if state == State.RECORDING:
+			t = (Time.get_ticks_usec() - record_start_usec) / 1_000_000.0
+		f = TakeComp.merge(punch_preview.sample(t), f, PackedStringArray([_punch_group()]))
 	robot.drive(f.mirrored() if mirror_view else f, delta)
+
+
+# Punch-in needs a previous take for the same robot.
+func _setup_punch() -> void:
+	punch_base = null
+	punch_preview = null
+	punch_base_path = ""
+	if _punch_group().is_empty():
+		return
+	if last_take == null or last_take.robot_id != _robot_id():
+		status_line = "punch-in needs a previous take for this robot - recording normally"
+		return
+	punch_base = last_take
+	punch_base_path = last_take_path
+	punch_preview = last_clean if last_clean else TakeCleanup.run(last_take).take
 
 
 func _start_replay() -> void:
@@ -294,11 +333,25 @@ func _finish_recording() -> void:
 	if take.frame_count() < 2:
 		return
 	var path := TakeStore.new_path()
+	if punch_base:
+		# The raw punch recording is only a source for the comp: no robot, so
+		# "Bake all" skips it. Kept on disk in case you want to re-comp.
+		take.robot_id = ""
+		take.note = "punch-in source (%s) for %s" % [_punch_group(), punch_base_path.get_file()]
 	var err := TakeStore.save(take, path)
 	if err != OK:
 		status_line = "COULD NOT SAVE (error %d)" % err
 		push_error("Could not save take to %s (error %d)" % [path, err])
 		return
+	if punch_base:
+		var comp := TakeComp.comp(punch_base, take, PackedStringArray([_punch_group()]), 0.0, take.duration())
+		comp.created = take.created
+		comp.overdub_of = PackedStringArray([punch_base_path, path])
+		var comp_path := path.get_basename() + "_punch_%s.res" % _punch_group()
+		TakeStore.save(comp, comp_path)
+		take = comp
+		path = comp_path
+		punch_base = null
 	last_take = take
 	last_take_path = path
 	last_clean = TakeCleanup.run(take).take
@@ -366,11 +419,13 @@ func _update_hud() -> void:
 			hud.text = "%d\nstand on the mark, look ahead" % ceili(countdown)
 		State.RECORDING:
 			var t := (Time.get_ticks_usec() - record_start_usec) / 1_000_000.0
-			hud.text = "[REC]  %.1f s   %s\nleft MENU to stop" % [t, robot_name]
+			var punch := "   PUNCH-IN: %s only" % _punch_group().to_upper() if punch_base else ""
+			hud.text = "[REC]  %.1f s   %s%s\nleft MENU to stop" % [t, robot_name, punch]
 		State.IDLE:
 			var lines := PackedStringArray()
 			lines.append("READY  -  performing as: %s" % robot_name)
-			lines.append("MENU record   X robot   Y play-along: %s" % ("ON" if play_along else "off"))
+			lines.append("MENU record   X robot   Y play-along: %s   L-stick click punch-in: %s" % [
+				"ON" if play_along else "off", _punch_group().to_upper() if _punch_group() else "off"])
 			lines.append("A %s   B view: %s   R-stick click: ghost cubes" % [
 				"back to live" if replay else "replay", "mirror" if mirror_view else "behind"])
 			if last_take:

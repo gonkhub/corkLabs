@@ -49,6 +49,40 @@ func _initialize() -> void:
 	_check(lib != null and lib.has_animation(clip), "take baked into the %s library as %s" % [rec._robot_id(), clip])
 	_check(rec.replay != null, "robot replays the new take")
 
+	# Punch-in: redo just the right arm over the take we just made.
+	var base_path: String = rec.last_take_path
+	rec.play_along = false
+	rec._on_right_button("ax_button")        # back to live
+	rec._on_left_button("primary_click")     # punch mode: right
+	_check(rec._punch_group() == "right", "left stick click selects right-arm punch-in")
+	rec._toggle_recording()
+	while rec.state != rec.State.RECORDING:
+		_pose(rec, t)
+		rec._process(dt)
+		t += dt
+	_check(rec.punch_base != null, "punch-in armed with the previous take")
+	start_ms = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - start_ms < 1000:
+		_pose(rec, t)
+		rec.right_hand.transform.origin.y = 1.6   # hold the right arm up high
+		rec._process(dt)
+		t += dt
+		OS.delay_msec(10)
+	rec._toggle_recording()
+	_check(rec.last_take_path.contains("_punch_right"), "comped take saved (%s)" % rec.last_take_path.get_file())
+	_check(rec.last_take.robot_id == rec._robot_id(), "comped take keeps the robot")
+	var base := TakeStore.load_take(base_path)
+	var comp: PerformanceTake = rec.last_take
+	_check(comp.sample(0.5).right.origin.y > 1.5, "comp has the new right arm")
+	_check(comp.sample(0.5).left.origin.distance_to(base.sample(0.5).left.origin) < 0.001, "comp keeps the old left arm")
+	var raw_punch := TakeStore.load_take(comp.overdub_of[1])
+	_check(raw_punch != null and raw_punch.robot_id.is_empty(), "raw punch recording kept, excluded from Bake all")
+	rec._on_left_button("primary_click")     # punch mode: left
+	rec._on_left_button("primary_click")     # head
+	rec._on_left_button("primary_click")     # face
+	rec._on_left_button("primary_click")     # off
+	_check(rec._punch_group() == "", "punch mode cycles back to off")
+
 	for i in 60:
 		rec._process(dt)
 	rec._on_left_button("ax_button")   # next robot
