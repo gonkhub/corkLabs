@@ -42,7 +42,7 @@ func _initialize() -> void:
 	await create_timer(3.0).timeout
 	var gap_after: float = absf(demo.hauler_rider.progress - h_agent.pos)
 	_check(gap_before > 1.0 and gap_after < gap_before - 0.5, "the 3D hauler glides to its sim position (%.2f -> %.2f m)" % [gap_before, gap_after])
-	var swing: Node3D = demo.get_node("HaulerRail/Rider/Swing")
+	var swing: Node3D = demo.get_node("World/HaulerRail/Rider/Swing")
 	_check(swing.rotation.length() > 0.0001, "hauler swings on the rail (%.4f rad)" % swing.rotation.length())
 	var core: Node3D = tinker.rig.get_node("Core")
 	var core_start := core.position

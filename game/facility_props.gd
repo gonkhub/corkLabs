@@ -36,6 +36,8 @@ var _time := 0.0
 ## rails: rail id -> Path3D. pods_node: the scene's Pods (children Pod1..Pod4).
 func build(rails: Dictionary, pods_node: Node3D = null) -> void:
 	_rails = rails
+	if DisplayServer.get_name() == "headless":
+		return   # no renderer (tests): meshes would only spam errors
 	var layout := FacilitySetup.layout()
 	if pods_node:
 		for i in 4:
@@ -61,7 +63,7 @@ func _process(delta: float) -> void:
 	if not Facility.running:
 		return
 	var plant := Facility.sim.get_system("plant") as FacilityPlant
-	if plant == null:
+	if plant == null or _lamps.is_empty():
 		return
 	var flash := 0.5 + 0.5 * sin(_time * 7.0)
 	for id in _pods:

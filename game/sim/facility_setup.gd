@@ -3,7 +3,7 @@
 # with FacilitySetup.systems(), so they all run the same facility.
 #
 # The rail ids and lengths here must match the Path3D rails in the 3D world
-# (game/demo_facility.tscn): tests/test_robot_behaviour.gd checks it.
+# (game/facility_world.tscn): tests/test_robot_behaviour.gd checks it.
 class_name FacilitySetup
 extends RefCounted
 

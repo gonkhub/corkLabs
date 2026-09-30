@@ -219,7 +219,7 @@ func _test_repeatable() -> void:
 
 func _test_rails_match_world() -> void:
 	var l := FacilitySetup.layout()
-	var scene := (load("res://game/demo_facility.tscn") as PackedScene).instantiate()
+	var scene := (load("res://game/facility_world.tscn") as PackedScene).instantiate()
 	var tinker: Path3D = scene.get_node("TinkerRail")
 	var hauler: Path3D = scene.get_node("HaulerRail")
 	_check(absf(tinker.curve.get_baked_length() - l.rail_length(FacilitySetup.TINKER_RAIL)) < 0.05,

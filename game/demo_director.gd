@@ -19,14 +19,15 @@ const JOURNAL_LINES := 7
 ## Separate save from the real game, so demo poking never touches it.
 @export var save_path := "user://demo_facility_save.json"
 
-@onready var cameras: Array[Camera3D] = [$Cameras/Cam1, $Cameras/Cam2, $Cameras/Cam3]
+@onready var world: FacilityWorld = $World
+@onready var cameras: Array[Camera3D] = world.cameras
 @onready var cctv: CanvasItem = $Overlay/CCTV
 @onready var cam_label: Label = $Overlay/CamLabel
 @onready var help_label: Label = $Overlay/Help
-@onready var tinker: RobotActor = $TinkerRail/Rider/Swing/Tinker
-@onready var tinker_rider: RailRider = $TinkerRail/Rider
-@onready var hauler: RobotActor = $HaulerRail/Rider/Swing/Hauler
-@onready var hauler_rider: RailRider = $HaulerRail/Rider
+@onready var tinker: RobotActor = world.tinker
+@onready var tinker_rider: RailRider = world.tinker_rider
+@onready var hauler: RobotActor = world.hauler
+@onready var hauler_rider: RailRider = world.hauler_rider
 
 var cam_index := 0
 var selected := "tinker"
@@ -37,14 +38,6 @@ func _ready() -> void:
 	if FlatScreen.relaunch_if_xr(self):
 		return
 	Facility.start_session(FacilitySetup.systems(), save_path)
-	for pair in [["tinker", tinker_rider, tinker], ["hauler", hauler_rider, hauler]]:
-		var view := RobotView.new()
-		view.setup(pair[0], pair[1], pair[2])
-		add_child(view)
-	var props := FacilityProps.new()
-	props.name = "Props"
-	add_child(props)
-	props.build({FacilitySetup.TINKER_RAIL: $TinkerRail, FacilitySetup.HAULER_RAIL: $HaulerRail}, $Pods)
 	_use_camera(0)
 	help_label.add_theme_font_override("font", Mono.font())
 
