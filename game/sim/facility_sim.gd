@@ -27,7 +27,7 @@ const TICK := 0.1
 ## Where a brand-new facility's clock starts: Day 1, 05:55 (the first shift
 ## starts at 06:00).
 const START_TIME := 5 * 3600 + 55 * 60
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3   # 3: robots, work board
 
 signal ticked(tick: int)
 signal event_fired(event_name: String, data: Dictionary)
@@ -88,8 +88,9 @@ func system_ids() -> Array[String]:
 ## One tick: due events fire first, then every system updates.
 func step() -> void:
 	tick += 1
-	for e in scheduler.pop_due(time()):
-		_fire(e)
+	if scheduler.has_due(time()):
+		for e in scheduler.pop_due(time()):
+			_fire(e)
 	for id in _order:
 		var s: Object = _systems.get(id)
 		if s:

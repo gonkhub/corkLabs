@@ -1,0 +1,89 @@
+@tool
+# A robot's behaviour personality: how it weighs its options, how fast it
+# burns power, how it takes orders. (Its *motion* personality is the
+# RobotProfile; this is its *mind*.)
+#
+# Lives at robots/<id>/<id>_traits.tres. Open it in the Inspector; every
+# value has a tooltip. Changes apply the next time the facility starts.
+#
+# How a robot decides (utility scores, like a mixer): every couple of
+# facility seconds it scores each thing it could do between 0 and ~1.5 and
+# does the highest. Needs, orders and personality are the faders.
+class_name RobotTraits
+extends Resource
+
+@export var display_name := "Robot"
+
+@export_group("Rail travel")
+## Top speed along the rail, in m/s (facility time).
+@export_range(0.1, 3.0, 0.05) var rail_speed := 0.8
+
+@export_group("Skills")
+## How good it is at heavy work (lifting, hauling, clearing). 0 = useless, 1 = built for it.
+## Poor skill = slower work and lower scores.
+@export_range(0.0, 1.0, 0.05) var skill_heavy := 0.5
+## How good it is at precise work (repairs, calibration, pod care).
+@export_range(0.0, 1.0, 0.05) var skill_precise := 0.5
+## How good it is at general work (inspections, cleaning, sorting).
+@export_range(0.0, 1.0, 0.05) var skill_general := 0.7
+## Work units done per facility second at skill 1.0.
+@export_range(0.1, 5.0, 0.05) var work_speed := 1.0
+
+@export_group("Power")
+## Power used per facility second just being switched on (0-1 scale; 0.0002 = 1% every 50 s).
+@export_range(0.0, 0.01, 0.00001) var drain_idle := 0.00003
+## Extra power per second while travelling.
+@export_range(0.0, 0.01, 0.00001) var drain_move := 0.00012
+## Extra power per second while working.
+@export_range(0.0, 0.01, 0.00001) var drain_work := 0.00018
+## Power gained per second on a dock.
+@export_range(0.0, 0.05, 0.0001) var charge_rate := 0.0012
+## Below this it drops everything (even orders) to recharge.
+@export_range(0.0, 0.5, 0.01) var power_reserve := 0.15
+## Once charging, it stays on the dock until it reaches this.
+@export_range(0.3, 1.0, 0.01) var charge_until := 0.95
+
+@export_group("Purpose")
+## How quickly idleness makes it uneasy (purpose lost per idle second, 0-1 scale).
+## Robots think the work keeps THEM running; standing around feels like dying.
+@export_range(0.0, 0.01, 0.00001) var restlessness := 0.0004
+## Purpose regained per second of work.
+@export_range(0.0, 0.01, 0.00001) var purpose_from_work := 0.001
+## Purpose gained on finishing a job.
+@export_range(0.0, 1.0, 0.01) var purpose_per_job := 0.25
+
+@export_group("Orders")
+## How much a supervisor's order adds to a job's score. High = obedient.
+@export_range(0.0, 1.5, 0.05) var obedience := 0.6
+## Refuses ordered work it's worse than this at ("not built for that").
+@export_range(0.0, 1.0, 0.05) var refuse_below_skill := 0.2
+
+@export_group("Deciding")
+## Facility seconds between rethinks.
+@export_range(0.5, 30.0, 0.5) var think_interval := 2.0
+## Bonus for sticking with what it's doing, so it doesn't flip-flop.
+@export_range(0.0, 0.5, 0.01) var commitment := 0.1
+## How much it cares about travel distance (0 = not at all, 1 = strongly prefers nearby work).
+@export_range(0.0, 1.0, 0.05) var distance_aversion := 0.4
+
+@export_group("Animation")
+## Clips to play while working, by job skill ("heavy", "precise", "general").
+## Missing = any act_* clip.
+@export var work_clips := {}
+
+
+func skill(kind: String) -> float:
+	match kind:
+		"heavy": return skill_heavy
+		"precise": return skill_precise
+	return skill_general
+
+
+## robots/<id>/<id>_traits.tres, or plain defaults if the robot has none.
+static func load_for(robot_id: String) -> RobotTraits:
+	var path := "res://robots/%s/%s_traits.tres" % [robot_id, robot_id]
+	if ResourceLoader.exists(path):
+		return load(path) as RobotTraits
+	var t := RobotTraits.new()
+	t.display_name = robot_id.capitalize()
+	return t

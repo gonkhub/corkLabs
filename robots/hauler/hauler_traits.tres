@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="RobotTraits" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/sim/robot_traits.gd" id="1_traits"]
+
+[resource]
+script = ExtResource("1_traits")
+display_name = "Hauler"
+rail_speed = 0.5
+skill_heavy = 1.0
+skill_precise = 0.35
+skill_general = 0.7
+work_speed = 1.0
+drain_idle = 4e-05
+drain_move = 0.0002
+drain_work = 0.00025
+charge_rate = 0.001
+power_reserve = 0.2
+charge_until = 0.95
+restlessness = 0.00025
+purpose_from_work = 0.0008
+purpose_per_job = 0.2
+obedience = 0.8
+refuse_below_skill = 0.15
+think_interval = 3.0
+commitment = 0.15
+distance_aversion = 0.6
+work_clips = {
+"heavy": ["act_reach_demo", "cs_wave_and_work_test"]
+}

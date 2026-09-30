@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="RobotTraits" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/sim/robot_traits.gd" id="1_traits"]
+
+[resource]
+script = ExtResource("1_traits")
+display_name = "Tinker"
+rail_speed = 0.9
+skill_heavy = 0.2
+skill_precise = 1.0
+skill_general = 0.8
+work_speed = 1.1
+drain_idle = 2e-05
+drain_move = 0.0001
+drain_work = 0.00015
+charge_rate = 0.0015
+power_reserve = 0.12
+charge_until = 0.95
+restlessness = 0.0007
+purpose_from_work = 0.0012
+purpose_per_job = 0.3
+obedience = 0.45
+refuse_below_skill = 0.3
+think_interval = 1.5
+commitment = 0.08
+distance_aversion = 0.3
+work_clips = {
+"precise": ["act_arms_test", "act_reach_demo"]
+}

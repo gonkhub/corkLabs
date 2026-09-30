@@ -27,7 +27,7 @@ Current status, open work and next steps: [docs/ROADMAP.md](docs/ROADMAP.md).
 | --- | --- | --- |
 | `recorder/recorder.tscn` | **F5** (main scene), headset on | Perform, record, replay, punch-in |
 | `game/robot_lab.tscn` | open it, **F6** | Compare any take on every robot side by side, on your monitor |
-| `game/demo_facility.tscn` | open it, **F6** | Robots working on rails, seen through security cameras |
+| `game/demo_facility.tscn` | open it, **F6** | The facility simulation seen through security cameras: robots pick their own work, you give orders |
 | `recorder/hello_vr.tscn` | open it, **F6** | Phase 1 headset test (cubes + input readouts) |
 
 Robot Lab and the demo run on the monitor. Because VR is on for the whole
@@ -144,9 +144,71 @@ starts at Day 1 05:55 (first shift at 06:00).
 `sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
 `sim_load`. See `shift_schedule.gd`. Pass it to `Facility.start_session([...])`.
 
-**Dev panel: F1** in any scene with a running facility (the demo has one):
-clock, booked events, journal. F5 one tick, F6 +1 min (Shift +1 h), F7 +15 min,
-F8 wipe the save.
+**Dev panel: F1** in any scene with a running facility (the demo has one).
+**F2** flips pages: overview (clock, booked events, journal), robots (what
+each robot is doing, its needs, and its top scores with the reason), full
+journal. F5 one tick, F6 +1 min (Shift +1 h), F7 +15 min, F8 wipe the save,
+F9 post a random job.
+
+## Robots in the facility
+
+Each robot is a facility system (`RobotAgent`, `game/sim/robot_agent.gd`)
+with its own mind. The 3D robot only *shows* it (`RobotView`): when facility
+time jumps, the robot glides along its rail to where the sim says it is and
+keeps performing what it's doing (work clips at a job, idles otherwise).
+
+**Needs**
+
+| Need | Goes down | Goes up | When it runs low |
+| --- | --- | --- | --- |
+| **Power** | always a little; more moving, most working | on its dock | below its reserve it drops everything to recharge; at 0 it stalls and limps on emergency cells |
+| **Purpose** | standing idle (robots think the work keeps *them* running) | working, and a jump for each finished job | "restless", then "uneasy": hungrier for work, and eventually it wanders the rail looking for some |
+
+**Deciding: utility scores, like a mixer.** Every couple of facility seconds
+a robot scores everything it could do (each reachable job, recharge, stand
+by, wander) and does the best. Job scores come from priority × skill ×
+distance × power × hunger for purpose. The F1 robots page shows the top scores
+and the reason; every change of mind goes in the journal with the runner-up:
+
+```
+06:55  Hauler: work #7 Replace fuse (0.60: high priority, precise skill 35%, 0.0 m away); next best stand by (0.34)
+```
+
+**Orders are a strong nudge, not a command.** `agent.give_order(sim, "job", id)`
+(or `"recharge"`, `"standby"`, `"cancel"`) adds the robot's `obedience` to
+that option. Usually it wins, and the robot says "On it." But below its power
+reserve it recharges first, it refuses work it's hopeless at ("No. 'Clear
+debris' is heavy work; I'm not built for it."), and an uneasy robot finds it
+hard to stand still. Every answer goes in the journal.
+
+**Personality** lives in `robots/<id>/<id>_traits.tres` (open it in the
+Inspector; every value has a tooltip): rail speed, skills (heavy / precise /
+general), power drain and charge, restlessness, obedience, when it refuses,
+how often it rethinks, and which clips it plays for each kind of work.
+
+| | Hauler | Tinker |
+| --- | --- | --- |
+| Skills | heavy 100%, precise 35% | precise 100%, heavy 20% (refuses heavy orders) |
+| Rail speed | 0.5 m/s | 0.9 m/s |
+| Restlessness | low (stoic) | high (curious, fidgety) |
+| Obedience | high | lower |
+
+**The floor plan** (`game/sim/facility_setup.gd`): rails and stations in
+meters along them, the same numbers the 3D rails use. Tinker's loop has its
+dock, the pods, the relay panel and a workbench; Hauler's straight rail has
+its dock and three bays. A robot only reaches stations on its own rail.
+`FacilitySetup.systems()` is the whole standard facility; every gameplay
+scene starts its session with it.
+
+**The work board** (`WorkBoard`, `game/sim/work_board.gd`): jobs with a
+title, skill, station, amount of work, priority and progress. A robot claims
+a job while it's on it; if it walks away the job goes back on the board with
+its progress kept. A finished job fires a `job_done` event, so whatever posted
+it can react.
+
+**The demo** is a bare-bones supervisor console: Q select robot, O order it
+to take the most urgent job it can reach, R recharge, S stand by, X cancel,
+W wait 5 minutes. Orders cost facility time (a choice, 2 min).
 
 ## Folder map
 
@@ -157,7 +219,8 @@ F8 wipe the save.
 | `robots/` | One folder per robot: scene + rig script + profile. `robot_rig.gd` is the shared base |
 | `takes/` | Your recordings (keep these!). `takes/demo/` = procedural demo takes, delete any time |
 | `animations/` | Baked clips + one `AnimationLibrary` per robot (regenerated by baking) |
-| `game/` | `RobotActor` (plays clips via AnimationTree), `RailRider` (rail travel + pendulum sway), demo + lab scenes |
+| `game/` | `RobotActor` (plays clips via AnimationTree), `RailRider` (rail travel + pendulum sway), `RobotView` (3D robot follows its sim self), demo + lab scenes |
+| `game/sim/` | The facility simulation: clock, scheduler, journal, layout, work board, robot agents and traits |
 | `addons/corklabs_pipeline/` | The editor Takes panel |
 | `tools/` | Command-line tools (bake all, demo takes, screenshots, test runner) |
 | `tests/` | Automated tests, no headset needed |

@@ -49,6 +49,12 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-29 | Closing the game freezes facility time; reopening resumes at the saved moment. The corkLabs OS clock shows facility time, never the real clock | Replaced an earlier "slow offline time" idea as too complex |
 | 2026-09-29 | First playable target: **one shift, start to end** | Proves the whole loop small |
 | 2026-09-29 | Before gameplay: build developer tools, readability, and robot-behaviour scaffolding | Robots are the core; they need a solid, debuggable foundation |
+| 2026-09-29 | Robots decide with **utility scores** (every option scored, best wins; personality = weights) | Readable: scores + reasons show on the dev panel and in the journal; tuned like faders; new options slot in without rewiring |
+| 2026-09-29 | Supervisor orders are a **strong nudge**, not a command: they add `obedience` to that option, and robots can push back | Refusals ("recharging first", "not built for it", "can't stand still") become story moments |
+| 2026-09-29 | Robot needs: **Power** and **Purpose** (idleness feels like dying to them). Wear and trust left for later | Power gives logistics; Purpose fits "the work keeps *them* running" and gives robots an inner life |
+| 2026-09-29 | The sim owns robot state; the 3D robot follows it (`RobotView`) and keeps performing its current activity in real time | Time only moves on player actions, so the world must be able to "catch up" smoothly after a jump |
+| 2026-09-29 | Behaviour personality is a separate resource (`<id>_traits.tres`) from the motion profile | Mind and motion tune independently; motion changes need a rebake, mind changes don't |
+| 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)
 
