@@ -74,6 +74,15 @@ func _test_terminal() -> void:
 	out = term.run("whoami")
 	_check(out.contains("new command noted") and out.contains("probationary"), "typing a real, unlisted command works and teaches it")
 	_check(term.run("xyzzy").contains("command not found"), "made-up commands don't")
+	t0 = sim().time()
+	out = term.run("grep lantern")
+	_check(out.contains("No matches") and sim().time() - t0 >= 299.0, "grep searches what you can open (the diary's still encrypted), 5 min")
+	out = term.run("grep transferred")
+	_check(out.contains("/corp/memos/") and out.contains(":"), "grep finds lines across files (%d chars)" % out.length())
+	_check(term.run("find memo").is_empty() == false and term.run("find transfer").contains("/corp/memos/1994-transfer-hollis.txt"), "find lists files by name")
+	_check(term.run("who").contains("pell") and term.run("ps").contains("auditd"), "who and ps show who's watching")
+	_check(term.run("kill 45").contains("permission denied"), "kill is for maint")
+	_check(term.run("history").contains("whoami"), "history lists what you typed")
 	term.run("cd /home")
 	out = term.run("ls")
 	_check(out.contains("dokafor/") and out.contains("rmarrow/"), "/home has the former supervisors' folders")
@@ -281,6 +290,10 @@ func _test_maint() -> void:
 	term.run("hqctl unmute")
 	await process_frame
 	_check(not desk.hq_panel._suspended.visible, "and unmute brings it back")
+	var sus2 := Story.oversight(sim()).suspicion
+	out = term.run("kill 45")
+	_check(out.contains("restarted") and (Story.oversight(sim()).suspicion > sus2 or Story.oversight(sim()).strikes > 0), "maint can kill auditd; it comes straight back, and it's noticed")
+	_unfire()   # whether that got caught is down to chance: keep the rest of the test on the same footing
 	out = term.run("podctl wake 3")
 	_check(out.contains("sequence unknown") and term.mode == "", "waking a pod needs Hollis's diary")
 	term.run("exit")
@@ -328,6 +341,16 @@ func _test_ending() -> void:
 	camp = Story.campaign(sim())
 	_check(camp.state == "pre" and camp.shift == 1 and not Story.knows(sim(), "cmd:talk"), "start over: a new facility, a new supervisor")
 	_check(not SupervisorArchive.summary().is_empty(), "the personnel file carries on (%s)" % SupervisorArchive.summary())
+
+
+func _unfire() -> void:
+	var o := Story.oversight(sim())
+	o.strikes = 0
+	o.fired_reason = ""
+	o.fired_kind = ""
+	var camp := Story.campaign(sim())
+	if camp.state == "fired":
+		camp.state = "on_duty"
 
 
 func _screen_says(text: String) -> bool:

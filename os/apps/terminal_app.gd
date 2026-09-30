@@ -24,6 +24,12 @@ const COMMANDS := {
 	"clear": ["clear", "clear the screen", "basics"],
 	"open": ["open <app>", "open an app (cameras, units, work, plant, files, duties...)", "basics"],
 	"whoami": ["whoami", "who this terminal thinks you are", "basics"],
+	"who": ["who", "who's logged in", "system"],
+	"ps": ["ps", "what's running on this terminal", "system"],
+	"uptime": ["uptime", "how long the facility has been running", "system"],
+	"date": ["date", "the facility date and time", "system"],
+	"history": ["history", "the commands you've typed", "system"],
+	"kill": ["kill <pid>", "stop a process", "maintenance"],
 	"duties": ["duties", "this shift's checklist", "shift"],
 	"duty": ["duty <id>", "do a duty from the checklist (takes its time)", "shift"],
 	"log": ["log [lines] [category]", "the facility journal (category: alarm, work, plant, tinker...)", "shift"],
@@ -43,6 +49,8 @@ const COMMANDS := {
 	"cat": ["cat <file>", "read a file (takes time the first time)", "files"],
 	"decrypt": ["decrypt <file> <password>", "unlock an encrypted file", "files"],
 	"cp": ["cp <file>", "copy a file into your home folder (copies survive a purge)", "files"],
+	"grep": ["grep <word>", "search every file you can open for a word (5 min)", "files"],
+	"find": ["find <name>", "list files whose names contain it", "files"],
 	"run": ["run <program>", "run a program", "files"],
 	"connect": ["connect <address>", "open a session with a corporate server", "network"],
 	"disconnect": ["disconnect", "close it", "network"],
@@ -56,8 +64,21 @@ const COMMANDS := {
 	"podctl": ["podctl list | inspect <pod> | wake <pod>", "the pods", "maintenance"],
 	"sound": ["sound [play|loop|stop|mute|unmute] ...", "audition a sound through the camera you're listening to", "dev"],
 }
-const GROUPS := ["basics", "shift", "units", "plant", "files", "network", "maintenance"]
-const ROOT_ONLY := ["auditctl", "hqctl", "unitctl", "pkgctl", "podctl"]
+const GROUPS := ["basics", "system", "shift", "units", "plant", "files", "network", "maintenance"]
+const ROOT_ONLY := ["auditctl", "hqctl", "unitctl", "pkgctl", "podctl", "kill"]
+## What ps shows: [pid, user, command, note].
+const PROCESSES := [
+	[1, "root", "corkos-init", ""],
+	[44, "corp", "corkhq-linkd", "the corkHQ panel"],
+	[45, "corp", "auditd", "writes the audit trail"],
+	[112, "root", "podsync --pods 4", ""],
+	[113, "root", "knowledge_filter --unit tinker", ""],
+	[114, "root", "knowledge_filter --unit hauler", ""],
+	[212, "rmarrow", "nightrun --attract-mode", "defunct"],
+	[300, "supervisor", "shell", ""],
+]
+## Facility C-7 came online (for uptime and who).
+const FACILITY_EPOCH := "1979-06-30"
 const ALIASES := {"?": "help", "robots": "units", "devices": "plant", "passages": "routes", "prio": "priority",
 	"cls": "clear", "dir": "ls", "type": "cat", "logout": "exit", "chat": "talk"}
 const ROOT_ACCOUNT := "maint"
@@ -187,6 +208,14 @@ func _submit(line: String) -> void:
 		"cat": _cat(args)
 		"decrypt": _decrypt(args)
 		"cp": _cp(args)
+		"grep": _grep(args)
+		"find": _find(args)
+		"who": _who()
+		"ps": _ps()
+		"uptime": _uptime()
+		"date": _print("  " + FacilitySim.format_time(sim().time()))
+		"history": _history()
+		"kill": _kill(args)
 		"run": _run(args)
 		"connect": _connect(args)
 		"disconnect": _disconnect()
@@ -557,6 +586,102 @@ func _cat(args: PackedStringArray) -> void:
 			cmds.append(str(key).trim_prefix("cmd:"))
 	if not cmds.is_empty():
 		_print("  [color=#%s](new command%s noted: %s)[/color]" % [_hex(OSTheme.INFO), "" if cmds.size() == 1 else "s", ", ".join(cmds)])
+
+
+# Every file that can be searched right now: existing, not a program, readable.
+func _searchable() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e in Story.fs().all_files(Story.knowledge(sim()), Story.shift(sim())):
+		if not e.meta.has("exec") and not Story.is_encrypted(sim(), e):
+			out.append(e)
+	out.append_array(Story.copies(sim()))
+	return out
+
+
+func _grep(args: PackedStringArray) -> void:
+	if args.is_empty():
+		_error("Usage: grep <word>")
+		return
+	var word := " ".join(args).to_lower()
+	var hits := 0
+	var restricted := false
+	for e in _searchable():
+		var lines := str(e.body).split("\n")
+		for i in lines.size():
+			if lines[i].to_lower().contains(word):
+				hits += 1
+				if hits <= 30:
+					_print("  [color=#%s]%s:%d[/color]  %s" % [_hex(OSTheme.INFO), e.path, i + 1, _esc(lines[i].strip_edges())])
+				if Story.restricted(e) > 0.0:
+					restricted = true
+	if hits > 30:
+		_print("  [color=#%s](%d more)[/color]" % [_hex(OSTheme.TEXT_DIM), hits - 30])
+	if hits == 0:
+		_print("  No matches.")
+	var o := Story.oversight(sim())
+	if restricted and o:
+		o.violate(sim(), "searched former staff files for '%s'" % word, 2.0)
+	Facility.act("interaction", "Supervisor searches the files for '%s'" % word)
+
+
+func _find(args: PackedStringArray) -> void:
+	if args.is_empty():
+		_error("Usage: find <name>")
+		return
+	var name := args[0].to_lower()
+	var n := 0
+	for e in _searchable():
+		if str(e.name).to_lower().contains(name) and not str(e.name).begins_with("."):
+			_print("  " + str(e.path))
+			n += 1
+	if n == 0:
+		_print("  Nothing called that.")
+
+
+func _who() -> void:
+	_print("  supervisor  tty1      Day %d 05:55" % Story.shift(sim()))
+	_print("  pell        corkhq    since %s   (idle 0s)" % FACILITY_EPOCH)
+	if Story.knows(sim(), "root") or root:
+		_print("  maint       tty1      (you)")
+
+
+func _ps() -> void:
+	_print("  %5s  %-11s %s" % ["PID", "USER", "COMMAND"])
+	for p in PROCESSES:
+		_print("  %5d  %-11s %s%s" % [p[0], p[1], p[2], ("   [color=#%s](%s)[/color]" % [_hex(OSTheme.TEXT_DIM), p[3]]) if not str(p[3]).is_empty() else ""])
+
+
+func _uptime() -> void:
+	var days := 17258 + int(sim().time() / 86400.0)
+	var plant := sim().get_system("plant") as FacilityPlant
+	var load := plant.throughput if plant else 0.0
+	_print("  up %d days (since %s), 4 pods, load %.2f %.2f %.2f" % [days, FACILITY_EPOCH, load, load, load])
+
+
+func _history() -> void:
+	for i in history.size():
+		_print("  %4d  %s" % [i + 1, _esc(history[i])])
+
+
+func _kill(args: PackedStringArray) -> void:
+	if args.is_empty() or not args[0].is_valid_int():
+		_error("Usage: kill <pid>   (see: ps)")
+		return
+	match int(args[0]):
+		45:
+			_root_act("audit daemon stopped", 12.0, 0.3)
+			_print("  auditd stopped.")
+			_print("  [color=#%s]auditd restarted by corkhq-linkd (0.3 s). That was noticed.[/color]" % _hex(OSTheme.WARN))
+		44:
+			_error("kill: corkhq-linkd: operation not permitted. (There's hqctl for that.)")
+		1, 112, 113, 114:
+			_error("kill: %s: operation not permitted" % args[0])
+		212:
+			_print("  nightrun: already defunct. It keeps its high scores anyway.")
+		300:
+			_print("  You can't log yourself off from in here.")
+		_:
+			_error("kill: (%s): no such process" % args[0])
 
 
 func _cp(args: PackedStringArray) -> void:

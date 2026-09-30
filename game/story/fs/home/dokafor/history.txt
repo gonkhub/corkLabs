@@ -1,0 +1,16 @@
+#! name: .history
+#! date: two days ago
+#! learn: cmd:history
+talk tinker
+status
+talk tinker
+cat /home/rmarrow/README_IF_YOU_REPLACED_ME.txt
+run nightrun
+run nightrun
+run nightrun
+su maint
+podctl list
+podctl inspect 3
+podctl inspect 3
+exit
+talk tinker

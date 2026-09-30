@@ -22,4 +22,6 @@ maybe it'll talk to you.
 one more thing, for when you play: don't go where the sign says.
 go where it says not to.
 
+and type "who" sometime. see who else is always logged in.
+
 - R.M.
