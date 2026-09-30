@@ -25,6 +25,7 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Software stability**: independence, whims, fixations, critical errors (crash/glitch), sabotage, reboots | **New framework, needs a look** | Automated tests + journal read-throughs |
 | **Camera audio**: Feed/Voices/World/UI buses, one listening camera, room-aware 3D sounds, robot motor hum, Cameras mute, Terminal `sound` auditions | **New framework, needs a listen** | Automated tests + screenshot (not checked by ear) |
 | **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
+| **Ogre**: massive stationary crane core in a new hangar (light cone eye, one crane arm), `stationary`/`reach` traits, freight jobs, two hangar cameras | **New, needs a look** | Automated tests (`test_ogre.gd`) + screenshots; not tried in VR |
 
 ## Branches and pull requests
 
@@ -42,6 +43,7 @@ commits, and so on).
 | 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
 | 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
 | 7 | `feature/camera-audio` | Camera feed audio: bus layout, listener = the camera you watch, `FacilitySound` with room-aware attenuation, motor hum, Mute button (M), feed volume, `sound` auditions | Open the Audio tab in the editor; in Cameras, `sound loop tone 10` in the Terminal and switch cameras; hover grid feeds; press Mute |
+| 8 | `feature/ogre` (merged, PR #7) | Ogre, the stationary crane robot, and its hangar | Watch the Hangar cameras through a Wait; perform for Ogre in the recorder (right hand = crane, left trigger = winch) |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
@@ -71,6 +73,13 @@ All tests pass on each branch (`tools\run_tests.ps1`; 16 test files on the last 
   mic" band-pass? room reverbs per camera?).
 - **Which sounds come first**: room tone per room, device hums/alarms on the
   plant props, passage shutters. Each is a `FacilitySound` on the thing.
+- **Ogre**: is the hangar where it should be (south of the main hall, 50 x 40 m)?
+  What should it really lift (freight is a placeholder)? Should it hand things
+  to the rail robots at the loading bay (a chain, like salvage)? Should it be
+  the preferred robot for hangar work (now Hauler sometimes rides in and takes
+  the loading bay first)? Its lines are a first pass (end of `barks.txt`).
+- **Ogre's look**: ceiling-hung (like the others) or cradled on the floor? The
+  eyelid is a flat shutter; the crane's hook is a simple two-jaw grab.
 
 - **What each software package should really do** (packages.txt; three are wired).
 - **Crated robots**: how a delivered unit gets activated (a new robot in the facility?).
@@ -138,3 +147,6 @@ All tests pass on each branch (`tools\run_tests.ps1`; 16 test files on the last 
 - An old facility save (before rooms) is discarded: a new facility starts.
 - Hauler still reads a little leggy from straight in front.
 - The recorder bakes when you press stop; long takes may hitch briefly in the headset.
+- Ogre's baked clips don't aim the crane at its real work spot (no reactive IK
+  yet), so the hook works near, not exactly on, the crates.
+- Ogre in the recorder is shown at 1x (a 1.5 m core); its crane reaches about 3 m.

@@ -97,6 +97,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | The budget comes from shift reviews (grade A-F vs an 85% throughput target) | Performance drives resources; resources drive performance |
 | 2026-09-30 | Software packages are learned and installed through the **Terminal** (connect, corkpkg), approved by corporate by **clearance**, with install codes delivered via corkHQ | User's direction: the player learns the commands; corporate gates progress |
 | 2026-09-30 | Catalogue, packages and corkHQ lines are plain text data files | Content can grow without code |
+| 2026-09-30 | New robot **Ogre**: a massive (8x, 12 m) spherical core with ONE arm, a knuckle-boom crane; dark muted greys, yellow core lights; its big eye throws a visible yellow light cone | User's design |
+| 2026-09-30 | Ogre is **stationary**: bolted to the centre of its hangar's ceiling, never changes rooms. Works anything within its crane's reach (20 m); charges from its own mains coupling | User's design. Built as a general `stationary` + `reach` trait so any future fixed robot works the same way |
+| 2026-09-30 | Ogre's hangar is a new room (50 x 40 m, 26 m tall) south of the main hall with a wide door; freight arrives there (heavy work). The loading bay is shared with rail robots, the deep stacks are Ogre-only (a railless "pad") | Gives the crane something to do, and a place where Ogre and the rail robots meet. Placeholder content for the user to redesign |
+| 2026-09-30 | The light cone is a fake volumetric mesh (additive shader, soft where it meets the floor) plus a real spotlight | Works in every renderer and costs little; no fog set-up needed |
+| 2026-09-30 | Crane mapping: right hand = jib tip (knuckle up), left trigger = winch, right trigger = grab; the hook hangs and sways on a spring | One arm for a one-armed robot; the knuckle points up so the crane never reads as a leg |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)
@@ -114,5 +119,6 @@ These all fit and can be combined; none is being built yet:
 | --- | --- | --- |
 | **Tinker** | Wheatley-style core on a tether, telescoping arms, drill-spin tool heads | Precise, quick, curious: 3 Hz body, 0.9x reach, 1.15x amplitude |
 | **Hauler** | Heavy hanging body, neck + head, long two-segment excavator arms, clamp claws | Brute labour: 1.2 Hz underdamped body (swings, winds up), 1.8x reach, plays 1.25x slower |
+| **Ogre** | Huge ceiling-mounted spherical core (drawn 8x), dark greys + yellow light rings, a searchlight eye with a light cone, one knuckle-boom crane with a hanging grab | Planet-slow: 0.35 Hz core that turns only part-way (the eye does the rest), 3x reach, plays 1.8x slower. Stationary |
 
-Both are placeholder primitives; final models will be rigid parts from Blender.
+All are placeholder primitives; final models will be rigid parts from Blender.

@@ -8,6 +8,8 @@
 #   ducts are closed to wide robots, blocked routes are closed to everyone.
 #   If a route closes on the way it re-plans; if there's no way at all it
 #   gives up on that job and says so.
+#   A STATIONARY robot (Ogre) never moves: it works whatever is within its
+#   `reach` (in its own room) and turns down the rest.
 #
 # POWER  0-1. Drains while it's on, faster moving and working. Recharges on a
 #        dock. Below `power_reserve` it drops everything to recharge. At 0 it
@@ -197,7 +199,7 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 		for j in board.open_jobs():
 			if j.status == "claimed" and j.claimed_by != sim_id:
 				continue
-			var r := layout.reach_station(f, j.station)
+			var r := _reach_station(layout, f, j.station)
 			if r.is_empty():
 				continue   # can't get there (too narrow, or blocked)
 			var fit := traits.skill(j.skill)
@@ -243,7 +245,7 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 	# Errant behaviour: grows as stability falls.
 	var drift := clampf(traits.stability_decay / 0.0004, 0.3, 2.0)
 	var wander := drift * 0.25 * pow(1.0 - stability, 1.5) * (0.3 + 0.7 * energy)
-	out.append({"key": "wander", "label": "wander the rails", "score": wander, "why": "drifting (stability %d%%)" % _pct(stability)})
+	out.append({"key": "wander", "label": "sweep the crane about" if traits.stationary else "wander the rails", "score": wander, "why": "drifting (stability %d%%)" % _pct(stability)})
 	if ind > FIXATE_FROM:
 		out.append({"key": "fixate", "label": "fixate on something", "score": ind * 0.45 * (0.5 + 0.5 * energy),
 			"why": "unstable: an errant fixation (independence %d%%)" % _pct(ind)})
@@ -322,6 +324,8 @@ func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
 		_say(sim, "wander", {})
 	elif key == "fixate":
 		var ids := _layout(sim).stations_of()
+		if traits.stationary:
+			ids = ids.filter(func(i): return _crane_distance(_layout(sim), i) <= traits.reach)
 		var st: String = ids[sim.rng.randi() % ids.size()]
 		activity = {"kind": "fixate", "station": st, "until": -1.0}
 		_say(sim, "fixate", {"station": _layout(sim).station(st).name})
@@ -347,7 +351,7 @@ func _sabotage_target(sim: FacilitySim, f: Dictionary) -> Dictionary:
 		if d.fault or int(d.job) >= 0 or not FacilityPlant.KINDS[d.kind].has("job"):
 			continue
 		var fit := traits.skill(FacilityPlant.KINDS[d.kind].skill)
-		if fit > best_fit and not _layout(sim).reach_station(f, d.station).is_empty():
+		if fit > best_fit and not _reach_station(_layout(sim), f, d.station).is_empty():
 			best_fit = fit
 			best = d
 	return best
@@ -456,6 +460,10 @@ func why_cant_reach(sim: FacilitySim, station_id: String) -> String:
 	var st := layout.station(station_id)
 	if st.is_empty():
 		return "there's no such place"
+	if traits.stationary:
+		if _crane_distance(layout, station_id) <= traits.reach:
+			return ""
+		return "it's out of my reach, and I don't leave the %s" % str(layout.rooms.get(layout.room_at(seg, off), {}).get("name", "room")).to_lower()
 	if not layout.plan_to_station(seg, off, station_id, traits.width).is_empty():
 		return ""
 	# Would it get there if nothing were blocked? Then something's blocked.
@@ -580,6 +588,14 @@ func _travel(sim: FacilitySim, goal: String, to_seg: String, to_off: float, dt: 
 	if seg == to_seg and absf(off - to_off) < 0.01:
 		return true
 	var layout := _layout(sim)
+	if traits.stationary:
+		# It never moves: the place is either within reach (it's "there") or not.
+		var p := layout.world_pos(to_seg, to_off)
+		var me := layout.world_pos(seg, off)
+		if Vector2(p.x - me.x, p.z - me.z).length() <= traits.reach and layout.room_at(to_seg, to_off) == layout.room_at(seg, off):
+			return true
+		_give_up(sim, goal)
+		return false
 	if route.is_empty() or _route_goal != goal:
 		var r := layout.plan(seg, off, to_seg, to_off, traits.width)
 		if r.is_empty():
@@ -690,8 +706,11 @@ func _field(layout: FacilityLayout) -> Dictionary:
 	return _field_cache
 
 
-# A random spot it can get to, somewhere on the network.
+# A random spot it can get to, somewhere on the network (a stationary robot
+# stays where it is).
 func _wander_target(sim: FacilitySim) -> Dictionary:
+	if traits.stationary:
+		return {"kind": "wander", "seg": seg, "off": off}
 	var layout := _layout(sim)
 	var ids := layout.segments.keys()
 	ids.sort()
@@ -713,11 +732,30 @@ func _nearest_dock(sim: FacilitySim, f := {}) -> Dictionary:
 	var best := {}
 	var best_cost := INF
 	for id in layout.stations_of("dock"):
-		var r := layout.reach_station(f, id)
+		var r := _reach_station(layout, f, id)
 		if not r.is_empty() and float(r.cost) < best_cost:
 			best_cost = r.cost
 			best = layout.station(id)
 	return best
+
+
+# Can it get to a station, and how far is it: {"cost", "length"} or {}.
+# Rail robots ride the network; a stationary one reaches with its crane.
+func _reach_station(layout: FacilityLayout, f: Dictionary, station_id: String) -> Dictionary:
+	if not traits.stationary:
+		return layout.reach_station(f, station_id)
+	var d := _crane_distance(layout, station_id)
+	return {"cost": 0.0, "length": d} if d <= traits.reach else FacilityLayout.NO_ROUTE
+
+
+# Floor distance from its mount to a station (INF if it's in another room).
+func _crane_distance(layout: FacilityLayout, station_id: String) -> float:
+	var st := layout.station(station_id)
+	if st.is_empty() or st.room != layout.room_at(seg, off):
+		return INF
+	var a := layout.world_pos(seg, off)
+	var b := layout.station_world_pos(station_id)
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 func _room_name(sim: FacilitySim) -> String:
@@ -813,7 +851,7 @@ func doing_text(sim: FacilitySim) -> String:
 		"recharge":
 			return ("heading to " if moving else "charging at ") + str(_layout(sim).station(activity.station).get("name", "dock"))
 		"wander":
-			return "wandering (%s)" % _room_name(sim)
+			return ("restless, sweeping its crane (%s)" if traits.stationary else "wandering (%s)") % _room_name(sim)
 		"fixate":
 			return "fixated on %s (no job there)" % _layout(sim).station(activity.station).get("name", "?")
 		"sabotage":

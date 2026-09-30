@@ -13,7 +13,8 @@
 #   Mouse drag     orbit    Wheel  zoom
 extends Node3D
 
-const SPACING := 2.2
+## Gap between neighbouring robots (each gets as much room as it's wide).
+const GAP := 0.4
 
 @onready var stages: Node3D = $Stages
 @onready var info: Label = $Overlay/Info
@@ -42,22 +43,42 @@ func _ready() -> void:
 	var wanted := args[args.find("--take") + 1] if args.find("--take") >= 0 and args.find("--take") + 1 < args.size() else TakeStore.newest()
 	take_index = maxi(take_paths.find(wanted), 0) if not wanted.is_empty() else take_paths.size() - 1
 	var ids := RobotLibrary.ids()
+	var x := 0.0
 	for i in ids.size():
 		var holder := Node3D.new()
 		holder.name = ids[i]
 		stages.add_child(holder)
-		holder.position = Vector3((i - (ids.size() - 1) / 2.0) * SPACING, 2.5, 0)
 		var rig := RobotLibrary.instantiate(ids[i])
 		holder.add_child(rig)
 		rigs.append(rig)
+		# Side by side, each with room for its reach (Ogre's crane is long).
+		var r := _footprint(rig)
+		x += r if i > 0 else 0.0
+		holder.position = Vector3(x, 2.5, 0)
+		x += r + GAP
 		var label := Label3D.new()
 		label.text = rig.profile.display_name if rig.profile else ids[i]
 		label.position = Vector3(0, 0.35, 0)
 		label.pixel_size = 0.004
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		holder.add_child(label)
+	var row := x - GAP
+	for holder in stages.get_children():
+		(holder as Node3D).position.x -= (row - _footprint(rigs[0])) * 0.5
+	cam.position.z = maxf(cam.position.z, row * 0.75)
 	_apply_facing()
 	_load_take()
+
+
+# How far a robot sticks out from its mount across the floor, at rest.
+func _footprint(rig: RobotRig) -> float:
+	var r := 0.5
+	for m in rig.find_children("*", "MeshInstance3D", true, false):
+		var box: AABB = rig.rig_xform(m) * (m as MeshInstance3D).get_aabb()
+		for k in 8:
+			var p := box.get_endpoint(k)
+			r = maxf(r, Vector2(p.x, p.z).length())
+	return minf(r, 4.0)
 
 
 func _process(delta: float) -> void:

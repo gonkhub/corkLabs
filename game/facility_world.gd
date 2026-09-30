@@ -272,8 +272,13 @@ func _build_rails() -> void:
 	root.name = "Rails"
 	add_child(root)
 	var mat := _mat(RAIL_COLOR, 0.85, 0.35)
+	var pad_nodes := {}
 	for sid in layout.segments:
 		var s := layout.segment(sid)
+		if s.get("pad", false):   # no rail to a pad
+			pad_nodes[s.a] = true
+			pad_nodes[s.b] = true
+			continue
 		var pa: Vector3 = layout.nodes[s.a].pos
 		var pb: Vector3 = layout.nodes[s.b].pos
 		var beam := BoxMesh.new()
@@ -282,6 +287,8 @@ func _build_rails() -> void:
 		m.position = (pa + pb) * 0.5 + Vector3(0, 0.12, 0)
 		m.look_at_from_position(m.position, pb + Vector3(0, 0.12, 0), Vector3.UP if absf((pb - pa).normalized().y) < 0.99 else Vector3.RIGHT)
 	for nid in layout.nodes:
+		if pad_nodes.has(nid):
+			continue
 		var joint := BoxMesh.new()
 		joint.size = Vector3(0.4, 0.25, 0.4)
 		var j := _mesh(joint, mat, root)
