@@ -27,4 +27,5 @@ enabled=PackedStringArray("res://addons/corklabs_pipeline/plugin.cfg")
 [xr]
 
 openxr/enabled=true
+openxr/startup_alert=false
 shaders/enabled=true
