@@ -3,11 +3,25 @@
 #   ui_scale, fullscreen, boot animation, which pop-ups to show, robot voices,
 #   camera feed sound (mute, volume),
 #   and the window layout (which apps were open, where, and their view state)
-#   so the desktop comes back the way you left it.
+#   so the desktop comes back the way you left it,
+#   and the Notes app's text (the desk's notepad outlives any one facility).
 class_name OSSettings
 extends RefCounted
 
 const PATH := "user://os_settings.json"
+## What the Notes app's notepad says the first time: the last supervisor's leftovers.
+const NOTES_LEFTOVER := """--- already on the notepad when you arrived ---
+
+mornings (D.O.)
+  - say good morning to Tinker (talk tinker)
+  - morning report BEFORE Pell asks
+  - look at pod 3's sync. 4 beats, 3 beats. every time.
+  - do NOT let Pell see this notepad
+
+the desk keeps what you write here. the facility doesn't.
+
+--- your notes ---
+"""
 const DEFAULTS := {
 	"ui_scale": 1.0,
 	"fullscreen": false,
@@ -20,6 +34,7 @@ const DEFAULTS := {
 	"feed_muted": false,
 	"feed_volume": 1.0,
 	"windows": {},     # app id -> {"rect": [x, y, w, h], "open": bool, "minimized": bool, "maximized": bool, "state": {...}}
+	"notes": NOTES_LEFTOVER,   # the Notes app: the supervisor's own notepad (it's the desk: it survives new saves)
 }
 
 static var path := PATH

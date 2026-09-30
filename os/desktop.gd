@@ -48,9 +48,11 @@ const APPS := [
 	["requisitions", preload("res://os/apps/requisitions_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
 	["files", preload("res://os/apps/files_app.gd")],
+	["notes", preload("res://os/apps/notes_app.gd")],
 	["terminal", preload("res://os/apps/terminal_app.gd")],
 	["nightrun", preload("res://os/apps/nightrun_app.gd")],
 	["settings", preload("res://os/apps/settings_app.gd")],
+	["bin", preload("res://os/apps/bin_app.gd")],
 ]
 ## Apps that aren't on the desktop until the supervisor finds them
 ## (Knowledge "app:<id>"): a program in the file system, say.

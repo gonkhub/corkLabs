@@ -183,7 +183,7 @@ func _on_file(i: int) -> void:
 ## Shows a file (reading it, with what that costs, the first time).
 func open_file(vpath: String) -> void:
 	file = vpath
-	var e := Story.fs().get_entry(vpath)
+	var e := Story.entry(sim(), vpath)
 	password.visible = false
 	action_row.visible = false
 	if e.meta.has("exec"):
@@ -219,7 +219,7 @@ func _fill_list_keep() -> void:
 
 
 func _action() -> void:
-	var e := Story.fs().get_entry(file)
+	var e := Story.entry(sim(), file)
 	if e.is_empty():
 		return
 	if e.meta.has("exec"):

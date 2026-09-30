@@ -53,12 +53,74 @@ static func learn(sim: FacilitySim, key: String) -> bool:
 	return k != null and k.learn(sim, key)
 
 
+## An entry by path: the file system's, or one of the supervisor's copies.
+static func entry(sim: FacilitySim, vpath: String) -> Dictionary:
+	if vpath.begins_with(VirtualFS.HOME + "/"):
+		for c in copies(sim):
+			if c.path == vpath:
+				return c
+	return fs().get_entry(vpath)
+
+
 static func exists(sim: FacilitySim, vpath: String) -> bool:
+	if vpath.begins_with(VirtualFS.HOME + "/"):
+		for c in copies(sim):
+			if c.path == vpath:
+				return true
 	return fs().exists(vpath, knowledge(sim), shift(sim))
 
 
 static func list(sim: FacilitySim, vdir: String, show_hidden := false) -> Array[Dictionary]:
-	return fs().children(vdir, knowledge(sim), shift(sim), show_hidden)
+	var out := fs().children(vdir, knowledge(sim), shift(sim), show_hidden)
+	if vdir == VirtualFS.HOME:
+		for c in copies(sim):
+			if show_hidden or not str(c.name).begins_with("."):
+				out.append(c)
+		out.sort_custom(func(a, b): return [not a.dir, a.name] < [not b.dir, b.name])
+	return out
+
+
+# --- Copies -------------------------------------------------------------------------
+# "cp <file>" copies a file into the supervisor's home folder (Knowledge
+# "copied:<source path>"). A copy keeps its text when the original is purged:
+# the one way to keep Okafor's files.
+
+## The supervisor's copies, as file entries in their home folder.
+static func copies(sim: FacilitySim) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var k := knowledge(sim)
+	if k == null:
+		return out
+	for src in k.with_prefix("copied:"):
+		var e := fs().get_entry(src)
+		if e.is_empty():
+			continue
+		out.append({"path": VirtualFS.HOME + "/" + str(e.name), "name": e.name, "dir": false, "parent": VirtualFS.HOME,
+			"meta": {"owner": "supervisor", "date": "today", "copy_of": src}, "body": e.body})
+	return out
+
+
+## Copies a file into the home folder. Returns {"ok", "text"}.
+static func copy_file(sim: FacilitySim, src: String) -> Dictionary:
+	var e := entry(sim, src)
+	if e.is_empty() or not exists(sim, src):
+		return {"ok": false, "text": "cp: %s: No such file" % src}
+	if e.dir:
+		return {"ok": false, "text": "cp: %s: Is a directory" % src}
+	if e.meta.has("copy_of") or str(e.parent) == VirtualFS.HOME:
+		return {"ok": false, "text": "cp: %s is already in your home folder" % e.name}
+	if e.meta.has("password") or e.meta.has("exec"):
+		return {"ok": false, "text": "cp: %s: can't be copied" % e.name}
+	if exists(sim, VirtualFS.HOME + "/" + str(e.name)):
+		return {"ok": false, "text": "cp: ~/%s already exists" % e.name}
+	learn(sim, "copied:" + src)
+	var r := restricted(e)
+	var o := oversight(sim)
+	if r > 0.0 and o:
+		o.violate(sim, "copied %s" % src, r + 1.0)
+	if src.begins_with("/home/dokafor/"):
+		learn(sim, "secret:kept")
+	return {"ok": true, "text": "Copied to ~/%s" % e.name}
 
 
 static func is_encrypted(sim: FacilitySim, e: Dictionary) -> bool:
@@ -82,7 +144,7 @@ static func restricted(e: Dictionary) -> float:
 ## file is logged as a violation, and it costs its reading time. Re-reading
 ## is free.
 static func read_file(sim: FacilitySim, vpath: String) -> Dictionary:
-	var e := fs().get_entry(vpath)
+	var e := entry(sim, vpath)
 	if e.is_empty() or not exists(sim, vpath):
 		return {"ok": false, "error": "%s: No such file or directory" % vpath}
 	if e.dir:
@@ -116,7 +178,7 @@ static func read_file(sim: FacilitySim, vpath: String) -> Dictionary:
 
 ## Tries a password. Returns {"ok", "text"}. A right password decrypts it for good.
 static func decrypt(sim: FacilitySim, vpath: String, password: String) -> Dictionary:
-	var e := fs().get_entry(vpath)
+	var e := entry(sim, vpath)
 	if e.is_empty() or not exists(sim, vpath) or e.dir:
 		return {"ok": false, "text": "decrypt: %s: No such file" % vpath}
 	if not e.meta.has("password"):

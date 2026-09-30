@@ -39,6 +39,7 @@ func _initialize() -> void:
 
 	await _test_terminal()
 	await _test_apps()
+	await _test_bin_and_notes()
 	await _test_plant_and_liaison()
 	await _test_nightrun()
 	await _test_maint()
@@ -81,6 +82,15 @@ func _test_terminal() -> void:
 	out = term.run("cat todo.txt")
 	_check(out.contains("talk tinker") and Story.knows(sim(), "cmd:talk"), "Okafor's todo list teaches 'talk'")
 	_check(Story.oversight(sim()).suspicion > 0.0, "and reading it was logged")
+	# cp: keep a copy before the purge.
+	out = term.run("cp todo.txt")
+	_check(out.contains("Copied to ~/todo.txt") and Story.knows(sim(), "secret:kept"), "cp copies Okafor's todo into your home (%s)" % out.strip_edges())
+	_check(term.run("ls ~").contains("todo.txt") and term.run("cp todo.txt").contains("already"), "it's in your home folder, once")
+	Story.learn(sim(), "purged:dokafor")
+	_check(not Story.exists(sim(), "/home/dokafor/todo.txt") and term.run("cat ~/todo.txt").contains("talk tinker"),
+		"after the purge the original's gone, the copy isn't")
+	Story.knowledge(sim()).forget("purged:dokafor")
+	term.run("cd /home/dokafor")
 	out = term.run("cat /home/ehollis/diary.enc")
 	_check(out.contains("encrypted"), "the diary is encrypted")
 	_check(term.run("decrypt /home/ehollis/diary.enc wrong").contains("wrong password"), "decrypt with a wrong password")
@@ -136,6 +146,30 @@ func _test_apps() -> void:
 	t0 = sim().time()
 	units._diagnose("hauler")
 	_check(sim().time() - t0 >= 599.0 and units.cards["hauler"].reply.text.contains("DIAG"), "Diagnose takes 10 minutes and reads the unit out")
+
+
+func _test_bin_and_notes() -> void:
+	var bin = desk.open_app("bin")
+	await process_frame
+	bin._fill_list()
+	var names: Array = []
+	for i in bin.list.item_count:
+		names.append(bin.list.get_item_text(i))
+	_check(bin.dir == "/trash" and names.any(func(n): return str(n).begins_with("resignation_draft")), "the Recycle Bin holds deleted files (%s)" % ", ".join(names))
+	bin.open_file("/trash/untitled.txt")
+	_check(bin.view.get_parsed_text().contains("the light stays on"), "which can still be read")
+	var standing := Story.oversight(sim()).standing
+	bin.empty_button.pressed.emit()
+	bin._fill_list()
+	_check(bin.list.item_count == 0 and Story.oversight(sim()).standing > standing and bin.empty_button.disabled,
+		"emptying it deletes them for good (corporate likes a tidy terminal)")
+	var notes = desk.open_app("notes")
+	await process_frame
+	_check(notes.edit.text.contains("already on the notepad"), "the Notes app came with someone else's notes")
+	notes.edit.text += "\nmaint: top score"
+	notes._dirty = 0.01
+	notes._process(0.1)
+	_check(str(OSSettings.get_value("notes")).contains("maint: top score"), "and keeps yours on the desk")
 
 
 func _test_plant_and_liaison() -> void:

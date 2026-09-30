@@ -105,6 +105,28 @@ static func read_file(vpath: String) -> Dictionary:
 	return r
 
 
+## Copies a file into the home folder (1 minute).
+static func copy_file(vpath: String) -> Dictionary:
+	var r := Story.copy_file(Facility.sim, vpath)
+	if r.ok:
+		Facility.act("dialogue_line", "Supervisor copies %s" % vpath)
+	return r
+
+
+## Empties the Recycle Bin: what's in it is gone for good (this run). Corporate
+## likes a tidy terminal.
+static func empty_bin() -> bool:
+	var sim: FacilitySim = Facility.sim
+	if not Story.learn(sim, "bin_emptied"):
+		return false
+	sim.note("supervisor", "Empties the Recycle Bin")
+	var o := Story.oversight(sim)
+	if o:
+		o.commend(sim, "a tidy terminal", 1.0)
+	Facility.act("dialogue_line", "Supervisor empties the Recycle Bin")
+	return true
+
+
 ## Tries a password on an encrypted file (a choice: 2 minutes).
 static func decrypt(vpath: String, password: String) -> Dictionary:
 	var r := Story.decrypt(Facility.sim, vpath, password)

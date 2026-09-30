@@ -1,0 +1,6 @@
+#! date: 1993-11-02
+#! owner: ehollis
+#! restricted: 2
+#! gone_if: bin_emptied
+If they take me, tell Ogre the light stays on.
+It will know what that means. I don't, any more.

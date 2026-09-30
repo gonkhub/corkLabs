@@ -1,0 +1,11 @@
+#! date: yesterday
+#! owner: corp
+#! shift: 2
+DIRECTORATE OF OUTPUT: telemetry note (supervisor copy)
+
+Pod 3 sync pattern irregular since intake: a repeating 4-3 rhythm, not
+present in the pod's previous occupant. Output unaffected.
+
+Action: none. Do not discuss the pattern with units. Unit TINKER has
+been observed reproducing it; this is a firmware artefact and will be
+corrected at the next filter update.

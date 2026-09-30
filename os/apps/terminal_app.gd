@@ -42,6 +42,7 @@ const COMMANDS := {
 	"pwd": ["pwd", "which folder you're in", "files"],
 	"cat": ["cat <file>", "read a file (takes time the first time)", "files"],
 	"decrypt": ["decrypt <file> <password>", "unlock an encrypted file", "files"],
+	"cp": ["cp <file>", "copy a file into your home folder (copies survive a purge)", "files"],
 	"run": ["run <program>", "run a program", "files"],
 	"connect": ["connect <address>", "open a session with a corporate server", "network"],
 	"disconnect": ["disconnect", "close it", "network"],
@@ -185,6 +186,7 @@ func _submit(line: String) -> void:
 		"pwd": _print("  " + cwd)
 		"cat": _cat(args)
 		"decrypt": _decrypt(args)
+		"cp": _cp(args)
 		"run": _run(args)
 		"connect": _connect(args)
 		"disconnect": _disconnect()
@@ -481,7 +483,7 @@ func _ls(args: PackedStringArray) -> void:
 			target = VirtualFS.normalize(cwd, a)
 	if show_all:
 		Story.learn(sim(), "hidden_files")   # the Files app can show them now too
-	var e := Story.fs().get_entry(target)
+	var e := Story.entry(sim(), target)
 	if e.is_empty() or not Story.exists(sim(), target):
 		_error("ls: %s: No such file or directory" % target)
 		return
@@ -521,7 +523,7 @@ func _file_line(e: Dictionary, long: bool) -> String:
 
 func _cd(args: PackedStringArray) -> void:
 	var target := VirtualFS.normalize(cwd, args[0] if not args.is_empty() else "~")
-	var e := Story.fs().get_entry(target)
+	var e := Story.entry(sim(), target)
 	if e.is_empty() or not Story.exists(sim(), target):
 		_error("cd: %s: No such file or directory" % target)
 		return
@@ -557,6 +559,17 @@ func _cat(args: PackedStringArray) -> void:
 		_print("  [color=#%s](new command%s noted: %s)[/color]" % [_hex(OSTheme.INFO), "" if cmds.size() == 1 else "s", ", ".join(cmds)])
 
 
+func _cp(args: PackedStringArray) -> void:
+	if args.is_empty():
+		_error("Usage: cp <file>   (copies it into your home folder)")
+		return
+	var r: Dictionary = Supervisor.copy_file(VirtualFS.normalize(cwd, args[0]))
+	if r.ok:
+		_print("  " + _esc(r.text))
+	else:
+		_error(r.text)
+
+
 func _decrypt(args: PackedStringArray) -> void:
 	if args.size() < 2:
 		_error("Usage: decrypt <file> <password>")
@@ -573,7 +586,7 @@ func _run(args: PackedStringArray) -> void:
 		_error("Usage: run <program>")
 		return
 	var path := VirtualFS.normalize(cwd, args[0])
-	var e := Story.fs().get_entry(path)
+	var e := Story.entry(sim(), path)
 	if e.is_empty() or not Story.exists(sim(), path):
 		# By name, from the usual places.
 		for dir in ["/opt/games", "/opt"]:
