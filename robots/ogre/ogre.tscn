@@ -1,0 +1,357 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://robots/ogre/ogre_rig.gd" id="1_rig"]
+[ext_resource type="Resource" path="res://robots/ogre/ogre_profile.tres" id="2_profile"]
+[ext_resource type="Shader" path="res://robots/ogre/beam.gdshader" id="3_beam"]
+[ext_resource type="Script" path="res://robots/ogre/ogre_beam.gd" id="4_beam"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.27, 0.28, 0.29, 1)
+metallic = 0.45
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_plate"]
+albedo_color = Color(0.36, 0.37, 0.38, 1)
+metallic = 0.4
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.12, 0.12, 0.13, 1)
+metallic = 0.5
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_arm"]
+albedo_color = Color(0.4, 0.41, 0.42, 1)
+metallic = 0.45
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_light"]
+albedo_color = Color(1, 0.78, 0.2, 1)
+emission_enabled = true
+emission = Color(1, 0.78, 0.2, 1)
+emission_energy_multiplier = 3.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_eye"]
+albedo_color = Color(1, 0.84, 0.35, 1)
+emission_enabled = true
+emission = Color(1, 0.82, 0.3, 1)
+emission_energy_multiplier = 5.0
+
+[sub_resource type="ShaderMaterial" id="Mat_beam"]
+render_priority = 0
+shader = ExtResource("3_beam")
+shader_parameter/color = Color(1, 0.78, 0.22, 1)
+shader_parameter/intensity = 0.22
+shader_parameter/falloff = 1.6
+shader_parameter/length = 3.5
+shader_parameter/soft_distance = 1.5
+
+[sub_resource type="CylinderMesh" id="Mesh_mount"]
+top_radius = 0.4
+bottom_radius = 0.4
+height = 0.1
+radial_segments = 32
+
+[sub_resource type="CylinderMesh" id="Mesh_column"]
+top_radius = 0.13
+bottom_radius = 0.13
+height = 0.5
+radial_segments = 24
+
+[sub_resource type="CylinderMesh" id="Mesh_collar"]
+top_radius = 0.14
+bottom_radius = 0.24
+height = 0.1
+radial_segments = 32
+
+[sub_resource type="SphereMesh" id="Mesh_shell"]
+radius = 0.75
+height = 1.5
+radial_segments = 64
+rings = 32
+
+[sub_resource type="TorusMesh" id="Mesh_band"]
+inner_radius = 0.5
+outer_radius = 0.58
+rings = 64
+ring_segments = 12
+
+[sub_resource type="TorusMesh" id="Mesh_light_ring"]
+inner_radius = 0.6
+outer_radius = 0.635
+rings = 64
+ring_segments = 8
+
+[sub_resource type="BoxMesh" id="Mesh_plate_back"]
+size = Vector3(0.75, 0.54, 0.1)
+
+[sub_resource type="BoxMesh" id="Mesh_plate_side"]
+size = Vector3(0.1, 0.54, 0.62)
+
+[sub_resource type="SphereMesh" id="Mesh_lamp"]
+radius = 0.04
+height = 0.08
+
+[sub_resource type="CylinderMesh" id="Mesh_socket"]
+top_radius = 0.34
+bottom_radius = 0.34
+height = 0.14
+radial_segments = 48
+
+[sub_resource type="TorusMesh" id="Mesh_rim"]
+inner_radius = 0.28
+outer_radius = 0.37
+rings = 48
+ring_segments = 12
+
+[sub_resource type="CylinderMesh" id="Mesh_lens"]
+top_radius = 0.24
+bottom_radius = 0.24
+height = 0.03
+radial_segments = 48
+
+[sub_resource type="BoxMesh" id="Mesh_lid"]
+size = Vector3(0.62, 0.035, 0.5)
+
+[sub_resource type="CylinderMesh" id="Mesh_beam"]
+top_radius = 0.22
+bottom_radius = 1.3
+height = 3.5
+radial_segments = 48
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="CylinderMesh" id="Mesh_turret"]
+top_radius = 0.2
+bottom_radius = 0.22
+height = 0.14
+radial_segments = 24
+
+[sub_resource type="SphereMesh" id="Mesh_joint"]
+radius = 0.14
+height = 0.28
+
+[sub_resource type="BoxMesh" id="Mesh_boom"]
+size = Vector3(0.17, 0.2, 1.6)
+
+[sub_resource type="BoxMesh" id="Mesh_jib"]
+size = Vector3(0.13, 0.16, 1.4)
+
+[sub_resource type="CylinderMesh" id="Mesh_sheave"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.07
+radial_segments = 20
+
+[sub_resource type="CylinderMesh" id="Mesh_cable"]
+top_radius = 0.012
+bottom_radius = 0.012
+height = 1.0
+radial_segments = 6
+
+[sub_resource type="BoxMesh" id="Mesh_block"]
+size = Vector3(0.18, 0.16, 0.12)
+
+[sub_resource type="BoxMesh" id="Mesh_jaw"]
+size = Vector3(0.16, 0.22, 0.03)
+
+[node name="Ogre" type="Node3D"]
+script = ExtResource("1_rig")
+profile = ExtResource("2_profile")
+
+[node name="Mount" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+mesh = SubResource("Mesh_mount")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Column" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.33, 0)
+mesh = SubResource("Mesh_column")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="Collar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.58, 0)
+mesh = SubResource("Mesh_collar")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="SpeechAnchor" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0)
+
+[node name="Core" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.3, 0)
+
+[node name="Shell" type="MeshInstance3D" parent="Core"]
+mesh = SubResource("Mesh_shell")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Band" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 0)
+mesh = SubResource("Mesh_band")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="LightRingUpper" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.44, 0)
+mesh = SubResource("Mesh_light_ring")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="LightRingLower" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.44, 0)
+mesh = SubResource("Mesh_light_ring")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="PlateBack" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0.71)
+mesh = SubResource("Mesh_plate_back")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="PlateLeft" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.71, 0.03, 0.03)
+mesh = SubResource("Mesh_plate_side")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="LampA" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0.3, -0.53)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="LampB" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.3, -0.53)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="LampC" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.52, -0.15, -0.52)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="LampD" type="MeshInstance3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.69, -0.3)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="Eye" type="Node3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, -0.66)
+
+[node name="Socket" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.02)
+mesh = SubResource("Mesh_socket")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Rim" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.09)
+mesh = SubResource("Mesh_rim")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="Lens" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.095)
+mesh = SubResource("Mesh_lens")
+surface_material_override/0 = SubResource("Mat_eye")
+
+[node name="LidTop" type="Node3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.09)
+
+[node name="LidMesh" type="MeshInstance3D" parent="Core/Eye/LidTop"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.33, -0.02)
+mesh = SubResource("Mesh_lid")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="Glow" type="SpotLight3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.14)
+light_color = Color(1, 0.8, 0.3, 1)
+light_energy = 8.0
+shadow_enabled = true
+spot_range = 5.0
+spot_attenuation = 0.6
+spot_angle = 17.0
+spot_angle_attenuation = 0.8
+
+[node name="Beam" type="MeshInstance3D" parent="Core/Eye"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, -1.89)
+cast_shadow = 0
+mesh = SubResource("Mesh_beam")
+material_override = SubResource("Mat_beam")
+script = ExtResource("4_beam")
+
+[node name="CraneBase" type="Node3D" parent="Core"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, -0.5, -0.37)
+
+[node name="Turret" type="MeshInstance3D" parent="Core/CraneBase"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.04, 0)
+mesh = SubResource("Mesh_turret")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="Joint" type="MeshInstance3D" parent="Core/CraneBase"]
+mesh = SubResource("Mesh_joint")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Boom" type="Node3D" parent="Core/CraneBase"]
+
+[node name="BoomMesh" type="MeshInstance3D" parent="Core/CraneBase/Boom"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.8)
+mesh = SubResource("Mesh_boom")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="Jib" type="Node3D" parent="Core/CraneBase/Boom"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.6)
+
+[node name="Knuckle" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib"]
+transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, 0, 0, 0)
+mesh = SubResource("Mesh_joint")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="KnuckleLamp" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="JibMesh" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7)
+mesh = SubResource("Mesh_jib")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="Tip" type="Node3D" parent="Core/CraneBase/Boom/Jib"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.4)
+
+[node name="Sheave" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("Mesh_sheave")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="TipLamp" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, 0)
+mesh = SubResource("Mesh_lamp")
+surface_material_override/0 = SubResource("Mat_light")
+
+[node name="Cable" type="Node3D" parent="Core/CraneBase/Boom/Jib/Tip"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
+scale = Vector3(1, 1, 0.7)
+
+[node name="CableMesh" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip/Cable"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.5)
+mesh = SubResource("Mesh_cable")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="Hook" type="Node3D" parent="Core/CraneBase/Boom/Jib/Tip"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, 0)
+
+[node name="Block" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip/Hook"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0)
+mesh = SubResource("Mesh_block")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="JawA" type="Node3D" parent="Core/CraneBase/Boom/Jib/Tip/Hook"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -0.05)
+
+[node name="JawMesh" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip/Hook/JawA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.11, 0)
+mesh = SubResource("Mesh_jaw")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="JawB" type="Node3D" parent="Core/CraneBase/Boom/Jib/Tip/Hook"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0.05)
+
+[node name="JawMesh" type="MeshInstance3D" parent="Core/CraneBase/Boom/Jib/Tip/Hook/JawB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.11, 0)
+mesh = SubResource("Mesh_jaw")
+surface_material_override/0 = SubResource("Mat_dark")

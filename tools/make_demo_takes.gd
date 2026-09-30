@@ -2,7 +2,7 @@
 # demo scene has clips to play before anything is recorded in VR.
 # Delete res://takes/demo/ and the demo clips whenever you like.
 #
-#   Godot --headless --xr-mode off --path . --script res://tools/make_demo_takes.gd
+#   Godot --headless --xr-mode off --path . --script res://tools/make_demo_takes.gd [-- --robot ogre]
 extends SceneTree
 
 const DEMO_DIR := "res://takes/demo"
@@ -17,11 +17,18 @@ func _init() -> void:
 		["hauler", "idle_demo", FakePerformance.idle, 12.5, true],
 		["hauler", "act_reach_demo", FakePerformance.reach_and_grab, 3.2, false],
 		["hauler", "act_wave_demo", FakePerformance.wave, 3.0, false],
+		["ogre", "idle_demo", FakePerformance.idle, 12.5, true],
+		["ogre", "act_lift_demo", FakePerformance.crane_lift, 7.0, false],
+		["ogre", "act_reach_demo", FakePerformance.reach_and_grab, 3.2, false],
 	]
+	var args := OS.get_cmdline_user_args()
+	var only := args[args.find("--robot") + 1] if args.find("--robot") >= 0 and args.find("--robot") + 1 < args.size() else ""
 	var seed := 1
 	for s in specs:
-		var take := FakePerformance.build(s[2], s[3], 0.002, seed)
 		seed += 1
+		if not only.is_empty() and s[0] != only:
+			continue
+		var take := FakePerformance.build(s[2], s[3], 0.002, seed - 1)
 		take.robot_id = s[0]
 		take.clip_name = s[1]
 		take.note = "Procedural demo take (tools/make_demo_takes.gd)"
