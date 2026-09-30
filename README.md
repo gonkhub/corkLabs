@@ -65,6 +65,18 @@ performance inputs (blink, flash, ...).
 | A / X | Blink |
 | B / Y | Eye flash |
 
+**Ogre** has one arm, a crane, so it maps differently:
+
+| Input | Ogre |
+| --- | --- |
+| Head | The huge core turns slowly and only part of the way; the eye (and its light cone) does the rest |
+| Right hand | Where the crane's jib tip goes (two-bone IK, knuckle up). The hook hangs below it and sways like a load |
+| Right wrist | Turns the hook (yaw only) |
+| Right trigger / grip | Closes the grab jaws |
+| Left trigger | Winch: pays out cable, lowering the hook |
+| Left hand | Nothing (it only has the one arm) |
+| A / X, B / Y | Blink shuts the eye's shutter and cuts the beam; flash makes the beam blaze |
+
 When a robot is chosen, every take is saved to `takes/`, cleaned up, baked
 into `animations/<robot>/`, and replayed on the robot straight away.
 
@@ -208,14 +220,21 @@ independence, error resistance, sabotage tendency), obedience, when it refuses, 
 it rethinks, its **voice** (text colour, pitch, wave, speed, how chatty), and
 which clips it plays for each kind of work.
 
-| | Hauler | Tinker |
-| --- | --- | --- |
-| Size | 2.4 m wide, drawn 2.6x: huge | 0.7 m wide, normal size |
-| Skills | heavy 100%, precise 35% | precise 100%, heavy 20% (refuses heavy orders) |
-| Rail speed | 1.0 m/s | 1.6 m/s |
-| Restlessness | low (stoic) | high (curious, fidgety) |
-| Obedience | high | lower |
-| Voice | low square-wave blips, amber text, speaks rarely | high soft blips, cyan text, chatty |
+| | Hauler | Tinker | Ogre |
+| --- | --- | --- | --- |
+| Size | 2.4 m wide, drawn 2.6x: huge | 0.7 m wide, normal size | drawn 8x: a 12 m core. **Massive** |
+| Skills | heavy 100%, precise 35% | precise 100%, heavy 20% (refuses heavy orders) | heavy 100%, fast (1.6x); precise 10% |
+| Rail speed | 1.0 m/s | 1.6 m/s | **never moves** (stationary, crane reach 20 m) |
+| Restlessness | low (stoic) | high (curious, fidgety) | very low; hard to rattle |
+| Obedience | high | lower | high, but "I decide what I lift" when unstable |
+| Voice | low square-wave blips, amber text, speaks rarely | high soft blips, cyan text, chatty | very low, slow saw blips, yellow text, rarely speaks |
+
+**Stationary robots** (traits `stationary` + `reach`): Ogre hangs from the
+middle of its hangar's ceiling and never leaves. It scores only jobs within
+`reach` meters of its mount (in its own room), "gets there" instantly, charges
+on its own mains coupling (a dock on its mount), and turns down anything else
+("I can't get to Bay 2: it's out of my reach, and I don't leave the hangar.").
+In 3D it slowly turns on the spot to bring its crane round over its work.
 
 ## Rooms and routes
 
@@ -231,6 +250,7 @@ agree. Rooms are empty space for now.
 | Pod bay | 24 x 20 m (north) | the pods |
 | Workshop | 14 x 16 m (east) | relay panel, workbench |
 | Maintenance | 12 x 12 m (west) | both docks |
+| Hangar | 50 x 40 m, 26 m tall (south) | Ogre, hanging from the middle of the ceiling; the loading bay and the deep stacks |
 
 The rails are a **network** (`FacilityLayout`): junctions (nodes) joined by
 straight segments. A robot's position is a segment + meters along it; to go
@@ -250,6 +270,12 @@ two rooms are **passages**, and every segment can have caveats:
 | Workshop hatch | hall - workshop | narrow: Tinker only |
 | Freight gate | hall - workshop | wide but slow, and it **jams** (blocking the route until someone unjams it): Hauler's only way in |
 | Dock door | hall - maintenance | wide; the only way to the docks |
+| Hangar door | hall - hangar | wide: rail robots can ride in to the loading bay |
+
+**Pads** (`add_pad`) are spots with no rail to them: a tiny segment nobody
+can ride (clearance 0), not drawn as rail. Only a stationary robot's reach
+gets there. Ogre is mounted on one (`ogre_mount`); the deep stacks are
+another, so only Ogre can work them.
 
 If a route closes while a robot is on its way, it re-plans; if there's no way
 at all, it gives up the job and says so ("Can't get to Workbench. Freight
@@ -277,6 +303,7 @@ board, and escalate them as they get worse:
 | Power relay | workshop | fuse blows at random | Replace relay fuse (precise, high) | docks charge at 40% until fixed |
 | Bays | main hall | debris falls at random | Clear debris (heavy) | half the time Hauler finds a damaged part: Tinker repairs it at the workbench, then Hauler refits it |
 | Freight gate | hall - workshop | jams at random | Unjam freight gate (general, high) | blocks the route until fixed |
+| Freight | hangar: loading bay, deep stacks | crates are delivered at random | Stack freight (heavy) | the loading bay can be done by Ogre or a rail robot; only Ogre reaches the deep stacks |
 
 Faults sound an alarm (robots rethink at once); every shift ends with a
 report line in the journal (throughput, jobs, faults). Rates and amounts are
@@ -312,6 +339,8 @@ framework: the lines and voices are placeholders to replace.
   `stable`, `drifting`, `unstable`, `critical`, `working`...) and
   placeholders (`{station}`, `{job}`, `{peer}`, `{power}`...). Lines whose
   condition holds are picked more often, so a tired robot mostly sounds tired.
+  The robot field can leave robots out: `any !ogre` is every robot but Ogre
+  (for lines about riding the rails, which Ogre never does).
   Edit it freely; the format is at the top of `bark_library.gd`.
 - **How it shows** (`SpeechDirector`, `os/speech_director.gd`): one line per
   robot at a time (a newer one replaces it), typed at the robot's
@@ -374,7 +403,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Five CCTV cameras across the rooms, one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, F filter. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
+| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, F filter. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
 | **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **remote reboot** (needs the remote-reboot package) |
 | **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
 | **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
@@ -468,8 +497,9 @@ RobotView (on the rail network)      game/robot_view.gd: rides routes, faces tra
 
 ## Adding a robot
 
-1. Copy `robots/tinker/` (core-bot, telescoping arms) or `robots/hauler/`
-   (hanging body, neck, two-segment arms) to `robots/<newname>/`, and rename
+1. Copy `robots/tinker/` (core-bot, telescoping arms), `robots/hauler/`
+   (hanging body, neck, two-segment arms) or `robots/ogre/` (huge core, one
+   crane arm with a hanging hook, eye spotlight + light cone) to `robots/<newname>/`, and rename
    the three files to `<newname>.tscn`, `<newname>_rig.gd`, `<newname>_profile.tres`.
 2. Fix the paths inside the `.tscn` (script + profile) and the profile's
    `display_name`.
@@ -478,8 +508,9 @@ RobotView (on the rail network)      game/robot_view.gd: rides routes, faces tra
 4. It shows up automatically in the recorder (Left X), Robot Lab and the
    Takes panel.
 5. To put it in the facility: a `robots/<newname>/<newname>_traits.tres`
-   (copy one; set width, scale, skills, voice), a start station in
-   `FacilitySetup.START_STATIONS`, and its id in `FacilitySetup.systems()`.
+   (copy one; set width, scale, skills, voice; `stationary` + `reach` for a
+   robot that never moves, like Ogre) and a start station in
+   `FacilitySetup.START_STATIONS` (that's all `systems()` and the 3D world need).
    Give it lines in `barks.txt` (or it uses the `any` ones).
 
 The rig must extend `RobotRig`, pose its joints in `drive()`, and list the
