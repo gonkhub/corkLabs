@@ -20,22 +20,16 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | Robot behaviour (robots as facility systems) | **Not started** | |
 | corkLabs desktop OS | **Not started** | |
 
-## Branches and pull requests (as of 2026-09-29)
+## Branches and pull requests
 
-| Branch | Contents | State |
-| --- | --- | --- |
-| `feature/take-naming` | Take naming window, `takes/<robot>/` layout, first naming session | PR [#1](https://github.com/gonkhub/corkLabs/pull/1) open |
-| `feature/facility-clock` | Facility time system, dev panel, demo integration | Not pushed yet; PR #2 to open after push |
-| `docs/handoff` | This file, DESIGN.md, test runner on a throwaway copy | Not pushed yet; PR #3 |
-
-**Heads-up when merging:** `feature/take-naming` and `feature/facility-clock`
-both add a README section (naming vs. facility time) in the same spot. The
-second one merged will show a conflict; keep both sections.
+Everything from 2026-09-29 is merged into `main` (PRs
+[#1](https://github.com/gonkhub/corkLabs/pull/1) take naming and
+[#2](https://github.com/gonkhub/corkLabs/pull/2) facility time + docs).
+No open branches. Start new work on a fresh branch from `main`.
 
 ## Next up
 
-1. **Merge the open work** (#1, #2, #3) into `main`.
-2. **Robot behaviour scaffolding.** Make robots facility systems: they pick up
+1. **Robot behaviour scaffolding.** Make robots facility systems: they pick up
    work, react to supervisor orders, to each other and to the environment,
    and their decisions show in the journal. Design questions to settle first:
    - Decision model: utility scores, behaviour trees, or goal/plan (GOAP)?
@@ -43,8 +37,8 @@ second one merged will show a conflict; keep both sections.
    - How do orders work: direct commands, suggestions they can refuse, or priorities?
    - How do robots perceive each other and the environment (events, sensors, a shared blackboard)?
    - How does sim state drive visuals (which clip plays, rail travel) when time only moves on player actions?
-3. **One shift, start to end** (the first playable slice) on top of 2.
-4. **corkLabs desktop OS** shell: windows, camera feeds, a message app, the facility clock.
+2. **One shift, start to end** (the first playable slice) on top of 1.
+3. **corkLabs desktop OS** shell: windows, camera feeds, a message app, the facility clock.
 
 ## Backlog
 
