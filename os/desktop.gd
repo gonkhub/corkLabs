@@ -195,6 +195,7 @@ func _gui_input(event: InputEvent) -> void:
 
 ## Applies OSSettings (UI scale, fullscreen). Settings app calls this after changes.
 func apply_settings() -> void:
+	FeedAudio.apply()
 	var win := get_window()
 	if win and win == get_tree().root:
 		win.content_scale_factor = float(OSSettings.get_value("ui_scale"))

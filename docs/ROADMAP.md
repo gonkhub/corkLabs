@@ -23,6 +23,7 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Rooms + rail network**: 4 rooms (huge main hall), routes with caveats (narrow, blocked, slow), re-routing, 3D world built from the layout, bigger Hauler | **New framework, needs a look** | Automated tests + screenshots |
 | **Robot speech**: floating CCTV text + voice blips; lines by trigger/condition in `barks.txt`; robot-to-robot exchanges | **New framework, needs a look** | Automated tests + screenshots (sound not checked by ear) |
 | **Software stability**: independence, whims, fixations, critical errors (crash/glitch), sabotage, reboots | **New framework, needs a look** | Automated tests + journal read-throughs |
+| **Camera audio**: Feed/Voices/World/UI buses, one listening camera, room-aware 3D sounds, robot motor hum, Cameras mute, Terminal `sound` auditions | **New framework, needs a listen** | Automated tests + screenshot (not checked by ear) |
 | **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 | **Ogre**: massive stationary crane core in a new hangar (light cone eye, one crane arm), `stationary`/`reach` traits, freight jobs, two hangar cameras | **New, needs a look** | Automated tests (`test_ogre.gd`) + screenshots; not tried in VR |
 
@@ -41,12 +42,13 @@ commits, and so on).
 | 4 | `feature/os-buildout` (PR #3, contains 1-4) | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
 | 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
 | 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
-| 7 | `feature/ogre` (built on 6, in its own worktree `Desktop\corkLabs-ogre`) | Ogre, the stationary crane robot, and its hangar | Watch the Hangar cameras through a Wait; perform for Ogre in the recorder (right hand = crane, left trigger = winch) |
+| 7 | `feature/camera-audio` | Camera feed audio: bus layout, listener = the camera you watch, `FacilitySound` with room-aware attenuation, motor hum, Mute button (M), feed volume, `sound` auditions | Open the Audio tab in the editor; in Cameras, `sound loop tone 10` in the Terminal and switch cameras; hover grid feeds; press Mute |
+| 8 | `feature/ogre` (merged, PR #7) | Ogre, the stationary crane robot, and its hangar | Watch the Hangar cameras through a Wait; perform for Ogre in the recorder (right hand = crane, left trigger = winch) |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
 
-All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last one).
+All tests pass on each branch (`tools\run_tests.ps1`; 16 test files on the last one).
 
 ## Things to try first (about 15 minutes)
 
@@ -65,6 +67,12 @@ All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last 
 
 ## Decisions waiting for you
 
+- **Camera audio**: how loud through walls (-30 dB now), whether robot voices
+  should become positional too, whether the grid should hear the last-opened
+  camera instead of the hovered one, and what goes on the Feed bus (a "CCTV
+  mic" band-pass? room reverbs per camera?).
+- **Which sounds come first**: room tone per room, device hums/alarms on the
+  plant props, passage shutters. Each is a `FacilitySound` on the thing.
 - **Ogre**: is the hangar where it should be (south of the main hall, 50 x 40 m)?
   What should it really lift (freight is a placeholder)? Should it hand things
   to the rail robots at the loading bay (a chain, like salvage)? Should it be

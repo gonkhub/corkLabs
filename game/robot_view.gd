@@ -21,6 +21,8 @@ extends Node3D
 
 ## Catch up with the sim within about this many seconds when far behind.
 const CATCH_UP_TIME := 2.0
+## Motor hum level at full rail speed (placeholder sound: SoundSynth "hum").
+const MOTOR_DB := -12.0
 ## How quickly a stationary robot turns towards its work (fraction per second; low = massive).
 const SLEW_RATE := 0.3
 
@@ -45,6 +47,9 @@ var _prev_vel := Vector3.ZERO
 var _disp := Vector2.ZERO
 var _disp_vel := Vector2.ZERO
 var _pendulum := 1.0
+## Motor hum while it rides (a FacilitySound: heard through the cameras).
+var motor: FacilitySound
+var _motor_level := 0.0
 
 
 func setup(id: String, facility_layout: FacilityLayout) -> void:
@@ -61,6 +66,13 @@ func setup(id: String, facility_layout: FacilityLayout) -> void:
 	actor.position.y = 0.0 if traits.stationary else -0.15 * traits.visual_scale
 	swing.add_child(actor)
 	_pendulum = 0.9 * traits.visual_scale
+	motor = FacilitySound.new()
+	motor.name = "Motor"
+	motor.robot_id = id
+	motor.stream = SoundSynth.builtin("hum")
+	motor.unit_size = 4.0 * traits.visual_scale   # bigger robots carry further
+	motor.position.y = 0.5 * traits.visual_scale
+	add_child(motor)
 	var st := layout.station(FacilitySetup.START_STATIONS.get(id, ""))
 	if not st.is_empty():
 		seg = st.segment
@@ -111,6 +123,7 @@ func _process(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, atan2(-moved.x, -moved.z), clampf(6.0 * delta, 0.0, 1.0))
 	rotation.y = _yaw
 	_swing(delta)
+	_motor_sound(moved.length() / maxf(delta, 0.0001), delta)
 	_perform(a, delta)
 
 
@@ -122,6 +135,20 @@ func _perform(a: RobotAgent, delta: float) -> void:
 		if _pause <= 0.0:
 			_play_work_clip(a)
 			_pause = _rng.randf_range(0.4, 2.0)
+
+
+# Hum while riding: louder and higher the faster it goes; bigger robots hum lower.
+func _motor_sound(speed: float, delta: float) -> void:
+	var want := clampf(speed / maxf(traits.rail_speed, 0.1), 0.0, 1.5)
+	_motor_level = move_toward(_motor_level, want, delta * 3.0)
+	if _motor_level < 0.02:
+		if motor.playing:
+			motor.stop()
+		return
+	if not motor.playing:
+		motor.play()
+	motor.set_level_db(MOTOR_DB + linear_to_db(_motor_level))
+	motor.pitch_scale = clampf((0.8 + 0.3 * _motor_level) / sqrt(traits.visual_scale), 0.3, 2.0)
 
 
 # A stationary robot turns on the spot so its crane's resting reach points at

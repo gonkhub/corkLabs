@@ -43,28 +43,36 @@ func build() -> void:
 	_check("Shift reports", "toast_report", "")
 	add_child(OSTheme.label("Everything still goes to the notification centre (click the clock).", 12, OSTheme.TEXT_DIM))
 
-	_section("Robot voices")
-	_check("Voices (heard while a robot is on camera)", "voices", "")
-	var vol_row := HBoxContainer.new()
-	add_child(vol_row)
-	var vol_label := OSTheme.label("Voice volume", 14)
-	vol_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vol_row.add_child(vol_label)
-	var vol := HSlider.new()
-	vol.custom_minimum_size.x = 180
-	vol.min_value = 0.0
-	vol.max_value = 1.0
-	vol.step = 0.05
-	vol.value = float(OSSettings.get_value("voice_volume"))
-	vol.focus_mode = Control.FOCUS_NONE
-	vol.value_changed.connect(func(v: float): OSSettings.set_value("voice_volume", v))
-	vol_row.add_child(vol)
+	_section("Camera sound")
+	_check("Mute camera feeds", "feed_muted", "Same as the Mute button in Cameras")
+	_slider("Feed volume (everything heard through a camera)", "feed_volume", func(v: float): FeedAudio.set_volume(v))
+	_check("Robot voices (heard while a robot is on camera)", "voices", "")
+	_slider("Voice volume", "voice_volume", func(v: float): OSSettings.set_value("voice_volume", v))
 
 	_section("Windows")
 	add_child(button_row([
 		["Forget window layout", func():
 			OSSettings.set_value("windows", {})],
 	]))
+
+
+func _slider(text: String, key: String, on_change: Callable) -> HSlider:
+	var row := HBoxContainer.new()
+	add_child(row)
+	var l := OSTheme.label(text, 14)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(l)
+	var s := HSlider.new()
+	s.custom_minimum_size.x = 180
+	s.min_value = 0.0
+	s.max_value = 1.0
+	s.step = 0.05
+	s.value = float(OSSettings.get_value(key))
+	s.focus_mode = Control.FOCUS_NONE
+	s.value_changed.connect(on_change)
+	row.add_child(s)
+	return s
 
 
 func _section(text: String) -> void:
