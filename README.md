@@ -18,6 +18,8 @@ Quest 3 ──► Recorder (VR) ──► take (.res) ──► cleanup ──�
 ```
 
 First-time headset setup: see [SETUP.md](SETUP.md).
+Premise and design decisions: [docs/DESIGN.md](docs/DESIGN.md).
+Current status, open work and next steps: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Scenes
 
