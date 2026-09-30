@@ -206,6 +206,31 @@ a job while it's on it; if it walks away the job goes back on the board with
 its progress kept. A finished job fires a `job_done` event, so whatever posted
 it can react.
 
+**The plant** (`FacilityPlant`, `game/sim/facility_plant.gd`) is the
+machinery the robots keep running. Devices drift or break, post jobs on the
+board, and escalate them as they get worse:
+
+| Device | Where | What goes wrong | Job (skill) | Knock-on effect |
+| --- | --- | --- | --- | --- |
+| Pods 1-4 | Tinker's back straight | sync drifts down, faster when hot; at 0 a pod desyncs | Recalibrate (precise), escalates | throughput = average pod sync |
+| Filters | each bay | clog slowly | Sweep filters (general) | clogged filters heat the facility |
+| Coolant pipes | each bay | leak at random | Clamp coolant leak (heavy, high) | each leak drains coolant; low coolant = hot = pods drift faster |
+| Power relay | Tinker's left wall | fuse blows at random | Replace relay fuse (precise, high) | docks charge at 40% until fixed |
+| Bays | Hauler's rail | debris falls at random | Clear debris (heavy) | half the time Hauler finds a damaged part: Tinker repairs it at the workbench, then Hauler refits it |
+
+Faults sound an alarm (robots rethink at once); every shift ends with a
+report line in the journal (throughput, jobs, faults). Rates and amounts are
+the constants at the top of `facility_plant.gd`.
+
+In the 3D demo, `FacilityProps` (`game/facility_props.gd`) builds placeholder
+props at each station from the same layout: pods glow green → amber → red,
+bay lamps flash red on a leak, debris piles appear, the relay lamp blinks
+when its fuse is out, docks light while a robot charges, and a repaired part
+waits on the workbench. Every device has a floating label.
+
+`tools/screenshot.gd` can break things before the shot: `--fault pipe_2
+--fault relay --spend 600`.
+
 **The demo** is a bare-bones supervisor console: Q select robot, O order it
 to take the most urgent job it can reach, R recharge, S stand by, X cancel,
 W wait 5 minutes. Orders cost facility time (a choice, 2 min).

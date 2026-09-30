@@ -94,6 +94,8 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 	match event_name:
+		"alarm":
+			_think_left = 0.0   # something broke: reconsider now
 		"job_done", "job_cancelled":
 			var id := int(data.get("job", -1))
 			if order.get("kind", "") == "job" and int(order.get("job", -1)) == id:
@@ -307,7 +309,7 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 		"recharge":
 			var st := layout.station(activity.station)
 			if _move_toward(sim, layout, float(st.pos), dt):
-				power = minf(power + traits.charge_rate * dt, 1.0)
+				power = minf(power + traits.charge_rate * _charge_factor(sim) * dt, 1.0)
 				if power >= traits.charge_until:
 					if order.get("kind", "") == "recharge":
 						order = {}
@@ -383,6 +385,7 @@ func _nearest_dock(layout: FacilityLayout) -> Dictionary:
 var _sim_ref: WeakRef
 var _layout_ref: FacilityLayout
 var _board_ref: WorkBoard
+var _plant_ref: FacilityPlant
 
 
 func _layout(sim: FacilitySim) -> FacilityLayout:
@@ -395,10 +398,17 @@ func _board(sim: FacilitySim) -> WorkBoard:
 	return _board_ref
 
 
+# Docks charge slower while the facility's power relay is out.
+func _charge_factor(sim: FacilitySim) -> float:
+	_cache(sim)
+	return _plant_ref.charge_factor() if _plant_ref else 1.0
+
+
 func _cache(sim: FacilitySim) -> void:
 	if _sim_ref and _sim_ref.get_ref() == sim:
 		return
 	_sim_ref = weakref(sim)
+	_plant_ref = sim.get_system("plant") as FacilityPlant
 	_layout_ref = sim.get_system("layout") as FacilityLayout
 	if _layout_ref == null:
 		_layout_ref = FacilityLayout.new()

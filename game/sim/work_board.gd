@@ -125,6 +125,18 @@ func cancel(sim: FacilitySim, id: int, reason: String) -> void:
 	_trim_history()
 
 
+## Raises or lowers a job's priority (things got worse, or the supervisor says so).
+func set_priority(sim: FacilitySim, id: int, priority: int) -> void:
+	var j := get_job(id)
+	priority = clampi(priority, 0, 3)
+	if j.is_empty() or int(j.priority) == priority:
+		return
+	var up := priority > int(j.priority)
+	j.priority = priority
+	sim.note("work", "Job #%d %s to %s priority: %s" % [id, "escalated" if up else "lowered",
+		PRIORITY_NAMES[priority], j.title])
+
+
 func fraction_done(j: Dictionary) -> float:
 	return float(j.progress) / maxf(float(j.work), 0.001)
 

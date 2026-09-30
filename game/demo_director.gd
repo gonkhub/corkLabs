@@ -41,6 +41,10 @@ func _ready() -> void:
 		var view := RobotView.new()
 		view.setup(pair[0], pair[1], pair[2])
 		add_child(view)
+	var props := FacilityProps.new()
+	props.name = "Props"
+	add_child(props)
+	props.build({FacilitySetup.TINKER_RAIL: $TinkerRail, FacilitySetup.HAULER_RAIL: $HaulerRail}, $Pods)
 	_use_camera(0)
 	help_label.add_theme_font_override("font", Mono.font())
 
@@ -113,6 +117,11 @@ func _most_urgent_job(bot: RobotAgent) -> Dictionary:
 
 func _console_text() -> String:
 	var lines := PackedStringArray()
+	var plant := Facility.sim.get_system("plant") as FacilityPlant
+	if plant:
+		lines.append("  PLANT   throughput %d%%   coolant %d%%   heat %.1fx   open jobs %d" % [
+			roundi(plant.throughput * 100.0), roundi(plant.coolant * 100.0), plant.heat(),
+			(Facility.sim.get_system("work") as WorkBoard).open_jobs().size()])
 	for bot in FacilitySetup.robots(Facility.sim):
 		var ord := "" if bot.order.is_empty() else "   [order: %s]" % (
 			"job #%d" % int(bot.order.job) if bot.order.kind == "job" else str(bot.order.kind))

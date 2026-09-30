@@ -13,13 +13,14 @@ const HAULER_RAIL := "hauler_line"
 
 static func layout() -> FacilityLayout:
 	var l := FacilityLayout.new()
-	# Tinker's loop runs round the room; its back straight passes the pods.
+	# Tinker's loop runs round the room: its back straight passes the pods,
+	# the dock and workbench are on the front, the relay on the left wall.
 	l.add_rail(TINKER_RAIL, 30.27, true)
 	l.add_station("t_dock", TINKER_RAIL, 18.0, "dock", "Tinker dock")
 	l.add_station("pods_a", TINKER_RAIL, 2.0, "work", "Pods 1-2")
 	l.add_station("pods_b", TINKER_RAIL, 6.0, "work", "Pods 3-4")
-	l.add_station("relay", TINKER_RAIL, 12.0, "work", "Relay panel")
-	l.add_station("bench", TINKER_RAIL, 25.0, "work", "Workbench")
+	l.add_station("relay", TINKER_RAIL, 28.0, "work", "Relay panel")
+	l.add_station("bench", TINKER_RAIL, 22.0, "work", "Workbench")
 	# Hauler's straight rail runs down the middle of the room.
 	l.add_rail(HAULER_RAIL, 8.0, false)
 	l.add_station("h_dock", HAULER_RAIL, 0.4, "dock", "Hauler dock")
@@ -32,12 +33,11 @@ static func layout() -> FacilityLayout:
 ## A fresh set of every facility system. Pass to Facility.start_session().
 static func systems() -> Array:
 	var l := layout()
-	var board := WorkBoard.new()
-	board.starter_jobs = 3
 	return [
 		l,
 		ShiftSchedule.new(),
-		board,
+		WorkBoard.new(),
+		FacilityPlant.new(),
 		RobotAgent.new("tinker", TINKER_RAIL, null, l.station("t_dock").pos),
 		RobotAgent.new("hauler", HAULER_RAIL, null, l.station("h_dock").pos),
 	]
