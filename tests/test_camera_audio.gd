@@ -101,7 +101,11 @@ func _test_mute_and_volume() -> void:
 	app.mute_button.button_pressed = true   # as a click
 	_check(AudioServer.is_bus_mute(feed_bus) and OSSettings.get_value("feed_muted") == true and app.mute_button.text == "Muted",
 		"the mute button mutes the Feed bus and remembers it")
-	await process_frame
+	# The feed's text redraws on its next frame, which may take a few process frames.
+	for i in 60:
+		await process_frame
+		if app.feeds[0].ptz_label.text.contains("AUDIO MUTED"):
+			break
 	_check(app.feeds[0].ptz_label.text.contains("AUDIO MUTED"), "the feed says it's muted")
 	var ev := InputEventKey.new()
 	ev.keycode = KEY_M
