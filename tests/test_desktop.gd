@@ -1,0 +1,86 @@
+# Checks the corkLabs OS desktop: log on starts the facility, apps open in
+# windows, orders from the apps cost facility time and get answers, alarms
+# become toasts and light the taskbar, log off saves and resumes.
+extends SceneTree
+
+const SAVE := "user://test_desktop_save.json"
+
+var failures := 0
+
+
+func _initialize() -> void:
+	var facility: Node = get_root().get_node("Facility")
+	facility.wipe_save(SAVE)
+	var desk: Control = (load("res://os/desktop.tscn") as PackedScene).instantiate()
+	desk.save_path = SAVE
+	get_root().add_child(desk)
+	await process_frame
+
+	_check(desk.login.visible and not facility.running, "it starts at the login screen, facility closed")
+	desk.log_on()
+	await process_frame
+	_check(facility.running and not desk.login.visible, "log on opens the facility")
+	_check(desk.world != null and desk.world.cameras.size() == 3, "the 3D facility runs hidden, with its cameras")
+	_check(desk.clock_label.text == FacilitySim.format_time(facility.sim.time()), "the taskbar clock shows facility time (%s)" % desk.clock_label.text)
+
+	for id in ["cameras", "units", "work", "plant", "messages", "log"]:
+		_check(desk.open_app(id) != null and desk.is_open(id), "the %s app opens in a window" % id)
+	var again: Object = desk.open_app("work")
+	_check(desk.window_layer.get_child_count() == 6 and again == desk._windows["work"].app, "opening an open app just brings it forward")
+
+	# Assign a job from the Work Orders app.
+	var work = desk._windows["work"].app
+	var sim: FacilitySim = facility.sim
+	var board: WorkBoard = sim.get_system("work")
+	var job := board.post(sim, "Clear debris", "heavy", "bay_2", 300.0, 1, "test")
+	work.selected_job = job
+	var t0: float = sim.time()
+	work._assign("hauler")
+	_check(sim.time() - t0 >= 119.9, "an order from the Work app costs facility time")
+	_check(work.reply.text.begins_with("Hauler:"), "and shows the robot's answer (%s)" % work.reply.text)
+	work._assign("tinker")
+	_check(work.reply.text.contains("can't reach") or work.reply.text.contains("already"),
+		"Tinker can't take a job on Hauler's rail (%s)" % work.reply.text)
+
+	# Break something: toast + alarm light.
+	var toasts_before: int = desk.toast_box.get_child_count()
+	sim.schedule_in(0.0, "plant_fault", {"device": "relay"})
+	desk.get_node("/root/Facility").spend(1.0, "test")
+	await process_frame
+	var alarm_toast: bool = desk.toast_box.get_children().any(func(t): return t.find_children("*", "Label", true, false).any(func(l): return l.text.contains("FUSE BLOWN")))
+	_check(desk.toast_box.get_child_count() > toasts_before and alarm_toast, "an alarm pops up as a toast")
+	_check(desk.alarm_button.visible and desk.alarm_button.text.contains("1"), "and lights the taskbar alarm (%s)" % desk.alarm_button.text)
+
+	# Waiting lets time pass; the apps follow.
+	var t1: float = sim.time()
+	load("res://game/supervisor.gd").wait(900.0)   # by path: classes that use the Facility autoload can't be named in --script tests
+	await process_frame
+	_check(is_equal_approx(sim.time() - t1, 900.0), "Wait lets 15 facility minutes pass")
+	var units = desk._windows["units"].app
+	_check(not str(units.cards["tinker"].think.text).is_empty(), "the Units app shows what each robot is weighing up")
+	var log_app = desk._windows["log"].app
+	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
+
+	# Log off, log back on: same moment.
+	var t_off: float = sim.time()
+	desk.log_off()
+	await process_frame
+	_check(not facility.running and desk.login.visible, "log off closes the facility")
+	await process_frame
+	_check(desk.window_layer.get_child_count() == 0, "and its windows")
+	var info: Label = desk.login.find_child("Info", true, false)
+	_check(info.text.contains(FacilitySim.format_time(t_off)), "the login screen says where the facility is on hold (%s)" % info.text.split("\n")[0])
+	desk.log_on()
+	_check(is_equal_approx(facility.sim.time(), t_off), "log on resumes at exactly that moment")
+
+	desk.log_off()
+	desk.free()
+	facility.wipe_save(SAVE)
+	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
+	quit(failures)
+
+
+func _check(ok: bool, what: String) -> void:
+	print(("PASS  " if ok else "FAIL  ") + what)
+	if not ok:
+		failures += 1

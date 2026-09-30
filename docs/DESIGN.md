@@ -58,6 +58,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-29 | Problems **chain**: leaks drain coolant, heat speeds pod drift, a blown fuse slows robot charging | Neglect should snowball, so the supervisor's choices (what to prioritise, when to overrule) matter |
 | 2026-09-29 | A salvage chain hands work between robots (Hauler finds a part, Tinker repairs, Hauler refits) | Robots visibly depend on each other (pillar 1) without needing shared rails |
 | 2026-09-29 | Baseline tuning: the two robots keep up (~86% throughput, ~27 jobs a shift) | Normal running should be calm; incidents and story events will push it over |
+| 2026-09-29 | The corkLabs OS is built in code (`OSApp` scripts + one `OSTheme`), not as .tscn UIs | Easy to read, diff and restyle in one place; apps are small and uniform |
+| 2026-09-29 | The 3D facility runs once, hidden, in a SubViewport; camera windows render it through their own viewports | One simulation view, any number of feeds, and the demo reuses the same world scene |
+| 2026-09-29 | Every supervisor action goes through `Supervisor` (journals it as "you", spends the time) | One place to tune what costs time; Messages can show your side of the conversation |
+| 2026-09-29 | For now opening apps and switching cameras is free; orders and priority changes cost 2 min; Wait passes 5/15/60 min | Placeholder until the user decides which OS actions should cost time (see ROADMAP) |
+| 2026-09-29 | The OS greets the player by their Windows user name (the only real-PC read) | Light-touch personal touch, per the real-PC decision |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)

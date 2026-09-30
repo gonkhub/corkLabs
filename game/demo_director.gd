@@ -82,10 +82,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # Giving an order is a choice: it costs facility time, and the robot answers.
-func _order(bot: RobotAgent, kind: String, job_id: int, what: String) -> void:
-	var r := bot.give_order(Facility.sim, kind, job_id)
+func _order(bot: RobotAgent, kind: String, job_id: int, _what := "") -> void:
+	var r := Supervisor.order(bot, kind, job_id)
 	last_reply = "%s: \"%s\"" % [bot.display_name(), r.reply]
-	Facility.act("choice", "Supervisor orders %s to %s" % [bot.display_name(), what])
 
 
 func _selected_agent() -> RobotAgent:

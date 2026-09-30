@@ -4,6 +4,7 @@
 #   Godot --xr-mode off --path . --resolution 1280x720 --script res://tools/screenshot.gd -- \
 #       --scene res://game/demo_facility.tscn --wait 4 --out C:/temp/shot.png [--cam 2] [--nofilter]
 #       [--fault pipe_2 --fault relay] [--spend 1800]   (facility scenes: break things, pass facility time)
+#       [--call log_on --call open_app:cameras]         (call methods on the scene first)
 # Note: facility scenes use their normal save, so this moves the demo's facility on.
 extends SceneTree
 
@@ -21,6 +22,12 @@ func _initialize() -> void:
 		scene._use_camera(cam - 1)
 	if args.has("--nofilter") and scene.get("cctv"):
 		scene.cctv.visible = false
+	# Call methods on the scene first, e.g. --call log_on --call open_app:cameras
+	for i in args.size():
+		if args[i] == "--call" and i + 1 < args.size():
+			var bits := args[i + 1].split(":")
+			scene.callv(bits[0], Array(bits.slice(1)))
+			await process_frame
 	# Facility scenes: break something and/or let facility time pass first.
 	var facility := get_root().get_node_or_null("Facility")
 	if facility and facility.running:

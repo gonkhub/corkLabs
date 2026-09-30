@@ -9,10 +9,14 @@ const MAX_ENTRIES := 5000
 
 # Each entry: {"t": facility seconds, "cat": category, "text": String}
 var entries: Array[Dictionary] = []
+## How many entries were ever added (not saved; counts from the load).
+## Lets a UI ask "what's new since I last looked?" with added_since().
+var added := 0
 
 
 func add(t: float, category: String, text: String) -> void:
 	entries.append({"t": t, "cat": category, "text": text})
+	added += 1
 	if entries.size() > MAX_ENTRIES:
 		entries = entries.slice(entries.size() - MAX_ENTRIES)
 
@@ -23,6 +27,15 @@ func since(t: float) -> Array[Dictionary]:
 	for e in entries:
 		if e.t >= t:
 			out.append(e)
+	return out
+
+
+## Entries added after the moment `added` was `mark`.
+func added_since(mark: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var n := mini(added - mark, entries.size())
+	if n > 0:
+		out = entries.slice(entries.size() - n)
 	return out
 
 
@@ -42,3 +55,4 @@ func from_data(d: Array) -> void:
 	entries.clear()
 	for e in d:
 		entries.append({"t": float(e.t), "cat": str(e.cat), "text": str(e.text)})
+	added = entries.size()
