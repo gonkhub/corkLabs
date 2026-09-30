@@ -67,11 +67,14 @@ func end_session() -> void:
 ## The one way facility time moves: the player did something that takes
 ## `seconds` of facility time. Robots and events play out through it.
 ## `cause` is written to the journal ("dialogue: Tinker asks about pod 14").
-func spend(seconds: float, cause: String) -> void:
+## `journal` false skips the "+1m cause" line (for a long wait passed in
+## steps, which journals itself once).
+func spend(seconds: float, cause: String, journal := true) -> void:
 	if not running or seconds <= 0.0:
 		return
 	var from := sim.time()
-	sim.note("time", "+%s  %s" % [_short(seconds), cause])
+	if journal:
+		sim.note("time", "+%s  %s" % [_short(seconds), cause])
 	sim.advance(seconds)
 	save()
 	time_spent.emit(from, sim.time(), cause)

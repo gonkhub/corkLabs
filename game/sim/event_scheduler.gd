@@ -34,6 +34,11 @@ func cancel(id: int) -> bool:
 	return false
 
 
+## True if anything is due at or before `now` (cheap; called every tick).
+func has_due(now: float) -> bool:
+	return not _entries.is_empty() and _entries[0].time <= now
+
+
 ## Removes and returns every event due at or before `now`, in firing order.
 func pop_due(now: float) -> Array[Dictionary]:
 	var due: Array[Dictionary] = []

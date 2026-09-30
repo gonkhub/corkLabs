@@ -49,6 +49,28 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-29 | Closing the game freezes facility time; reopening resumes at the saved moment. The corkLabs OS clock shows facility time, never the real clock | Replaced an earlier "slow offline time" idea as too complex |
 | 2026-09-29 | First playable target: **one shift, start to end** | Proves the whole loop small |
 | 2026-09-29 | Before gameplay: build developer tools, readability, and robot-behaviour scaffolding | Robots are the core; they need a solid, debuggable foundation |
+| 2026-09-29 | Robots decide with **utility scores** (every option scored, best wins; personality = weights) | Readable: scores + reasons show on the dev panel and in the journal; tuned like faders; new options slot in without rewiring |
+| 2026-09-29 | Supervisor orders are a **strong nudge**, not a command: they add `obedience` to that option, and robots can push back | Refusals ("recharging first", "not built for it", "can't stand still") become story moments |
+| 2026-09-29 | Robot needs: **Power** and **Purpose** (idleness feels like dying to them). Wear and trust left for later | Power gives logistics; Purpose fits "the work keeps *them* running" and gives robots an inner life |
+| 2026-09-29 | The sim owns robot state; the 3D robot follows it (`RobotView`) and keeps performing its current activity in real time | Time only moves on player actions, so the world must be able to "catch up" smoothly after a jump |
+| 2026-09-29 | Behaviour personality is a separate resource (`<id>_traits.tres`) from the motion profile | Mind and motion tune independently; motion changes need a rebake, mind changes don't |
+| 2026-09-29 | The facility's machinery is one `FacilityPlant` system: pods (sync), filters, coolant pipes, power relay, bays. Devices drift or fault, post and escalate jobs | One place to read how the facility behaves; devices are data, so more can be added cheaply |
+| 2026-09-29 | Problems **chain**: leaks drain coolant, heat speeds pod drift, a blown fuse slows robot charging | Neglect should snowball, so the supervisor's choices (what to prioritise, when to overrule) matter |
+| 2026-09-29 | A salvage chain hands work between robots (Hauler finds a part, Tinker repairs, Hauler refits) | Robots visibly depend on each other (pillar 1) without needing shared rails |
+| 2026-09-29 | Baseline tuning: the two robots keep up (~86% throughput, ~27 jobs a shift) | Normal running should be calm; incidents and story events will push it over |
+| 2026-09-29 | The corkLabs OS is built in code (`OSApp` scripts + one `OSTheme`), not as .tscn UIs | Easy to read, diff and restyle in one place; apps are small and uniform |
+| 2026-09-29 | The 3D facility runs once, hidden, in a SubViewport; camera windows render it through their own viewports | One simulation view, any number of feeds, and the demo reuses the same world scene |
+| 2026-09-29 | Every supervisor action goes through `Supervisor` (journals it as "you", spends the time) | One place to tune what costs time; Messages can show your side of the conversation |
+| 2026-09-29 | For now opening apps and switching cameras is free; orders and priority changes cost 2 min; Wait passes 5 min to 4 h | Placeholder until the user decides which OS actions should cost time (see ROADMAP) |
+| 2026-09-29 | Wait passes facility time a minute per frame and stops on an alarm or shift report | No freeze on long waits, the player watches it happen, and "wait until something happens" becomes a real move. Still player-initiated, so time only moves on player actions |
+| 2026-09-29 | The OS greets the player by their Windows user name (the only real-PC read) | Light-touch personal touch, per the real-PC decision |
+| 2026-09-30 | The game stays **inside the fake corkLabs OS** (not native windows on the real desktop), and the game boots straight into it | User's choice: the OS is the world; keeps framing, streaming and tutorials under control |
+| 2026-09-30 | The Cameras window is **observation only**: camera control (pan/tilt/zoom, switching, grid, auto-track) and nothing that changes the facility. Controls live in the other apps | User's choice: observing and acting are separate windows the player opens and closes freely |
+| 2026-09-30 | Camera control is **free** (no facility time) | User's choice: looking is not acting |
+| 2026-09-30 | Pan/tilt/zoom lives on the `SecurityCamera` itself (a motorised head with limits), so every feed of a camera shows the same view | Like real CCTV; the demo and all feeds agree |
+| 2026-09-30 | OS preferences and window layout are saved separately from the facility (`os_settings.json`) | They're the player's desk, not game state; wiping a facility doesn't reset your desk |
+| 2026-09-30 | A Terminal app mirrors every supervisor action as typed commands | Fits the "supervisor terminal" fiction; handy for power users and testing |
+| 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)
 

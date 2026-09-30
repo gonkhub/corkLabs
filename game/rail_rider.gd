@@ -63,6 +63,10 @@ func _drive(delta: float) -> void:
 		speed = move_toward(speed, max_speed, acceleration * delta)
 	elif target >= 0.0:
 		var to_go := target - progress
+		if loop:   # the short way round
+			var length := rail_length()
+			if length > 0.0:
+				to_go = wrapf(to_go, -length * 0.5, length * 0.5)
 		var dir := signf(to_go)
 		# Brake in time: v^2 = 2 a d.
 		var stop_speed := sqrt(2.0 * acceleration * absf(to_go))

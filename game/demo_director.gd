@@ -1,97 +1,136 @@
-# Runs the demo facility: robots go about their shifts on the rails, and you
-# watch through security cameras, like the supervisor will.
+# Runs the demo facility: the standard facility simulation (FacilitySetup)
+# shown through security cameras, with a bare-bones supervisor console.
+# The robots decide for themselves (see game/sim/robot_agent.gd); you can
+# give orders, and every order or wait spends facility time.
 #
 # Keys:
-#   Tab / 1 2 3     switch camera
-#   T               Tinker: play a random action
-#   H               Hauler: play a random action
+#   Tab / 1-4       switch camera
+#   Q               select the other robot
+#   O               order it to take the most urgent job it can reach
+#   R / S           order it to recharge / to stand by
+#   X               cancel its order
+#   W               wait and watch (5 facility minutes pass)
 #   C               toggle the CCTV filter
-#
-# Nothing here is final game code; it's a place to see baked clips in
-# context, and a starting point for real robot behaviour.
+#   F1 / F2         dev panel / its pages      F9 post a random job (dev)
 extends Node3D
 
-## Hauler's work stations, in meters along its rail.
-@export var hauler_stations: Array[float] = [0.6, 4.0, 7.4]
+const JOURNAL_LINES := 7
 
-@onready var cameras: Array[Camera3D] = [$Cameras/Cam1, $Cameras/Cam2, $Cameras/Cam3]
+## Separate save from the real game, so demo poking never touches it.
+@export var save_path := "user://demo_facility_save.json"
+
+@onready var world: FacilityWorld = $World
+@onready var cameras: Array[SecurityCamera] = world.cameras
 @onready var cctv: CanvasItem = $Overlay/CCTV
 @onready var cam_label: Label = $Overlay/CamLabel
 @onready var help_label: Label = $Overlay/Help
-@onready var tinker: RobotActor = $TinkerRail/Rider/Swing/Tinker
-@onready var tinker_rider: RailRider = $TinkerRail/Rider
-@onready var hauler: RobotActor = $HaulerRail/Rider/Swing/Hauler
-@onready var hauler_rider: RailRider = $HaulerRail/Rider
+@onready var tinker: RobotActor = world.tinker
+@onready var tinker_rider: RailRider = world.tinker_rider
+@onready var hauler: RobotActor = world.hauler
+@onready var hauler_rider: RailRider = world.hauler_rider
 
 var cam_index := 0
-var _station := 0
-var _hauler_wait := 2.0
-var _tinker_wait := 6.0
-var _rng := RandomNumberGenerator.new()
+var selected := "tinker"
+var last_reply := ""
 
 
 func _ready() -> void:
 	if FlatScreen.relaunch_if_xr(self):
 		return
-	_rng.randomize()
-	# Separate save from the real game, so demo poking never touches it.
-	Facility.start_session([ShiftSchedule.new()], "user://demo_facility_save.json")
+	Facility.start_session(FacilitySetup.systems(), save_path)
 	_use_camera(0)
-	hauler_rider.arrived.connect(_on_hauler_arrived)
-	hauler_rider.travel_to(hauler_stations[0])
-	help_label.text = "Tab/1-3 camera   T/H ask Tinker/Hauler to act (spends facility time)   C CCTV filter   F1 dev panel\n" + _clip_summary()
+	help_label.add_theme_font_override("font", Mono.font())
 
 
-func _process(delta: float) -> void:
-	# Tinker patrols, and now and then stops what it's doing to gesture.
-	_tinker_wait -= delta
-	if _tinker_wait <= 0.0 and not tinker.is_busy():
-		tinker.play_random_action()
-		_tinker_wait = _rng.randf_range(6.0, 12.0)
-
-	# Hauler: drive to a station, work, move on.
-	if not hauler_rider.is_moving() and not hauler.is_busy():
-		_hauler_wait -= delta
-		if _hauler_wait <= 0.0:
-			_station = (_station + 1) % hauler_stations.size()
-			hauler_rider.travel_to(hauler_stations[_station])
-			_hauler_wait = 1.5
-
+func _process(_delta: float) -> void:
 	# The corkLabs clock shows facility time, not the real clock.
 	cam_label.text = "CAM %02d  %s   %s   REC" % [
 		cam_index + 1, cameras[cam_index].name.to_upper(), FacilitySim.format_time(Facility.sim.time())]
+	help_label.text = _console_text()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
+	var bot := _selected_agent()
 	match event.keycode:
 		KEY_TAB:
 			_use_camera((cam_index + 1) % cameras.size())
-		KEY_1, KEY_2, KEY_3:
+		KEY_1, KEY_2, KEY_3, KEY_4:
 			_use_camera(event.keycode - KEY_1)
-		KEY_T:
-			var clip := tinker.play_random_action()
-			Facility.act("interaction", "Supervisor asked Tinker to act (%s)" % clip)
-		KEY_H:
-			var clip := hauler.play_random_action()
-			Facility.act("interaction", "Supervisor asked Hauler to act (%s)" % clip)
+		KEY_Q:
+			selected = "hauler" if selected == "tinker" else "tinker"
+		KEY_O:
+			var job := _most_urgent_job(bot)
+			if job.is_empty():
+				last_reply = "No open job %s can reach." % bot.display_name()
+			else:
+				_order(bot, "job", int(job.id), "take job #%d %s" % [job.id, job.title])
+		KEY_R:
+			_order(bot, "recharge", -1, "recharge")
+		KEY_S:
+			_order(bot, "standby", -1, "stand by")
+		KEY_X:
+			_order(bot, "cancel", -1, "cancel its order")
+		KEY_W:
+			Facility.act("interaction", "Supervisor watches the feeds")
 		KEY_C:
 			cctv.visible = not cctv.visible
+		_:
+			return
+	get_viewport().set_input_as_handled()
 
 
-func _on_hauler_arrived() -> void:
-	hauler.play_random_action()
+# Giving an order is a choice: it costs facility time, and the robot answers.
+func _order(bot: RobotAgent, kind: String, job_id: int, _what := "") -> void:
+	var r := Supervisor.order(bot, kind, job_id)
+	last_reply = "%s: \"%s\"" % [bot.display_name(), r.reply]
+
+
+func _selected_agent() -> RobotAgent:
+	return Facility.sim.get_system("robot_" + selected) as RobotAgent
+
+
+# Highest priority first, then the oldest, among jobs on the robot's rail
+# that nobody else has claimed.
+func _most_urgent_job(bot: RobotAgent) -> Dictionary:
+	var board := Facility.sim.get_system("work") as WorkBoard
+	var layout := Facility.sim.get_system("layout") as FacilityLayout
+	var best := {}
+	for j in board.open_jobs():
+		if layout.station(j.station).get("rail", "") != bot.rail:
+			continue
+		if j.status == "claimed" and j.claimed_by != bot.sim_id:
+			continue
+		if best.is_empty() or int(j.priority) > int(best.priority):
+			best = j
+	return best
+
+
+func _console_text() -> String:
+	var lines := PackedStringArray()
+	var plant := Facility.sim.get_system("plant") as FacilityPlant
+	if plant:
+		lines.append("  PLANT   throughput %d%%   coolant %d%%   heat %.1fx   open jobs %d" % [
+			roundi(plant.throughput * 100.0), roundi(plant.coolant * 100.0), plant.heat(),
+			(Facility.sim.get_system("work") as WorkBoard).open_jobs().size()])
+	for bot in FacilitySetup.robots(Facility.sim):
+		var ord := "" if bot.order.is_empty() else "   [order: %s]" % (
+			"job #%d" % int(bot.order.job) if bot.order.kind == "job" else str(bot.order.kind))
+		lines.append("%s %-7s %-44s power %3d%%   %s%s" % [">" if bot.robot_id == selected else " ",
+			bot.display_name().to_upper(), bot.doing_text(Facility.sim), roundi(bot.power * 100.0),
+			bot.mood, ord])
+	if not last_reply.is_empty():
+		lines.append("  " + last_reply)
+	lines.append("")
+	var recent := Facility.sim.journal.tail(60).filter(func(e): return e.cat != "time")
+	for e in recent.slice(maxi(0, recent.size() - JOURNAL_LINES)):
+		lines.append("  %s  %s" % [FacilitySim.format_clock(e.t), e.text])
+	lines.append("")
+	lines.append("Q select robot   O order: most urgent job   R recharge   S stand by   X cancel   W wait 5 min   Tab/1-4 camera   C filter   F1 dev")
+	return "\n".join(lines)
 
 
 func _use_camera(i: int) -> void:
 	cam_index = clampi(i, 0, cameras.size() - 1)
 	cameras[cam_index].make_current()
-
-
-func _clip_summary() -> String:
-	var lines := PackedStringArray()
-	for actor in [tinker, hauler]:
-		lines.append("%s: idles %s, actions %s" % [actor.robot_id, ", ".join(actor.idle_names),
-			", ".join(actor.action_names)])
-	return "\n".join(lines)

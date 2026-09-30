@@ -25,9 +25,10 @@ Current status, open work and next steps: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 | Scene | Run with | What it's for |
 | --- | --- | --- |
-| `recorder/recorder.tscn` | **F5** (main scene), headset on | Perform, record, replay, punch-in |
+| `os/desktop.tscn` | **F5** (main scene) | **The game**: boots into the corkLabs OS, the supervisor's desktop |
+| `recorder/recorder.tscn` | open it, **F6**, headset on | Perform, record, replay, punch-in |
 | `game/robot_lab.tscn` | open it, **F6** | Compare any take on every robot side by side, on your monitor |
-| `game/demo_facility.tscn` | open it, **F6** | Robots working on rails, seen through security cameras |
+| `game/demo_facility.tscn` | open it, **F6** | The facility simulation full-screen through security cameras, with a bare-bones key console |
 | `recorder/hello_vr.tscn` | open it, **F6** | Phase 1 headset test (cubes + input readouts) |
 
 Robot Lab and the demo run on the monitor. Because VR is on for the whole
@@ -144,9 +145,96 @@ starts at Day 1 05:55 (first shift at 06:00).
 `sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
 `sim_load`. See `shift_schedule.gd`. Pass it to `Facility.start_session([...])`.
 
-**Dev panel: F1** in any scene with a running facility (the demo has one):
-clock, booked events, journal. F5 one tick, F6 +1 min (Shift +1 h), F7 +15 min,
-F8 wipe the save.
+**Dev panel: F1** in any scene with a running facility (the demo has one).
+**F2** flips pages: overview (clock, booked events, journal), robots (what
+each robot is doing, its needs, and its top scores with the reason), full
+journal. F5 one tick, F6 +1 min (Shift +1 h), F7 +15 min, F8 wipe the save,
+F9 post a random job.
+
+## Robots in the facility
+
+Each robot is a facility system (`RobotAgent`, `game/sim/robot_agent.gd`)
+with its own mind. The 3D robot only *shows* it (`RobotView`): when facility
+time jumps, the robot glides along its rail to where the sim says it is and
+keeps performing what it's doing (work clips at a job, idles otherwise).
+
+**Needs**
+
+| Need | Goes down | Goes up | When it runs low |
+| --- | --- | --- | --- |
+| **Power** | always a little; more moving, most working | on its dock | below its reserve it drops everything to recharge; at 0 it stalls and limps on emergency cells |
+| **Purpose** | standing idle (robots think the work keeps *them* running) | working, and a jump for each finished job | "restless", then "uneasy": hungrier for work, and eventually it wanders the rail looking for some |
+
+**Deciding: utility scores, like a mixer.** Every couple of facility seconds
+a robot scores everything it could do (each reachable job, recharge, stand
+by, wander) and does the best. Job scores come from priority × skill ×
+distance × power × hunger for purpose. The F1 robots page shows the top scores
+and the reason; every change of mind goes in the journal with the runner-up:
+
+```
+06:55  Hauler: work #7 Replace fuse (0.60: high priority, precise skill 35%, 0.0 m away); next best stand by (0.34)
+```
+
+**Orders are a strong nudge, not a command.** `agent.give_order(sim, "job", id)`
+(or `"recharge"`, `"standby"`, `"cancel"`) adds the robot's `obedience` to
+that option. Usually it wins, and the robot says "On it." But below its power
+reserve it recharges first, it refuses work it's hopeless at ("No. 'Clear
+debris' is heavy work; I'm not built for it."), and an uneasy robot finds it
+hard to stand still. Every answer goes in the journal.
+
+**Personality** lives in `robots/<id>/<id>_traits.tres` (open it in the
+Inspector; every value has a tooltip): rail speed, skills (heavy / precise /
+general), power drain and charge, restlessness, obedience, when it refuses,
+how often it rethinks, and which clips it plays for each kind of work.
+
+| | Hauler | Tinker |
+| --- | --- | --- |
+| Skills | heavy 100%, precise 35% | precise 100%, heavy 20% (refuses heavy orders) |
+| Rail speed | 0.5 m/s | 0.9 m/s |
+| Restlessness | low (stoic) | high (curious, fidgety) |
+| Obedience | high | lower |
+
+**The floor plan** (`game/sim/facility_setup.gd`): rails and stations in
+meters along them, the same numbers the 3D rails use. Tinker's loop has its
+dock, the pods, the relay panel and a workbench; Hauler's straight rail has
+its dock and three bays. A robot only reaches stations on its own rail.
+`FacilitySetup.systems()` is the whole standard facility; every gameplay
+scene starts its session with it.
+
+**The work board** (`WorkBoard`, `game/sim/work_board.gd`): jobs with a
+title, skill, station, amount of work, priority and progress. A robot claims
+a job while it's on it; if it walks away the job goes back on the board with
+its progress kept. A finished job fires a `job_done` event, so whatever posted
+it can react.
+
+**The plant** (`FacilityPlant`, `game/sim/facility_plant.gd`) is the
+machinery the robots keep running. Devices drift or break, post jobs on the
+board, and escalate them as they get worse:
+
+| Device | Where | What goes wrong | Job (skill) | Knock-on effect |
+| --- | --- | --- | --- | --- |
+| Pods 1-4 | Tinker's back straight | sync drifts down, faster when hot; at 0 a pod desyncs | Recalibrate (precise), escalates | throughput = average pod sync |
+| Filters | each bay | clog slowly | Sweep filters (general) | clogged filters heat the facility |
+| Coolant pipes | each bay | leak at random | Clamp coolant leak (heavy, high) | each leak drains coolant; low coolant = hot = pods drift faster |
+| Power relay | Tinker's left wall | fuse blows at random | Replace relay fuse (precise, high) | docks charge at 40% until fixed |
+| Bays | Hauler's rail | debris falls at random | Clear debris (heavy) | half the time Hauler finds a damaged part: Tinker repairs it at the workbench, then Hauler refits it |
+
+Faults sound an alarm (robots rethink at once); every shift ends with a
+report line in the journal (throughput, jobs, faults). Rates and amounts are
+the constants at the top of `facility_plant.gd`.
+
+In the 3D demo, `FacilityProps` (`game/facility_props.gd`) builds placeholder
+props at each station from the same layout: pods glow green → amber → red,
+bay lamps flash red on a leak, debris piles appear, the relay lamp blinks
+when its fuse is out, docks light while a robot charges, and a repaired part
+waits on the workbench. Every device has a floating label.
+
+`tools/screenshot.gd` can break things before the shot: `--fault pipe_2
+--fault relay --spend 600`.
+
+**The demo** is a bare-bones supervisor console: Q select robot, O order it
+to take the most urgent job it can reach, R recharge, S stand by, X cancel,
+W wait 5 minutes. Orders cost facility time (a choice, 2 min).
 
 ## Folder map
 
@@ -157,10 +245,75 @@ F8 wipe the save.
 | `robots/` | One folder per robot: scene + rig script + profile. `robot_rig.gd` is the shared base |
 | `takes/` | Your recordings (keep these!). `takes/demo/` = procedural demo takes, delete any time |
 | `animations/` | Baked clips + one `AnimationLibrary` per robot (regenerated by baking) |
-| `game/` | `RobotActor` (plays clips via AnimationTree), `RailRider` (rail travel + pendulum sway), demo + lab scenes |
+| `game/` | `RobotActor` (plays clips via AnimationTree), `RailRider` (rail travel + pendulum sway), `RobotView` (3D robot follows its sim self), demo + lab scenes |
+| `game/sim/` | The facility simulation: clock, scheduler, journal, layout, work board, plant, robot agents and traits |
+| `os/` | The corkLabs OS: desktop, windows, theme, and its apps (`os/apps/`) |
 | `addons/corklabs_pipeline/` | The editor Takes panel |
 | `tools/` | Command-line tools (bake all, demo takes, screenshots, test runner) |
 | `tests/` | Automated tests, no headset needed |
+
+## The corkLabs OS (the game screen)
+
+`os/desktop.tscn` is the main scene: **F5** boots the game straight into the
+corkLabs OS, the supervisor's desktop, where the game is played. (Like the
+other flat scenes it restarts itself without VR. The VR recorder is now
+`recorder/recorder.tscn` + **F6**.)
+
+- **Boot screen**: a few lines of start-up text; any key or click skips it
+  (can be switched off in Settings).
+- **Log on** opens the real facility (`user://facility_save.json`) exactly
+  where you left it, and reopens the windows you had open, where they were.
+  The greeting uses your Windows user name (the only thing it reads from the PC).
+  **Shut down** quits.
+- **Windows**: open apps from the desktop icons (double-click), the
+  **corkLabs** start menu, or a right-click on the desktop. Drag the title
+  bar to move; drag to the left/right screen edge to snap to half the screen,
+  to the top to maximise; double-click the title or use □ to maximise; resize
+  from the corner; minimise to the taskbar; close. Keys go to the focused
+  window (e.g. arrow keys pan the camera).
+- **Desktop right-click**: show desktop (minimise all), cascade, close all,
+  Handbook, Settings.
+- **Taskbar**: open windows, a blinking **ALARM** light while anything is
+  broken (click: Plant), throughput, **Wait** (let 5 min / 15 min / 1 h / 4 h
+  of facility time pass, a minute per frame so you watch it happen; an alarm
+  or a shift report stops the wait early, and you can stop it yourself), and
+  the **facility clock** with the current shift (never the real clock).
+- **Notifications**: alarms, shift reports and robot replies pop up bottom
+  right (each kind can be turned off in Settings) and are all kept in the
+  **notification centre**: click the clock (a dot means there's something new).
+- **F1** dev panel works here too.
+
+| App | What it shows | What you can do |
+| --- | --- | --- |
+| **Cameras** | Four CCTV cameras, one at a time or in a 2x2 grid. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-4 camera, G grid, F filter. Auto-track (Cam 3 follows Hauler). All free: looking costs no time |
+| **Units** | Each robot: what it's doing, power, purpose and mood, standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min) |
+| **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
+| **Plant** | Throughput, coolant, heat, dock power, every device's state and job | |
+| **Messages** | A thread per robot (your orders, their answers, moods, power) and a Facility thread (alarms, reports) | |
+| **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
+| **Terminal** | A command line: `help`, `status`, `units`, `jobs`, `plant`, `log [n] [category]` | `order <robot> <job#/recharge/standby/cancel>`, `priority <job#> <level/+/->`, `wait <min>`, `open <app>`; up/down for history |
+| **Handbook** | The supervisor's manual: the job, facility time, the units, orders, the plant, the apps | |
+| **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, forget window layout | |
+
+Every supervisor action goes through `Supervisor` (`game/supervisor.gd`),
+which journals it and spends the time (an order or priority change: 2 min).
+Opening apps and looking through cameras is free.
+
+OS preferences and the window layout are saved in `user://os_settings.json`
+(`OSSettings`), separate from the facility save: they're the player's
+desk, not the facility.
+
+How it's built: the 3D facility (`game/facility_world.tscn`, shared with the
+demo) runs once, hidden, inside a SubViewport; each camera feed (`CCTVFeed`,
+`os/cctv_feed.gd`) renders it through its own viewport and camera, copying a
+`SecurityCamera` (`game/security_camera.gd`: a pan/tilt/zoom head with
+limits and a motor that eases). Apps are `OSApp` scripts in `os/apps/` that
+build their UI in code, `refresh()` from the running facility, can take keys
+(`key_input`) and remember their view (`save_state`/`load_state`); the look is
+one `OSTheme` (`os/os_theme.gd`). Adding an app: copy one in `os/apps/`, give
+it an id/title/icon in `_init()`, and add it to `APPS` in `os/desktop.gd`.
+
+`tools/screenshot.gd` can drive it: `--call log_on --call open_app:plant`.
 
 ## Using robots in the game
 
