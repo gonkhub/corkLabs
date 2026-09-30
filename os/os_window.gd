@@ -1,5 +1,9 @@
-# A window on the corkLabs desktop: a title bar you drag, minimise and close
-# buttons, a resize grip in the corner, and an app inside.
+# A window on the corkLabs desktop: a title bar you drag, minimise /
+# maximise / close buttons, a resize grip in the corner, and an app inside.
+#
+#   drag title bar          move (drag a maximised window to restore it)
+#   drag to screen edge     snap: left/right edge = half screen, top = maximise
+#   double-click title      maximise / restore
 #
 #     var win := OSWindow.new()
 #     win.setup(app)            # app: an OSApp (its title and size are used)
@@ -10,6 +14,9 @@ extends PanelContainer
 signal focused(win: OSWindow)
 signal closed(win: OSWindow)
 signal minimized(win: OSWindow)
+## While dragging the title bar: where the mouse is (window-layer coordinates).
+signal dragging(win: OSWindow, mouse: Vector2)
+signal drag_ended(win: OSWindow, mouse: Vector2)
 
 const TITLE_HEIGHT := 28
 const MIN_SIZE := Vector2(280, 160)
@@ -17,12 +24,15 @@ const MIN_SIZE := Vector2(280, 160)
 var app: OSApp
 var title_bar: PanelContainer
 var title_label: Label
+var max_button: Button
 var is_focused := false
 
 var _dragging := false
-var _resizing := false
 var _style: StyleBoxFlat
 var _title_style: StyleBoxFlat
+## Size and place before maximising or snapping (empty = not maximised/snapped).
+var _restore_rect := Rect2()
+var _maximized := false
 
 
 func setup(os_app: OSApp) -> void:
@@ -53,12 +63,15 @@ func setup(os_app: OSApp) -> void:
 	var row := HBoxContainer.new()
 	title_bar.add_child(row)
 	var badge := OSTheme.mono_label(app.icon_text, 11, app.icon_color)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(badge)
 	title_label = OSTheme.label(app.title, 14)
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(title_label)
-	row.add_child(_title_button("_", "Minimise", func(): minimized.emit(self)))
+	row.add_child(_title_button("–", "Minimise", func(): minimized.emit(self)))
+	max_button = _title_button("□", "Maximise", toggle_maximize)
+	row.add_child(max_button)
 	row.add_child(_title_button("×", "Close", func(): close()))
 
 	var margin := MarginContainer.new()
@@ -79,7 +92,7 @@ func _title_button(text: String, tip: String, action: Callable) -> Button:
 	b.text = text
 	b.tooltip_text = tip
 	b.flat = true
-	b.custom_minimum_size = Vector2(24, 22)
+	b.custom_minimum_size = Vector2(26, 22)
 	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(action)
 	return b
@@ -96,6 +109,50 @@ func close() -> void:
 	queue_free()
 
 
+func is_maximized() -> bool:
+	return _maximized
+
+
+func toggle_maximize() -> void:
+	if _maximized:
+		restore()
+	else:
+		maximize()
+
+
+func maximize() -> void:
+	snap_to(Rect2(Vector2.ZERO, get_parent_area_size()))
+	_maximized = true
+	max_button.text = "❐"
+	max_button.tooltip_text = "Restore"
+
+
+## Fills `rect` (a snap), remembering where it was so restore() goes back.
+func snap_to(rect: Rect2) -> void:
+	if _restore_rect.size == Vector2.ZERO:
+		_restore_rect = Rect2(position, size)
+	position = rect.position
+	size = rect.size
+	_maximized = false
+	max_button.text = "□"
+	max_button.tooltip_text = "Maximise"
+
+
+func restore() -> void:
+	if _restore_rect.size != Vector2.ZERO:
+		position = _restore_rect.position
+		size = _restore_rect.size
+	_restore_rect = Rect2()
+	_maximized = false
+	max_button.text = "□"
+	max_button.tooltip_text = "Maximise"
+
+
+## The rect to remember for next session (the un-maximised one).
+func normal_rect() -> Rect2:
+	return _restore_rect if _restore_rect.size != Vector2.ZERO else Rect2(position, size)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		focused.emit(self)
@@ -103,29 +160,30 @@ func _gui_input(event: InputEvent) -> void:
 
 func _on_title_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		_dragging = event.pressed
 		if event.pressed:
 			focused.emit(self)
 			if event.double_click:
-				_toggle_maximise()
+				toggle_maximize()
+				_dragging = false
+				return
+		elif _dragging:
+			drag_ended.emit(self, _mouse_in_layer())
+		_dragging = event.pressed
 	elif event is InputEventMouseMotion and _dragging:
-		position += event.relative
+		if _restore_rect.size != Vector2.ZERO:
+			# Pulling a maximised/snapped window off: restore it under the cursor.
+			var grab: float = event.position.x / maxf(size.x, 1.0)
+			restore()
+			position = _mouse_in_layer() - Vector2(size.x * grab, TITLE_HEIGHT * 0.5)
+		else:
+			position += event.relative
 		_keep_on_screen()
+		dragging.emit(self, _mouse_in_layer())
 
 
-var _restore_rect := Rect2()
-
-
-func _toggle_maximise() -> void:
-	var area := get_parent_area_size()
-	if _restore_rect.size != Vector2.ZERO:
-		position = _restore_rect.position
-		size = _restore_rect.size
-		_restore_rect = Rect2()
-	else:
-		_restore_rect = Rect2(position, size)
-		position = Vector2.ZERO
-		size = area
+func _mouse_in_layer() -> Vector2:
+	var parent := get_parent() as Control
+	return parent.get_local_mouse_position() if parent else get_global_mouse_position()
 
 
 func _keep_on_screen() -> void:
@@ -135,6 +193,8 @@ func _keep_on_screen() -> void:
 
 
 func _resize_by(delta: Vector2) -> void:
+	_restore_rect = Rect2()
+	_maximized = false
 	size = (size + delta).max(MIN_SIZE)
 
 

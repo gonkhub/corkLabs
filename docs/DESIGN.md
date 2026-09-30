@@ -64,6 +64,12 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-29 | For now opening apps and switching cameras is free; orders and priority changes cost 2 min; Wait passes 5 min to 4 h | Placeholder until the user decides which OS actions should cost time (see ROADMAP) |
 | 2026-09-29 | Wait passes facility time a minute per frame and stops on an alarm or shift report | No freeze on long waits, the player watches it happen, and "wait until something happens" becomes a real move. Still player-initiated, so time only moves on player actions |
 | 2026-09-29 | The OS greets the player by their Windows user name (the only real-PC read) | Light-touch personal touch, per the real-PC decision |
+| 2026-09-30 | The game stays **inside the fake corkLabs OS** (not native windows on the real desktop), and the game boots straight into it | User's choice: the OS is the world; keeps framing, streaming and tutorials under control |
+| 2026-09-30 | The Cameras window is **observation only**: camera control (pan/tilt/zoom, switching, grid, auto-track) and nothing that changes the facility. Controls live in the other apps | User's choice: observing and acting are separate windows the player opens and closes freely |
+| 2026-09-30 | Camera control is **free** (no facility time) | User's choice: looking is not acting |
+| 2026-09-30 | Pan/tilt/zoom lives on the `SecurityCamera` itself (a motorised head with limits), so every feed of a camera shows the same view | Like real CCTV; the demo and all feeds agree |
+| 2026-09-30 | OS preferences and window layout are saved separately from the facility (`os_settings.json`) | They're the player's desk, not game state; wiping a facility doesn't reset your desk |
+| 2026-09-30 | A Terminal app mirrors every supervisor action as typed commands | Fits the "supervisor terminal" fiction; handy for power users and testing |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)

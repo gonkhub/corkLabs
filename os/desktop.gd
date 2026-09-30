@@ -1,20 +1,27 @@
-# The corkLabs OS: the supervisor's desktop, and the whole game screen.
+# The corkLabs OS: the supervisor's desktop, and the whole game screen. The
+# game boots straight into it (it's the main scene).
 #
+#   Boot screen    a few seconds of start-up text (any key or click skips;
+#                  can be turned off in Settings), then the login screen.
 #   Login screen   "Log on" opens the facility session (the real save,
-#                  user://facility_save.json) exactly where it was left.
-#   Desktop        icons (double-click) and the start menu open apps in
-#                  windows you can drag, resize, minimise and close.
+#                  user://facility_save.json) exactly where it was left, and
+#                  reopens the windows you had open.
+#   Desktop        icons (double-click), the start menu or a right-click on
+#                  the desktop open apps in windows: drag, snap to screen
+#                  edges, maximise, resize, minimise, close.
 #   Taskbar        start menu, open windows, the alarm light, throughput,
 #                  "Wait" (lets facility time pass, a minute per frame, so you
 #                  see it happen; an alarm or shift report interrupts it),
-#                  and the facility clock.
-#                  The clock shows facility time, never the real clock.
+#                  and the facility clock (never the real clock). Click the
+#                  clock for the notification centre.
 #   Toasts         alarms, shift reports and robot replies pop up bottom right.
+#   Keys           go to the focused window's app (e.g. Cameras: arrows pan).
 #
 # The 3D facility runs once, hidden, in a SubViewport; camera windows render
 # it from the security cameras through their own viewports.
 #
-# Run: open os/desktop.tscn, F6 (it restarts itself without VR, like the demo).
+# OS preferences and the window layout live in OSSettings (os_settings.json),
+# separate from the facility save.
 class_name CorkDesktop
 extends Control
 
@@ -24,6 +31,10 @@ const TOAST_SECONDS := 7.0
 const WORLD_SCENE := "res://game/facility_world.tscn"
 ## A wait passes this much facility time per frame (1 h takes about a second).
 const WAIT_STEP := 60.0
+## Notifications kept in the notification centre.
+const NOTIFICATION_HISTORY := 60
+## Snap zone at the screen edges while dragging a window, in pixels.
+const SNAP_MARGIN := 12.0
 
 ## [id, script] in desktop-icon order.
 const APPS := [
@@ -33,24 +44,49 @@ const APPS := [
 	["plant", preload("res://os/apps/plant_app.gd")],
 	["messages", preload("res://os/apps/messages_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
+	["terminal", preload("res://os/apps/terminal_app.gd")],
+	["handbook", preload("res://os/apps/handbook_app.gd")],
+	["settings", preload("res://os/apps/settings_app.gd")],
+]
+
+const BOOT_LINES := [
+	"corkLabs firmware 3.1.4  (c) corkLabs Organic Computing",
+	"Memory check ............................ OK",
+	"Rail controllers ........................ 2 found",
+	"Unit link: TINKER ....................... online",
+	"Unit link: HAULER ....................... online",
+	"Pod bus ................................. 4 pods in sync",
+	"Coolant loop ............................ pressurised",
+	"Mounting /facility ...................... OK",
+	"Starting corkLabs OS ...",
 ]
 
 ## Where the facility is saved (tests point this elsewhere).
 @export var save_path := "user://facility_save.json"
+## Skip the boot screen (tests; players can turn it off in Settings).
+@export var skip_boot := false
 
 var world_viewport: SubViewport
 var world: FacilityWorld
 var window_layer: Control
-var icons: VBoxContainer
+var icons: VFlowContainer
 var toast_box: VBoxContainer
 var taskbar_buttons: HBoxContainer
-var clock_label: Label
+var clock_button: Button
 var output_label: Label
 var alarm_button: Button
 var wait_button: MenuButton
 var stop_wait_button: Button
 var login: Control
+var boot: Control
+var notice_panel: PanelContainer
+var notice_list: VBoxContainer
+var context_menu: PopupMenu
+var snap_preview: Panel
 var unread := 0
+## Newest last: {"t": facility time, "heading", "body", "color", "app"}
+var notifications: Array[Dictionary] = []
+var unseen_notifications := 0
 
 var _windows := {}          # app id -> OSWindow
 var _refresh_left := 0.0
@@ -59,6 +95,7 @@ var _time := 0.0
 var _cascade := 0
 var _wait_left := 0.0
 var _wait_mark := 0
+var _boot_left := 0.0
 
 
 func _ready() -> void:
@@ -66,6 +103,7 @@ func _ready() -> void:
 		return
 	theme = OSTheme.theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	apply_settings()
 	_build_background()
 	_build_icons()
 	window_layer = Control.new()
@@ -74,14 +112,24 @@ func _ready() -> void:
 	window_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	window_layer.offset_bottom = -TASKBAR_HEIGHT
 	add_child(window_layer)
+	snap_preview = Panel.new()
+	snap_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	snap_preview.add_theme_stylebox_override("panel", OSTheme.box(Color(OSTheme.ACCENT, 0.12), Color(OSTheme.ACCENT, 0.6), 6))
+	snap_preview.visible = false
+	add_child(snap_preview)
 	_build_toasts()
 	_build_taskbar()
+	_build_notice_panel()
+	_build_context_menu()
 	_build_login()
+	_build_boot()
 	Facility.time_spent.connect(func(_a, _b, _c): _refresh_all())
 
 
 func _process(delta: float) -> void:
 	_time += delta
+	if boot.visible:
+		_boot_step(delta)
 	if not Facility.running:
 		return
 	if _wait_left > 0.0:
@@ -95,9 +143,17 @@ func _process(delta: float) -> void:
 		alarm_button.modulate.a = 0.55 + 0.45 * sin(_time * 6.0)
 
 
-# Clicking anywhere on a window brings it to the front.
 func _input(event: InputEvent) -> void:
+	# Any key or click skips the boot screen.
+	if boot.visible and (event is InputEventKey or event is InputEventMouseButton) and event.is_pressed():
+		_finish_boot()
+		get_viewport().set_input_as_handled()
+		return
+	# Clicking anywhere on a window brings it to the front.
 	if event is InputEventMouseButton and event.pressed and not login.visible:
+		if notice_panel.visible and not notice_panel.get_global_rect().has_point(event.position) \
+				and not clock_button.get_global_rect().has_point(event.position):
+			notice_panel.visible = false
 		for i in range(window_layer.get_child_count() - 1, -1, -1):
 			var w := window_layer.get_child(i) as OSWindow
 			if w and w.visible and w.get_global_rect().has_point(event.position):
@@ -105,9 +161,78 @@ func _input(event: InputEvent) -> void:
 				return
 
 
+# Keys nobody else used go to the focused window's app.
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed) or login.visible:
+		return
+	if event.keycode == KEY_ESCAPE and notice_panel.visible:
+		notice_panel.visible = false
+		get_viewport().set_input_as_handled()
+		return
+	var w := focused_window()
+	if w and w.visible and w.app.key_input(event):
+		get_viewport().set_input_as_handled()
+
+
+# Right-click on the empty desktop: the desktop menu.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and Facility.running:
+		context_menu.position = Vector2i(get_global_mouse_position())
+		context_menu.popup()
+		accept_event()
+
+
+# --- Settings ----------------------------------------------------------------------------------
+
+## Applies OSSettings (UI scale, fullscreen). Settings app calls this after changes.
+func apply_settings() -> void:
+	var win := get_window()
+	if win and win == get_tree().root:
+		win.content_scale_factor = float(OSSettings.get_value("ui_scale"))
+		var want_full: bool = OSSettings.get_value("fullscreen")
+		var is_full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		if want_full != is_full and DisplayServer.get_name() != "headless":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if want_full else DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+# --- Boot ------------------------------------------------------------------------------------------
+
+func _build_boot() -> void:
+	boot = ColorRect.new()
+	(boot as ColorRect).color = Color.BLACK
+	boot.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(boot)
+	var text := OSTheme.mono_label("", 16, OSTheme.ACCENT)
+	text.name = "Text"
+	text.position = Vector2(48, 40)
+	boot.add_child(text)
+	var skip := OSTheme.mono_label("press any key", 12, OSTheme.TEXT_DIM)
+	skip.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	skip.position = Vector2(48, -40)
+	skip.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	boot.add_child(skip)
+	_boot_left = 0.0
+	boot.visible = not skip_boot and bool(OSSettings.get_value("boot_animation"))
+
+
+func _boot_step(delta: float) -> void:
+	_boot_left += delta
+	var lines := int(_boot_left / 0.22)
+	(boot.get_node("Text") as Label).text = "\n".join(BOOT_LINES.slice(0, mini(lines, BOOT_LINES.size())))
+	if lines > BOOT_LINES.size() + 2:
+		_finish_boot()
+
+
+func _finish_boot() -> void:
+	if not boot.visible:
+		return
+	boot.visible = false
+
+
 # --- Session -----------------------------------------------------------------------------
 
 func log_on() -> void:
+	_finish_boot()
 	Facility.start_session(FacilitySetup.systems(), save_path)
 	world_viewport = SubViewport.new()
 	world_viewport.name = "FacilityWorldViewport"
@@ -119,6 +244,8 @@ func log_on() -> void:
 	world_viewport.add_child(world)
 	_journal_mark = Facility.sim.journal.added
 	login.visible = false
+	if OSSettings.get_value("restore_windows"):
+		_restore_layout()
 	_refresh_all()
 	var board := Facility.sim.get_system("work") as WorkBoard
 	toast("Welcome, %s" % user_name(), "Facility time %s. %d open job(s)." % [
@@ -127,11 +254,17 @@ func log_on() -> void:
 
 func log_off() -> void:
 	_end_wait("")
+	save_layout()
 	for id in _windows.keys():
+		_windows[id].closed.disconnect(_on_closed)   # closing for log-off isn't "closed by the player"
 		_windows[id].close()
 	_windows.clear()
+	_rebuild_taskbar()
 	for t in toast_box.get_children():
 		t.queue_free()
+	notifications.clear()
+	unseen_notifications = 0
+	notice_panel.visible = false
 	Facility.end_session()
 	if world_viewport:
 		world_viewport.queue_free()
@@ -151,6 +284,7 @@ static func user_name() -> String:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and Facility.running:
+		save_layout()
 		Facility.end_session()
 
 
@@ -175,24 +309,47 @@ func open_app(id: String) -> OSApp:
 	var win := OSWindow.new()
 	win.setup(app)
 	var area := window_layer.size
-	win.position = Vector2(120 + 28 * (_cascade % 8), 30 + 26 * (_cascade % 8))
-	win.size = win.size.min(area - Vector2(140, 50))
-	_cascade += 1
+	var saved: Dictionary = OSSettings.windows().get(id, {})
+	if saved.has("rect"):
+		var r: Array = saved.rect
+		win.position = Vector2(r[0], r[1])
+		win.size = Vector2(r[2], r[3])
+	else:
+		win.position = Vector2(120 + 28 * (_cascade % 8), 30 + 26 * (_cascade % 8))
+		_cascade += 1
+	win.size = win.size.min(area - Vector2(20, 10)).max(OSWindow.MIN_SIZE)
+	win.position = win.position.clamp(Vector2.ZERO, (area - Vector2(120, OSWindow.TITLE_HEIGHT)).max(Vector2.ZERO))
 	window_layer.add_child(win)
 	win.focused.connect(focus_window)
 	win.minimized.connect(_on_minimized)
 	win.closed.connect(_on_closed)
+	win.dragging.connect(_on_window_dragging)
+	win.drag_ended.connect(_on_window_drag_ended)
 	_windows[id] = win
+	if saved.get("maximized", false):
+		win.maximize()
+	if saved.has("state"):
+		app.load_state(saved.state)
 	focus_window(win)
 	return app
 
 
+func focused_window() -> OSWindow:
+	for w in _windows.values():
+		if w.is_focused and w.visible:
+			return w
+	return null
+
+
 func _on_minimized(w: OSWindow) -> void:
 	w.visible = false
+	w.set_focused(false)
 	_rebuild_taskbar()
 
 
 func _on_closed(w: OSWindow) -> void:
+	_remember(w, false)
+	OSSettings.save()
 	_windows.erase(w.app.app_id)
 	_rebuild_taskbar.call_deferred()
 
@@ -210,14 +367,92 @@ func is_open(id: String) -> bool:
 	return _windows.has(id) and _windows[id].visible
 
 
-func _refresh_all() -> void:
-	if not Facility.running:
-		return
+## Minimise everything (desktop menu: "Show desktop").
+func show_desktop() -> void:
 	for w in _windows.values():
-		if w.visible:
-			w.app.refresh()
-	_refresh_taskbar()
-	_check_journal()
+		_on_minimized(w)
+
+
+## Lines the open windows up diagonally at their normal sizes.
+func cascade_windows() -> void:
+	var i := 0
+	for w in window_layer.get_children():
+		var win := w as OSWindow
+		if win == null or not win.visible:
+			continue
+		win.restore()
+		win.position = Vector2(110 + 30 * i, 20 + 30 * i)
+		i += 1
+
+
+func close_all_windows() -> void:
+	for w in _windows.values():
+		w.close()
+
+
+# Snapping: drag a window to the left/right edge for half the screen, to the top to maximise.
+func _snap_rect(mouse: Vector2) -> Rect2:
+	var area := window_layer.size
+	if mouse.y <= SNAP_MARGIN:
+		return Rect2(Vector2.ZERO, area)
+	if mouse.x <= SNAP_MARGIN:
+		return Rect2(Vector2.ZERO, Vector2(area.x * 0.5, area.y))
+	if mouse.x >= area.x - SNAP_MARGIN:
+		return Rect2(Vector2(area.x * 0.5, 0), Vector2(area.x * 0.5, area.y))
+	return Rect2()
+
+
+func _on_window_dragging(_w: OSWindow, mouse: Vector2) -> void:
+	var r := _snap_rect(mouse)
+	snap_preview.visible = r.size != Vector2.ZERO
+	if snap_preview.visible:
+		snap_preview.position = r.position + Vector2(4, 4)
+		snap_preview.size = r.size - Vector2(8, 8)
+		move_child(snap_preview, window_layer.get_index() + 1)
+
+
+func _on_window_drag_ended(w: OSWindow, mouse: Vector2) -> void:
+	snap_preview.visible = false
+	var r := _snap_rect(mouse)
+	if r.size == Vector2.ZERO:
+		return
+	if r.position == Vector2.ZERO and r.size == window_layer.size:
+		w.maximize()
+	else:
+		w.snap_to(r)
+
+
+# --- Layout memory ---------------------------------------------------------------------------
+
+## Remembers every open window (place, size, view state) for next time.
+func save_layout() -> void:
+	var saved := OSSettings.windows()
+	for id in saved:
+		saved[id].open = false
+	for i in window_layer.get_child_count():
+		var w := window_layer.get_child(i) as OSWindow
+		if w and _windows.has(w.app.app_id):
+			_remember(w, true)
+			saved[w.app.app_id].z = i
+	OSSettings.save()
+
+
+func _remember(w: OSWindow, open: bool) -> void:
+	var r := w.normal_rect()
+	var saved := OSSettings.windows()
+	var prev: Dictionary = saved.get(w.app.app_id, {})
+	saved[w.app.app_id] = {"rect": [r.position.x, r.position.y, r.size.x, r.size.y], "open": open,
+		"minimized": not w.visible, "maximized": w.is_maximized(), "state": w.app.save_state(), "z": prev.get("z", 0)}
+
+
+func _restore_layout() -> void:
+	var saved := OSSettings.windows()
+	var ids := saved.keys().filter(func(id): return saved[id].get("open", false))
+	ids.sort_custom(func(a, b): return int(saved[a].get("z", 0)) < int(saved[b].get("z", 0)))
+	for id in ids:
+		open_app(id)
+		if saved[id].get("minimized", false) and _windows.has(id):
+			_on_minimized(_windows[id])
 
 
 # --- Waiting ------------------------------------------------------------------------
@@ -253,8 +488,6 @@ func _wait_step() -> void:
 
 
 func _end_wait(why: String) -> void:
-	if _wait_left <= 0.0 and why.is_empty():
-		_wait_left = 0.0
 	if Facility.running and not why.is_empty() and _wait_left > 0.0:
 		Facility.sim.note("supervisor", why)
 	_wait_left = 0.0
@@ -269,31 +502,23 @@ static func _dur(seconds: float) -> String:
 	return "%.1f h" % (seconds / 3600.0)
 
 
-# --- Toasts --------------------------------------------------------------------------------
+# --- Notifications -----------------------------------------------------------------------
 
-## Pops a notification up bottom right. Clicking it opens `app`.
-func toast(heading: String, body: String, color := OSTheme.ACCENT, app := "") -> void:
-	var p := PanelContainer.new()
-	var style := OSTheme.box(OSTheme.PANEL_LIGHT, color, 6, 12, 8)
-	style.border_width_left = 4
-	p.add_theme_stylebox_override("panel", style)
+## Pops a notification up bottom right (if that kind is switched on in
+## Settings) and files it in the notification centre. Clicking opens `app`.
+## kind: "alarm", "report", "message" or "" (always shown).
+func toast(heading: String, body: String, color := OSTheme.ACCENT, app := "", kind := "") -> void:
+	var t := Facility.sim.time() if Facility.running else 0.0
+	notifications.append({"t": t, "heading": heading, "body": body, "color": color, "app": app})
+	if notifications.size() > NOTIFICATION_HISTORY:
+		notifications.pop_front()
+	unseen_notifications += 1
+	if notice_panel.visible:
+		_fill_notice_panel()
+	if not kind.is_empty() and not OSSettings.get_value("toast_" + kind):
+		return
+	var p := _notice_card(heading, body, color, app, FacilitySim.format_clock(t))
 	p.custom_minimum_size = Vector2(340, 0)
-	p.mouse_filter = Control.MOUSE_FILTER_STOP
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(col)
-	var h := OSTheme.label(heading, 14, color)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(h)
-	var b := OSTheme.label(body, 13)
-	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(b)
-	p.gui_input.connect(func(e: InputEvent):
-		if e is InputEventMouseButton and e.pressed:
-			if not app.is_empty():
-				open_app(app)
-			p.queue_free())
 	toast_box.add_child(p)
 	while toast_box.get_child_count() > 5:
 		toast_box.get_child(0).free()
@@ -304,7 +529,51 @@ func toast(heading: String, body: String, color := OSTheme.ACCENT, app := "") ->
 			tw.tween_callback(p.queue_free))
 
 
-# New journal lines: alarms, reports and robot replies become toasts.
+func _notice_card(heading: String, body: String, color: Color, app: String, clock := "") -> PanelContainer:
+	var p := PanelContainer.new()
+	var style := OSTheme.box(OSTheme.PANEL_LIGHT, color, 6, 12, 8)
+	style.border_width_left = 4
+	p.add_theme_stylebox_override("panel", style)
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(col)
+	var h := OSTheme.label(heading if clock.is_empty() else "%s   %s" % [heading, clock], 14, color)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(h)
+	var b := OSTheme.label(body, 13)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(b)
+	p.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			if not app.is_empty():
+				open_app(app)
+			if p.get_parent() == toast_box:
+				p.queue_free())
+	return p
+
+
+func toggle_notice_panel() -> void:
+	notice_panel.visible = not notice_panel.visible
+	if notice_panel.visible:
+		unseen_notifications = 0
+		_fill_notice_panel()
+		move_child(notice_panel, -1)
+	_refresh_taskbar()
+
+
+func _fill_notice_panel() -> void:
+	for c in notice_list.get_children():
+		c.queue_free()
+	if notifications.is_empty():
+		notice_list.add_child(OSTheme.label("Nothing yet.", 13, OSTheme.TEXT_DIM))
+	for i in range(notifications.size() - 1, -1, -1):
+		var n := notifications[i]
+		notice_list.add_child(_notice_card(n.heading, n.body, n.color, n.app, FacilitySim.format_clock(n.t)))
+
+
+# New journal lines: alarms, reports and robot replies become notifications.
 func _check_journal() -> void:
 	var journal := Facility.sim.journal
 	var fresh := journal.added_since(_journal_mark)
@@ -316,20 +585,29 @@ func _check_journal() -> void:
 		var cat: String = e.cat
 		var text: String = e.text
 		if cat == "alarm":
-			toast("ALARM  " + FacilitySim.format_clock(e.t), text, OSTheme.ALARM, "plant")
+			toast("ALARM", text, OSTheme.ALARM, "plant", "alarm")
 			shown += 1
 		elif cat == "report":
-			toast("Shift report", text.trim_prefix("Shift report: "), OSTheme.INFO, "log")
+			toast("Shift report", text.trim_prefix("Shift report: "), OSTheme.INFO, "log", "report")
 			shown += 1
 		elif MessagesApp.is_message(e):
 			if not (is_open("messages") and _windows["messages"].is_focused):
 				unread += 1
-				var who := cat.capitalize()
-				toast(who, MessagesApp.message_text(e), OSTheme.category_color(cat), "messages")
+				toast(cat.capitalize(), MessagesApp.message_text(e), OSTheme.category_color(cat), "messages", "message")
 				shown += 1
 
 
 # --- Building ------------------------------------------------------------------------------
+
+func _refresh_all() -> void:
+	if not Facility.running:
+		return
+	for w in _windows.values():
+		if w.visible:
+			w.app.refresh()
+	_refresh_taskbar()
+	_check_journal()
+
 
 func _build_background() -> void:
 	var bg := TextureRect.new()
@@ -361,9 +639,15 @@ func _build_background() -> void:
 
 
 func _build_icons() -> void:
-	icons = VBoxContainer.new()
-	icons.position = Vector2(14, 14)
-	icons.add_theme_constant_override("separation", 10)
+	# Columns of icons down the left edge; wraps into a new column when the screen is short.
+	icons = VFlowContainer.new()
+	icons.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	icons.offset_left = 14
+	icons.offset_top = 14
+	icons.offset_bottom = -TASKBAR_HEIGHT - 10
+	icons.add_theme_constant_override("v_separation", 8)
+	icons.add_theme_constant_override("h_separation", 8)
+	icons.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(icons)
 	for a in APPS:
 		var app: OSApp = a[1].new()
@@ -384,6 +668,61 @@ func _build_toasts() -> void:
 	toast_box.alignment = BoxContainer.ALIGNMENT_END
 	toast_box.add_theme_constant_override("separation", 8)
 	add_child(toast_box)
+
+
+func _build_notice_panel() -> void:
+	notice_panel = PanelContainer.new()
+	notice_panel.add_theme_stylebox_override("panel", OSTheme.box(OSTheme.PANEL, OSTheme.LINE, 6, 10, 10))
+	notice_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	notice_panel.offset_left = -380
+	notice_panel.offset_right = -8
+	notice_panel.offset_top = 8
+	notice_panel.offset_bottom = -TASKBAR_HEIGHT - 8
+	notice_panel.visible = false
+	add_child(notice_panel)
+	var col := VBoxContainer.new()
+	notice_panel.add_child(col)
+	var head := HBoxContainer.new()
+	col.add_child(head)
+	var title := OSTheme.label("Notifications", 16)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var clear := Button.new()
+	clear.text = "Clear"
+	clear.focus_mode = Control.FOCUS_NONE
+	clear.pressed.connect(func():
+		notifications.clear()
+		_fill_notice_panel())
+	head.add_child(clear)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(scroll)
+	notice_list = VBoxContainer.new()
+	notice_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	notice_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(notice_list)
+
+
+func _build_context_menu() -> void:
+	context_menu = PopupMenu.new()
+	context_menu.add_item("Show desktop (minimise all)", 0)
+	context_menu.add_item("Cascade windows", 1)
+	context_menu.add_item("Close all windows", 2)
+	context_menu.add_separator()
+	context_menu.add_item("Handbook", 3)
+	context_menu.add_item("Settings", 4)
+	context_menu.id_pressed.connect(_on_context_menu)
+	add_child(context_menu)
+
+
+func _on_context_menu(id: int) -> void:
+	match id:
+		0: show_desktop()
+		1: cascade_windows()
+		2: close_all_windows()
+		3: open_app("handbook")
+		4: open_app("settings")
 
 
 func _build_taskbar() -> void:
@@ -448,12 +787,17 @@ func _build_taskbar() -> void:
 	stop_wait_button.visible = false
 	row.add_child(stop_wait_button)
 
-	clock_label = OSTheme.mono_label("--:--", 15, OSTheme.TEXT)
-	clock_label.tooltip_text = "Facility time"
-	clock_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	clock_label.custom_minimum_size.x = 250
-	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(clock_label)
+	clock_button = Button.new()
+	clock_button.flat = true
+	clock_button.focus_mode = Control.FOCUS_NONE
+	clock_button.tooltip_text = "Facility time (click: notifications)"
+	clock_button.add_theme_font_override("font", Mono.font())
+	clock_button.add_theme_font_size_override("font_size", 15)
+	clock_button.custom_minimum_size.x = 270
+	clock_button.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	clock_button.text = "--:--"
+	clock_button.pressed.connect(toggle_notice_panel)
+	row.add_child(clock_button)
 
 
 func _rebuild_taskbar() -> void:
@@ -468,8 +812,7 @@ func _rebuild_taskbar() -> void:
 		b.button_pressed = w.visible and w.is_focused
 		b.pressed.connect(func():
 			if w.visible and w.is_focused:
-				w.visible = false
-				_rebuild_taskbar()
+				_on_minimized(w)
 			else:
 				w.visible = true
 				focus_window(w))
@@ -477,12 +820,16 @@ func _rebuild_taskbar() -> void:
 
 
 func _refresh_taskbar() -> void:
+	if not Facility.running:
+		return
 	var sim := Facility.sim
 	var shifts := sim.get_system("shifts") as ShiftSchedule
 	var shift_text := ""
 	if shifts and shifts.current >= 0:
 		shift_text = "   %s shift" % shifts.current_name()
-	clock_label.text = FacilitySim.format_time(sim.time()) + shift_text
+	var dot := "● " if unseen_notifications > 0 and not notice_panel.visible else ""
+	clock_button.text = dot + FacilitySim.format_time(sim.time()) + shift_text
+	clock_button.add_theme_color_override("font_color", OSTheme.WARN if not dot.is_empty() else OSTheme.TEXT)
 	var plant := sim.get_system("plant") as FacilityPlant
 	if plant:
 		output_label.text = "THROUGHPUT %d%%" % roundi(plant.throughput * 100.0)
@@ -530,6 +877,13 @@ func _build_login() -> void:
 	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	go.pressed.connect(log_on)
 	col.add_child(go)
+	var quit := Button.new()
+	quit.text = "Shut down"
+	quit.flat = true
+	quit.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	quit.add_theme_color_override("font_color", OSTheme.TEXT_DIM)
+	quit.pressed.connect(func(): get_tree().quit())
+	col.add_child(quit)
 	_update_login_text()
 
 

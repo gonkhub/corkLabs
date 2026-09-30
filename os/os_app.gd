@@ -32,6 +32,21 @@ func refresh() -> void:
 	pass
 
 
+## A key pressed while this app's window is focused (and nothing else took
+## it, e.g. a text box). Return true if the app used it.
+func key_input(_event: InputEventKey) -> bool:
+	return false
+
+
+## View state to remember between sessions (which camera, filters...).
+func save_state() -> Dictionary:
+	return {}
+
+
+func load_state(_state: Dictionary) -> void:
+	pass
+
+
 func sim() -> FacilitySim:
 	return Facility.sim if Facility.running else null
 

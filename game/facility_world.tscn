@@ -205,16 +205,27 @@ robot_id = "hauler"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.5, 4.6, 1.8)
 fov = 68.0
 script = ExtResource("4_cam")
+display_name = "Floor overview"
 look_point = Vector3(0, 2, 0)
 
 [node name="Cam2" type="Camera3D" parent="Cameras"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 5.6, -10)
 fov = 62.0
 script = ExtResource("4_cam")
+display_name = "Pod row"
 look_point = Vector3(-0.5, 1.4, -1)
 
 [node name="Cam3" type="Camera3D" parent="Cameras" node_paths=PackedStringArray("target")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 5.5)
 fov = 45.0
 script = ExtResource("4_cam")
+display_name = "Hauler bays"
+look_point = Vector3(0, 2, 0.8)
 target = NodePath("../../HaulerRail/Rider/Swing/Hauler")
+
+[node name="Cam4" type="Camera3D" parent="Cameras"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 4.4, 7)
+fov = 58.0
+script = ExtResource("4_cam")
+display_name = "Docks & workbench"
+look_point = Vector3(-1.5, 1.4, 2.2)

@@ -12,7 +12,7 @@ extends Node3D
 @onready var tinker_rider: RailRider = $TinkerRail/Rider
 @onready var hauler: RobotActor = $HaulerRail/Rider/Swing/Hauler
 @onready var hauler_rider: RailRider = $HaulerRail/Rider
-@onready var cameras: Array[Camera3D] = [$Cameras/Cam1, $Cameras/Cam2, $Cameras/Cam3]
+@onready var cameras: Array[SecurityCamera] = [$Cameras/Cam1, $Cameras/Cam2, $Cameras/Cam3, $Cameras/Cam4]
 
 var props: FacilityProps
 var views: Array[RobotView] = []
@@ -32,4 +32,7 @@ func _ready() -> void:
 
 ## Display names for the security cameras, same order as `cameras`.
 func camera_names() -> PackedStringArray:
-	return PackedStringArray(["Floor overview", "Pod row", "Hauler bays"])
+	var out := PackedStringArray()
+	for c in cameras:
+		out.append(c.display_name)
+	return out

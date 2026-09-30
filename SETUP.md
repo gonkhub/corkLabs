@@ -20,7 +20,7 @@ workflow, tools), see [README.md](README.md).
 1. Headset on Link first (you should see the Link home environment).
 2. Open the project in Godot. The first time after an update, the **Takes**
    panel appears next to Scene/Import (top-left).
-3. Press **F5** (runs the recorder), then put the headset on.
+3. Open `recorder/recorder.tscn` and press **F6** (runs the recorder; F5 now runs the game), then put the headset on.
 
 ## Checklists
 

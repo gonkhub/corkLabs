@@ -4,7 +4,7 @@ Where things stand and what's next. Update this at the end of every working
 session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 [README](../README.md).
 
-*Last updated: 2026-09-29 (evening session)*
+*Last updated: 2026-09-30*
 
 ## Status
 
@@ -19,11 +19,12 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Robot behaviour**: utility-AI robots with power + purpose needs, work board, orders they can push back on | **New, needs a look** | Automated tests + screenshots |
 | **Facility content**: pods, filters, coolant, relay, bays; faults chain; salvage hand-off between robots | **New, needs a look** | Automated tests + screenshots |
 | **corkLabs desktop OS**: login, windows, taskbar with facility clock, 6 apps, toasts | **New, needs a look** | Automated tests + screenshots |
+| **OS build-out**: boots into the OS, observation-only Cameras with pan/tilt/zoom + grid, snapping/maximise, remembered layout, notification centre, Terminal, Settings, Handbook | **New, needs a look** | Automated tests + screenshots + simulated clicks |
 
 ## Branches and pull requests
 
-Three new branches from the 2026-09-29 evening session, **stacked** (each
-builds on the one before). Push all three, then open the PRs in order; merge
+Four new branches, **stacked** (each builds on the one before; the first
+three from the 2026-09-29 evening session, the fourth from 2026-09-30). Push all three, then open the PRs in order; merge
 them in order (after #1 is merged, #2's diff on GitHub shows only its own
 commits, and so on).
 
@@ -32,16 +33,18 @@ commits, and so on).
 | 1 | `feature/robot-behaviour` | Robots as facility systems: utility scores, power + purpose, work board, orders + push-back, `RobotView`, dev panel pages. Also carries the earlier unpushed ROADMAP commit from `docs/roadmap-after-merge` | Run the demo; open `robots/*/<id>_traits.tres` in the Inspector |
 | 2 | `feature/facility-content` | `FacilityPlant`: devices, faults, chains, salvage hand-off, shift reports; 3D props coloured by state | Watch the demo for a shift (F7 / Shift+F6); do the props read? |
 | 3 | `feature/desktop-os` | The corkLabs OS (`os/desktop.tscn`); 3D world split into `game/facility_world.tscn`; `Supervisor` actions | Play it: log on, give orders, break things (F9), log off/on |
+| 4 | `feature/os-buildout` | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
 
-All tests pass on each branch (`tools\run_tests.ps1`, 12 test files).
+All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last one).
 
 ## Things to try first (about 15 minutes)
 
-1. Open `os/desktop.tscn`, **F6**, **Log on**.
-2. Open **Units** and **Cameras**. Press **Wait → 1 hour** (an alarm stops it early) and
+1. Press **F5** (the game now boots into the OS). Skip the boot text, **Log on**.
+2. Open **Cameras**: drag to pan, scroll to zoom, G for the grid. Open **Units**
+   beside it (drag a window to the screen edge to snap). Press **Wait → 1 hour** (an alarm stops it early) and
    watch the robots pick work, recharge, get restless.
 3. Press **F9** (dev) a few times to post jobs, or wait for faults. When an
    **ALARM** toast appears, open **Plant**, then **Work Orders**, and order a
@@ -49,16 +52,17 @@ All tests pass on each branch (`tools\run_tests.ps1`, 12 test files).
    a robot low on power (it recharges first).
 4. **Messages** shows the robots' answers; **Facility Log** has every
    decision with its reasons.
-5. Log off, close, reopen: it resumes at the same facility minute.
+5. Try the **Terminal** (`help`, `status`, `order tinker recharge`).
+6. Log off, close, reopen: it resumes at the same facility minute, with your windows where you left them.
 
 ## Decisions waiting for you
 
-- **What should cost facility time on the desktop?** Right now orders and
-  priority changes cost 2 min, Wait passes time, and opening apps/cameras is
-  free. Should looking at a camera or the log cost time (the design table
-  says "opening a feed: 5 minutes")?
-- **Make the desktop the main scene?** F5 still runs the VR recorder (handy
-  for recording). The game will eventually start at `os/desktop.tscn`.
+- **Boot screen text**: placeholder firmware lines ("Unit link: TINKER ... online").
+  Rewrite freely; they're `BOOT_LINES` in `os/desktop.gd`.
+- **Handbook voice**: plain and friendly right now. Should it read like a
+  corporate onboarding document (a place to plant story hints)?
+- **More cameras / rooms**: four cameras cover the one room. When the
+  facility grows, which rooms come next?
 - **Balance**: a normal day is calm (~86% throughput, robots keep up).
   Should the baseline be harder, or should pressure come from story events?
 - **Robot voice**: replies are short and dry ("On it.", "No. 'Clear debris'
@@ -92,6 +96,8 @@ All tests pass on each branch (`tools\run_tests.ps1`, 12 test files).
 
 ## Known issues
 
+- F5 (the OS) starts a VR session for a moment and restarts without VR, like
+  the other flat scenes. An exported game should ship with OpenXR off.
 - Flat scenes (Robot Lab, demo, desktop) restart themselves without VR, so
   the editor's Stop button and Output panel don't reach them. Logs go to
   `%APPDATA%\Godot\app_userdata\corkLabs\logs\godot.log`.

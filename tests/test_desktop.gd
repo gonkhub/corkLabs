@@ -4,6 +4,7 @@
 extends SceneTree
 
 const SAVE := "user://test_desktop_save.json"
+const OS_SETTINGS := "user://test_desktop_os_settings.json"
 
 var failures := 0
 
@@ -11,8 +12,11 @@ var failures := 0
 func _initialize() -> void:
 	var facility: Node = get_root().get_node("Facility")
 	facility.wipe_save(SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
+	OSSettings.use_file(OS_SETTINGS)
 	var desk: Control = (load("res://os/desktop.tscn") as PackedScene).instantiate()
 	desk.save_path = SAVE
+	desk.skip_boot = true
 	get_root().add_child(desk)
 	await process_frame
 
@@ -20,8 +24,8 @@ func _initialize() -> void:
 	desk.log_on()
 	await process_frame
 	_check(facility.running and not desk.login.visible, "log on opens the facility")
-	_check(desk.world != null and desk.world.cameras.size() == 3, "the 3D facility runs hidden, with its cameras")
-	_check(desk.clock_label.text.begins_with(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_label.text)
+	_check(desk.world != null and desk.world.cameras.size() == 4, "the 3D facility runs hidden, with its cameras")
+	_check(str(desk.clock_button.text).contains(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_button.text)
 
 	for id in ["cameras", "units", "work", "plant", "messages", "log"]:
 		_check(desk.open_app(id) != null and desk.is_open(id), "the %s app opens in a window" % id)
@@ -91,6 +95,7 @@ func _initialize() -> void:
 	desk.log_off()
 	desk.free()
 	facility.wipe_save(SAVE)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
 

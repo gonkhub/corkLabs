@@ -4,7 +4,7 @@
 # give orders, and every order or wait spends facility time.
 #
 # Keys:
-#   Tab / 1 2 3     switch camera
+#   Tab / 1-4       switch camera
 #   Q               select the other robot
 #   O               order it to take the most urgent job it can reach
 #   R / S           order it to recharge / to stand by
@@ -20,7 +20,7 @@ const JOURNAL_LINES := 7
 @export var save_path := "user://demo_facility_save.json"
 
 @onready var world: FacilityWorld = $World
-@onready var cameras: Array[Camera3D] = world.cameras
+@onready var cameras: Array[SecurityCamera] = world.cameras
 @onready var cctv: CanvasItem = $Overlay/CCTV
 @onready var cam_label: Label = $Overlay/CamLabel
 @onready var help_label: Label = $Overlay/Help
@@ -56,7 +56,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	match event.keycode:
 		KEY_TAB:
 			_use_camera((cam_index + 1) % cameras.size())
-		KEY_1, KEY_2, KEY_3:
+		KEY_1, KEY_2, KEY_3, KEY_4:
 			_use_camera(event.keycode - KEY_1)
 		KEY_Q:
 			selected = "hauler" if selected == "tinker" else "tinker"
@@ -127,7 +127,7 @@ func _console_text() -> String:
 	for e in recent.slice(maxi(0, recent.size() - JOURNAL_LINES)):
 		lines.append("  %s  %s" % [FacilitySim.format_clock(e.t), e.text])
 	lines.append("")
-	lines.append("Q select robot   O order: most urgent job   R recharge   S stand by   X cancel   W wait 5 min   Tab/1-3 camera   C filter   F1 dev")
+	lines.append("Q select robot   O order: most urgent job   R recharge   S stand by   X cancel   W wait 5 min   Tab/1-4 camera   C filter   F1 dev")
 	return "\n".join(lines)
 
 
