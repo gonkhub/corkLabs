@@ -3,10 +3,18 @@
 # what it's weighing up right now (its top utility scores and why). Orders
 # from here cost facility time, and the robot answers on camera. Reboot needs
 # the remote-reboot software package.
+#
+# Diagnose (10 min) reads a unit's state out properly and steadies it a
+# little. Talk appears once the supervisor knows units CAN be talked to
+# (the "talk" command): it opens the unit link in the Terminal.
 class_name UnitsApp
 extends OSApp
 
-var cards := {}   # robot_id -> {"name", "doing", "power", "power_txt", "stability", "stability_txt", "order", "think", "why", "reply", "reboot"}
+var cards := {}   # robot_id -> {"name", "doing", "power", "power_txt", "stability", "stability_txt", "order", "think", "why", "reply", "reboot", "talk"}
+
+## Facility minutes a diagnostic takes, and how much it steadies the unit.
+const DIAGNOSE_MINUTES := 10.0
+const DIAGNOSE_STEADY := 0.02
 
 
 func _init() -> void:
@@ -78,11 +86,24 @@ func _card(bot: RobotAgent) -> Control:
 		["Cancel order", _order.bind(bot.robot_id, "cancel")],
 		["Assign a job...", func(): desktop.open_app("work")],
 	]))
+	var row2 := HBoxContainer.new()
+	col.add_child(row2)
+	var diag := Button.new()
+	diag.text = "Diagnose (%d min)" % int(DIAGNOSE_MINUTES)
+	diag.focus_mode = Control.FOCUS_NONE
+	diag.pressed.connect(_diagnose.bind(bot.robot_id))
+	row2.add_child(diag)
+	c.talk = Button.new()
+	c.talk.text = "Talk"
+	c.talk.focus_mode = Control.FOCUS_NONE
+	c.talk.tooltip_text = "Open the unit link (in the Terminal). Conversing with units is against the Code of Conduct."
+	c.talk.pressed.connect(_talk.bind(bot.robot_id))
+	row2.add_child(c.talk)
 	c.reboot = Button.new()
 	c.reboot.text = "Remote reboot"
 	c.reboot.focus_mode = Control.FOCUS_NONE
 	c.reboot.pressed.connect(_reboot.bind(bot.robot_id))
-	col.add_child(c.reboot)
+	row2.add_child(c.reboot)
 	cards[bot.robot_id] = c
 	return panel
 
@@ -91,6 +112,25 @@ func _order(robot_id: String, kind: String) -> void:
 	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
 	Supervisor.order(bot, kind)
 	cards[robot_id].reply.text = "Order sent: %s. (Its answer is on camera.)" % Supervisor.describe_order(sim(), kind, -1)
+
+
+func _diagnose(robot_id: String) -> void:
+	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
+	sim().note("supervisor", "Runs diagnostics on %s" % bot.display_name())
+	if not bot.offline():
+		bot.stability = minf(bot.stability + DIAGNOSE_STEADY, 1.0)
+	Facility.spend(DIAGNOSE_MINUTES * 60.0, "Supervisor runs diagnostics on %s" % bot.display_name())
+	var power_left := bot.power * 100.0
+	cards[robot_id].reply.text = "DIAG %s: power %d%%, stability %d%% (%s), independence %d%%, jobs done %d. %s" % [
+		bot.display_name().to_upper(), roundi(power_left), roundi(bot.stability * 100.0), bot.stability_state,
+		roundi(bot.independence() * 100.0), bot.jobs_done,
+		"Firmware: knowledge filter active." if robot_id != "ogre" else "Firmware: no knowledge filter installed."]
+
+
+func _talk(robot_id: String) -> void:
+	var term = desktop.open_app("terminal") if desktop else null
+	if term:
+		term.start_talk(robot_id)
 
 
 func _reboot(robot_id: String) -> void:
@@ -114,6 +154,7 @@ func refresh() -> void:
 		c.stability_txt.text = "%3d%% %s" % [roundi(bot.stability * 100.0), bot.stability_state.to_upper() if bot.stability < 0.35 else bot.stability_state]
 		if bot.independence() > 0.2:
 			c.stability_txt.text += "  (independent %d%%)" % roundi(bot.independence() * 100.0)
+		c.talk.visible = Story.knows(sim(), "cmd:talk")
 		var unlocked := Supervisor.has_software("remote-reboot")
 		c.reboot.disabled = not unlocked or bot.offline()
 		c.reboot.tooltip_text = "Offline %d min, restores stability" % int(RobotAgent.REBOOT_TIME / 60.0) if unlocked \

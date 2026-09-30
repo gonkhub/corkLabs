@@ -6,7 +6,11 @@
 # It shows CorkHQ's messages (the simulation side: game/corporate/cork_hq.gd):
 # directives, shift reviews and grades, nagging, requisition confirmations
 # and status, software approvals with install codes. The header judges you:
-# your rating, budget and clearance.
+# your rating, budget, clearance and standing.
+#
+# The one way to quieten it: the maintenance account's "hqctl mute". While
+# the link is suspended the panel goes dark and holds new messages; they all
+# arrive at once when it comes back. Corporate notices at the next audit.
 class_name CorkHQPanel
 extends PanelContainer
 
@@ -30,6 +34,7 @@ var _flash := 0.0
 var _shake := 0.0
 var _home := Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
+var _suspended: Label
 
 
 func _ready() -> void:
@@ -78,6 +83,13 @@ func _ready() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 8)
 	scroll.add_child(list)
+	_suspended = OSTheme.mono_label("LINK SUSPENDED
+(maintenance)", 18, Color(1, 0.4, 0.35, 0.8))
+	_suspended.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_suspended.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_suspended.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_suspended.visible = false
+	inner.add_child(_suspended)
 	chime = AudioStreamPlayer.new()
 	chime.stream = _make_chime()
 	chime.volume_db = -4.0   # fixed: not tied to any OS setting
@@ -102,7 +114,11 @@ func _process(delta: float) -> void:
 	var hq := Facility.sim.get_system("hq") as CorkHQ
 	if hq == null:
 		return
-	if hq.posted != _mark:
+	var o := Facility.sim.get_system("oversight") as Oversight
+	var muted := o != null and o.hq_muted(Facility.sim)
+	_suspended.visible = muted
+	list.get_parent().visible = not muted
+	if hq.posted != _mark and not muted:
 		_mark = hq.posted
 		_rebuild(hq)
 		_alert()
@@ -128,8 +144,17 @@ func _alert() -> void:
 func _refresh_status(hq: CorkHQ) -> void:
 	var req := Facility.sim.get_system("requisitions") as Requisitions
 	var sw := Facility.sim.get_system("software") as SoftwareLibrary
+	var o := Facility.sim.get_system("oversight") as Oversight
 	status.text = "RATING %s   FUNDS %s cr   CLEARANCE %d" % [hq.grade if hq.grade != "" else "pending",
 		_thousands(req.funds) if req else "?", sw.clearance if sw else 1]
+	if o:
+		status.text += "
+STANDING %d/100%s" % [roundi(o.standing), "   WARNINGS %d" % o.strikes if o.strikes > 0 else ""]
+
+
+## Redraws right away (after the link is suspended or restored).
+func refresh_now() -> void:
+	_process(0.0)
 
 
 func _rebuild(hq: CorkHQ) -> void:

@@ -1,6 +1,7 @@
-# Checks the corkLabs OS desktop: log on starts the facility, apps open in
-# windows, orders from the apps cost facility time and get answers, alarms
-# become toasts and light the taskbar, log off saves and resumes.
+# Checks the corkLabs OS desktop: log on starts the facility (at the shift
+# brief; clocking in starts the shift), apps open in windows, orders from the
+# apps cost facility time and get answers, alarms become toasts and light the
+# taskbar, there's no way to just wait, log off saves and resumes.
 extends SceneTree
 
 const SAVE := "user://test_desktop_save.json"
@@ -10,6 +11,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	var facility: Node = get_root().get_node("Facility")
 	facility.wipe_save(SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
@@ -23,7 +25,14 @@ func _initialize() -> void:
 	_check(desk.login.visible and not facility.running, "it starts at the login screen, facility closed")
 	desk.log_on()
 	await process_frame
+	await process_frame
 	_check(facility.running and not desk.login.visible, "log on opens the facility")
+	_check(desk.shift_screen.blocking(), "a new facility starts at the first shift's brief, over the desktop")
+	desk.clock_in()
+	await process_frame
+	await process_frame
+	_check(not desk.shift_screen.blocking() and FacilitySim.format_clock(facility.sim.time()) == "06:00",
+		"clocking in starts the shift at 06:00 (%s)" % FacilitySim.format_clock(facility.sim.time()))
 	_check(desk.world != null and desk.world.cameras.size() == FacilitySetup.cameras().size(), "the 3D facility runs hidden, with its cameras")
 	_check(str(desk.clock_button.text).contains(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_button.text)
 
@@ -54,34 +63,16 @@ func _initialize() -> void:
 	_check(desk.toast_box.get_child_count() > toasts_before and alarm_toast, "an alarm pops up as a toast")
 	_check(desk.alarm_button.visible and desk.alarm_button.text.contains("1"), "and lights the taskbar alarm (%s)" % desk.alarm_button.text)
 
-	# Waiting lets time pass; the apps follow.
+	# No waiting: time moves when the supervisor does something (a duty here).
+	_check(not desk.has_method("start_wait") and not load("res://game/supervisor.gd").new().has_method("wait"), "there is no Wait")
 	var t1: float = sim.time()
-	load("res://game/supervisor.gd").wait(900.0)   # by path: classes that use the Facility autoload can't be named in --script tests
+	var why: String = load("res://game/supervisor.gd").do_duty("coolant_walk")   # by path: classes that use the Facility autoload can't be named in --script tests
 	await process_frame
-	_check(is_equal_approx(sim.time() - t1, 900.0), "Wait lets 15 facility minutes pass")
+	_check(why.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "a duty passes its facility time (%s)" % why)
 	var units = desk._windows["units"].app
 	_check(not str(units.cards["tinker"].think.text).is_empty(), "the Units app shows what each robot is weighing up")
 	var log_app = desk._windows["log"].app
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
-
-	# The taskbar Wait: passes time a step per frame, stops early on an alarm.
-	# (Cancel the plant's random faults first, so only our own alarm interrupts.)
-	for e in sim.scheduler.peek(1000):
-		if e.name == "plant_fault":
-			sim.scheduler.cancel(e.id)
-	var t2: float = sim.time()
-	desk.start_wait(20 * 60.0)
-	await process_frame
-	_check(desk.is_waiting() and sim.time() - t2 < 20 * 60.0, "a wait passes time over several frames, not all at once")
-	for i in 40:
-		await process_frame
-	_check(not desk.is_waiting() and is_equal_approx(sim.time() - t2, 1200.0), "and ends after the full 20 minutes (%.0f s)" % (sim.time() - t2))
-	var t3: float = sim.time()
-	sim.schedule_in(300.0, "plant_fault", {"device": "pipe_1"})
-	desk.start_wait(3600.0)
-	for i in 80:
-		await process_frame
-	_check(not desk.is_waiting() and sim.time() - t3 < 600.0, "an alarm interrupts a wait (stopped after %.0f s of 3600)" % (sim.time() - t3))
 
 	# Log off, log back on: same moment.
 	var t_off: float = sim.time()
@@ -94,6 +85,8 @@ func _initialize() -> void:
 	_check(info.text.contains(FacilitySim.format_time(t_off)), "the login screen says where the facility is on hold (%s)" % info.text.split("\n")[0])
 	desk.log_on()
 	_check(is_equal_approx(facility.sim.time(), t_off), "log on resumes at exactly that moment")
+	await process_frame
+	_check(not desk.shift_screen.blocking(), "mid-shift, with no brief in the way")
 
 	desk.log_off()
 	desk.free()

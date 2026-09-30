@@ -9,6 +9,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_rig()
 	_test_never_moves()
 	_test_reach_and_orders()

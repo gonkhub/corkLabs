@@ -14,6 +14,7 @@ var desk: Control
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	get_root().size = Vector2i(1600, 900)
 	facility = get_root().get_node("Facility")
 	facility.wipe_save(SAVE)
@@ -39,6 +40,7 @@ func _initialize() -> void:
 	desk.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	desk.size = Vector2(1600, 900)
 	desk.log_on()
+	desk.clock_in()
 	await process_frame
 
 	await _test_cameras()
@@ -163,7 +165,8 @@ func _test_notifications() -> void:
 func _test_terminal() -> void:
 	var term = desk.open_app("terminal")
 	await process_frame
-	_check(term.run("help").contains("order <robot>"), "Terminal: help lists the commands")
+	var help: String = term.run("help")
+	_check(help.contains("status") and help.contains("There are more"), "Terminal: help lists the commands you know, and hints there are more")
 	_check(term.run("status").contains("throughput"), "Terminal: status")
 	_check(term.run("units").contains("HAULER"), "Terminal: units")
 	_check(term.run("jobs").contains("Clamp coolant leak"), "Terminal: jobs shows the leak")
@@ -184,11 +187,9 @@ func _test_terminal() -> void:
 	_check(not layout.segment("pod_door").blocked, "Terminal: unblock reopens it")
 	term.run("priority %d critical" % leak)
 	_check(int(board.get_job(leak).priority) == 3, "Terminal: priority")
-	_check(term.run("order nobody 1").contains("No robot"), "Terminal: bad input gets a helpful error")
-	_check(term.run("frobnicate").contains("Unknown command"), "Terminal: unknown commands")
-	term.run("wait 5")
-	_check(desk.is_waiting(), "Terminal: wait uses the taskbar wait")
-	desk._end_wait("")
+	_check(term.run("order nobody 1").contains("No unit"), "Terminal: bad input gets a helpful error")
+	_check(term.run("frobnicate").contains("command not found"), "Terminal: unknown commands")
+	_check(term.run("wait 5").contains("command not found"), "Terminal: there is no wait")
 	_check(term.run("log 3 alarm").contains("COOLANT LEAK"), "Terminal: log with a category filter")
 	term.run("open plant")
 	_check(desk.is_open("plant"), "Terminal: open an app")

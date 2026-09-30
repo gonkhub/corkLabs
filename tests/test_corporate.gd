@@ -9,6 +9,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_data()
 	_test_hq_reviews()
 	_test_requisitions()
@@ -125,6 +126,7 @@ func _test_panel() -> void:
 	desk.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	desk.size = Vector2(1600, 900)
 	desk.log_on()
+	desk.clock_in()
 	await process_frame
 	await process_frame
 	var panel = desk.hq_panel
