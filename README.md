@@ -264,8 +264,10 @@ Open it and press **F6** (like the demo it restarts itself without VR).
   in windows: drag the title bar, double-click it to maximise, resize from
   the corner, minimise to the taskbar, close.
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
-  broken (click: Plant), throughput, **Wait** (let 5 min / 15 min / 1 h of
-  facility time pass), and the **facility clock** (never the real clock).
+  broken (click: Plant), throughput, **Wait** (let 5 min / 15 min / 1 h / 4 h
+  of facility time pass, a minute per frame so you watch it happen; an alarm
+  or a shift report stops the wait early, and you can stop it yourself), and
+  the **facility clock** with the current shift (never the real clock).
 - **Toasts** (bottom right): alarms, shift reports and robot replies. Click
   one to open the app it's about.
 - **F1** dev panel works here too.

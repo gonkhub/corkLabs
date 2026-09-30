@@ -41,7 +41,7 @@ All tests pass on each branch (`tools\run_tests.ps1`, 12 test files).
 ## Things to try first (about 15 minutes)
 
 1. Open `os/desktop.tscn`, **F6**, **Log on**.
-2. Open **Units** and **Cameras**. Press **Wait → 15 min** a few times and
+2. Open **Units** and **Cameras**. Press **Wait → 1 hour** (an alarm stops it early) and
    watch the robots pick work, recharge, get restless.
 3. Press **F9** (dev) a few times to post jobs, or wait for faults. When an
    **ALARM** toast appears, open **Plant**, then **Work Orders**, and order a
@@ -95,7 +95,6 @@ All tests pass on each branch (`tools\run_tests.ps1`, 12 test files).
 - Flat scenes (Robot Lab, demo, desktop) restart themselves without VR, so
   the editor's Stop button and Output panel don't reach them. Logs go to
   `%APPDATA%\Godot\app_userdata\corkLabs\logs\godot.log`.
-- Waiting a long time (1 h) freezes the desktop for about half a second while the facility catches up.
 - Floating 3D labels are tiny in the smaller camera windows.
 - Hauler still reads a little leggy from straight in front.
 - The recorder bakes when you press stop; long takes may hitch briefly in the headset.

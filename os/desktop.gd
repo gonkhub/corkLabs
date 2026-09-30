@@ -5,7 +5,9 @@
 #   Desktop        icons (double-click) and the start menu open apps in
 #                  windows you can drag, resize, minimise and close.
 #   Taskbar        start menu, open windows, the alarm light, throughput,
-#                  "Wait" (lets facility time pass), and the facility clock.
+#                  "Wait" (lets facility time pass, a minute per frame, so you
+#                  see it happen; an alarm or shift report interrupts it),
+#                  and the facility clock.
 #                  The clock shows facility time, never the real clock.
 #   Toasts         alarms, shift reports and robot replies pop up bottom right.
 #
@@ -20,6 +22,8 @@ const TASKBAR_HEIGHT := 40
 const REFRESH_EVERY := 0.5
 const TOAST_SECONDS := 7.0
 const WORLD_SCENE := "res://game/facility_world.tscn"
+## A wait passes this much facility time per frame (1 h takes about a second).
+const WAIT_STEP := 60.0
 
 ## [id, script] in desktop-icon order.
 const APPS := [
@@ -43,6 +47,8 @@ var taskbar_buttons: HBoxContainer
 var clock_label: Label
 var output_label: Label
 var alarm_button: Button
+var wait_button: MenuButton
+var stop_wait_button: Button
 var login: Control
 var unread := 0
 
@@ -51,6 +57,8 @@ var _refresh_left := 0.0
 var _journal_mark := 0
 var _time := 0.0
 var _cascade := 0
+var _wait_left := 0.0
+var _wait_mark := 0
 
 
 func _ready() -> void:
@@ -76,6 +84,8 @@ func _process(delta: float) -> void:
 	_time += delta
 	if not Facility.running:
 		return
+	if _wait_left > 0.0:
+		_wait_step()
 	_refresh_left -= delta
 	if _refresh_left <= 0.0:
 		_refresh_left = REFRESH_EVERY
@@ -116,6 +126,7 @@ func log_on() -> void:
 
 
 func log_off() -> void:
+	_end_wait("")
 	for id in _windows.keys():
 		_windows[id].close()
 	_windows.clear()
@@ -207,6 +218,55 @@ func _refresh_all() -> void:
 			w.app.refresh()
 	_refresh_taskbar()
 	_check_journal()
+
+
+# --- Waiting ------------------------------------------------------------------------
+
+## Lets up to `seconds` of facility time pass, a step per frame, so the
+## robots visibly get on with things. Stops early on an alarm or shift report.
+func start_wait(seconds: float) -> void:
+	if not Facility.running or _wait_left > 0.0:
+		return
+	Facility.sim.note("supervisor", "Waits (up to %s)" % _dur(seconds))
+	_wait_left = seconds
+	_wait_mark = Facility.sim.journal.added
+	wait_button.visible = false
+	stop_wait_button.visible = true
+
+
+func is_waiting() -> bool:
+	return _wait_left > 0.0
+
+
+func _wait_step() -> void:
+	var step := minf(WAIT_STEP, _wait_left)
+	Facility.spend(step, "Supervisor waits", false)
+	_wait_left -= step
+	stop_wait_button.text = "Waiting... %s left  (stop)" % _dur(_wait_left)
+	for e in Facility.sim.journal.added_since(_wait_mark):
+		if e.cat == "alarm" or e.cat == "report":
+			_end_wait("Wait interrupted: %s" % ("alarm" if e.cat == "alarm" else "shift report"))
+			return
+	_wait_mark = Facility.sim.journal.added
+	if _wait_left <= 0.0:
+		_end_wait("")
+
+
+func _end_wait(why: String) -> void:
+	if _wait_left <= 0.0 and why.is_empty():
+		_wait_left = 0.0
+	if Facility.running and not why.is_empty() and _wait_left > 0.0:
+		Facility.sim.note("supervisor", why)
+	_wait_left = 0.0
+	if wait_button:
+		wait_button.visible = true
+		stop_wait_button.visible = false
+
+
+static func _dur(seconds: float) -> String:
+	if seconds < 3600.0:
+		return "%d min" % ceili(seconds / 60.0)
+	return "%.1f h" % (seconds / 3600.0)
 
 
 # --- Toasts --------------------------------------------------------------------------------
@@ -372,20 +432,26 @@ func _build_taskbar() -> void:
 	output_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(output_label)
 
-	var wait := MenuButton.new()
-	wait.text = "Wait ▾"
-	wait.tooltip_text = "Let facility time pass. It only moves when you act."
-	wait.flat = false
-	var wm := wait.get_popup()
-	for m in [5, 15, 60]:
-		wm.add_item("Wait %s" % ("%d min" % m if m < 60 else "1 hour"), m)
-	wm.id_pressed.connect(func(m: int): Supervisor.wait(m * 60.0))
-	row.add_child(wait)
+	wait_button = MenuButton.new()
+	wait_button.text = "Wait ▾"
+	wait_button.tooltip_text = "Let facility time pass (it only moves when you act).\nAn alarm or a shift report stops the wait."
+	wait_button.flat = false
+	var wm := wait_button.get_popup()
+	for m in [5, 15, 60, 240]:
+		wm.add_item("Wait %s" % ("%d min" % m if m < 60 else "%d hour%s" % [m / 60, "s" if m > 60 else ""]), m)
+	wm.id_pressed.connect(func(m: int): start_wait(m * 60.0))
+	row.add_child(wait_button)
+	stop_wait_button = Button.new()
+	stop_wait_button.focus_mode = Control.FOCUS_NONE
+	stop_wait_button.add_theme_color_override("font_color", OSTheme.WARN)
+	stop_wait_button.pressed.connect(_end_wait.bind("You stop waiting"))
+	stop_wait_button.visible = false
+	row.add_child(stop_wait_button)
 
 	clock_label = OSTheme.mono_label("--:--", 15, OSTheme.TEXT)
 	clock_label.tooltip_text = "Facility time"
 	clock_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	clock_label.custom_minimum_size.x = 150
+	clock_label.custom_minimum_size.x = 250
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(clock_label)
 
@@ -412,7 +478,11 @@ func _rebuild_taskbar() -> void:
 
 func _refresh_taskbar() -> void:
 	var sim := Facility.sim
-	clock_label.text = FacilitySim.format_time(sim.time())
+	var shifts := sim.get_system("shifts") as ShiftSchedule
+	var shift_text := ""
+	if shifts and shifts.current >= 0:
+		shift_text = "   %s shift" % shifts.current_name()
+	clock_label.text = FacilitySim.format_time(sim.time()) + shift_text
 	var plant := sim.get_system("plant") as FacilityPlant
 	if plant:
 		output_label.text = "THROUGHPUT %d%%" % roundi(plant.throughput * 100.0)

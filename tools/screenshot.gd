@@ -26,7 +26,8 @@ func _initialize() -> void:
 	for i in args.size():
 		if args[i] == "--call" and i + 1 < args.size():
 			var bits := args[i + 1].split(":")
-			scene.callv(bits[0], Array(bits.slice(1)))
+			var call_args := Array(bits.slice(1)).map(func(a: String): return float(a) if a.is_valid_float() else a)
+			scene.callv(bits[0], call_args)
 			await process_frame
 	# Facility scenes: break something and/or let facility time pass first.
 	var facility := get_root().get_node_or_null("Facility")

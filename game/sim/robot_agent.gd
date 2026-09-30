@@ -169,8 +169,9 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 	var wander := restless * 0.25 * pow(1.0 - purpose, 1.5) * (0.3 + 0.7 * energy)
 	out.append({"key": "wander", "label": "wander the rail", "score": wander, "why": "looking for purpose (%d%%)" % _pct(purpose)})
 
+	# Stick with a task already started (not with doing nothing).
 	for o in out:
-		if o.key == current:
+		if o.key == current and current != "idle":
 			o.score += traits.commitment
 	out.sort_custom(func(a, b): return a.score > b.score or (a.score == b.score and a.key < b.key))
 	return out

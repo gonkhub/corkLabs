@@ -21,7 +21,7 @@ func _initialize() -> void:
 	await process_frame
 	_check(facility.running and not desk.login.visible, "log on opens the facility")
 	_check(desk.world != null and desk.world.cameras.size() == 3, "the 3D facility runs hidden, with its cameras")
-	_check(desk.clock_label.text == FacilitySim.format_time(facility.sim.time()), "the taskbar clock shows facility time (%s)" % desk.clock_label.text)
+	_check(desk.clock_label.text.begins_with(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_label.text)
 
 	for id in ["cameras", "units", "work", "plant", "messages", "log"]:
 		_check(desk.open_app(id) != null and desk.is_open(id), "the %s app opens in a window" % id)
@@ -60,6 +60,21 @@ func _initialize() -> void:
 	_check(not str(units.cards["tinker"].think.text).is_empty(), "the Units app shows what each robot is weighing up")
 	var log_app = desk._windows["log"].app
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
+
+	# The taskbar Wait: passes time a step per frame, stops early on an alarm.
+	var t2: float = sim.time()
+	desk.start_wait(20 * 60.0)
+	await process_frame
+	_check(desk.is_waiting() and sim.time() - t2 < 20 * 60.0, "a wait passes time over several frames, not all at once")
+	for i in 40:
+		await process_frame
+	_check(not desk.is_waiting() and is_equal_approx(sim.time() - t2, 1200.0), "and ends after the full 20 minutes (%.0f s)" % (sim.time() - t2))
+	var t3: float = sim.time()
+	sim.schedule_in(300.0, "plant_fault", {"device": "pipe_1"})
+	desk.start_wait(3600.0)
+	for i in 80:
+		await process_frame
+	_check(not desk.is_waiting() and sim.time() - t3 < 600.0, "an alarm interrupts a wait (stopped after %.0f s of 3600)" % (sim.time() - t3))
 
 	# Log off, log back on: same moment.
 	var t_off: float = sim.time()
