@@ -222,8 +222,14 @@ which clips it plays for each kind of work.
 **The floor plan** (`game/sim/facility_setup.gd`) is data: rooms, a rail
 network, stations, cameras. The simulation plans on it and the 3D world
 (`FacilityWorld`, `game/facility_world.gd`) builds itself from it (floors,
-walls with doorway openings, rails, signs, lights, cameras), so they always
+walls with doorway openings, rails, signs, cameras), so they always
 agree. Rooms are empty space for now.
+
+**The facility is dark.** It was built for robots: no lights, no water, no
+washrooms. The only light comes from machines (device status lamps, charging
+docks, each robot's status LED: blue ok, amber low power, red blink offline).
+Floor stencils and doorway signs are unlit paint. To see, switch a camera to
+night vision (below).
 
 | Room | Size | What's in it |
 | --- | --- | --- |
@@ -374,7 +380,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Five CCTV cameras across the rooms, one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, F filter. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
+| **Cameras** | Five CCTV cameras across the rooms, one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, **N night vision**, F filter. Feeds run at a locked 30 fps. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
 | **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **remote reboot** (needs the remote-reboot package) |
 | **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
 | **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
@@ -397,7 +403,10 @@ How it's built: the 3D facility (`game/facility_world.tscn`) runs once,
 hidden, inside a SubViewport; each camera feed (`CCTVFeed`,
 `os/cctv_feed.gd`) renders it through its own viewport and camera, copying a
 `SecurityCamera` (`game/security_camera.gd`: a pan/tilt/zoom head with
-limits and a motor that eases). Apps are `OSApp` scripts in `os/apps/` that
+limits and a motor that eases). Night vision swaps the feed camera's
+Environment for an infrared one (flat light, black distance fog) and flips the
+feed shader (`os/cctv_feed.gdshader`) to green phosphor. Each feed renders
+once per 1/30 s (`CCTVFeed.FEED_FPS`). Apps are `OSApp` scripts in `os/apps/` that
 build their UI in code, `refresh()` from the running facility, can take keys
 (`key_input`) and remember their view (`save_state`/`load_state`); the look is
 one `OSTheme` (`os/os_theme.gd`). Adding an app: copy one in `os/apps/`, give

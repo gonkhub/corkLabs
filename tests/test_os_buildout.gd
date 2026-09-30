@@ -97,6 +97,30 @@ func _test_cameras() -> void:
 	app.feeds[3].clicked.emit(app.feeds[3])
 	await process_frame
 	_check(not app.grid_mode and app.cam == 3, "clicking a feed in the grid opens it")
+
+	# The facility is dark: no lamps in the rooms, so the cameras have night vision.
+	var room_lights: Array = desk.world.get_children().filter(func(n): return n is Light3D)
+	_check(room_lights.is_empty(), "the facility has no room lights (%d)" % room_lights.size())
+	_check(app.feeds.all(func(f): return not f.night_vision and f.eye.environment == null), "feeds start without night vision")
+	_key(KEY_N)
+	await process_frame
+	var ir: Environment = app.feeds[0].eye.environment
+	_check(app.night_on and ir != null and ir.fog_enabled and app.feeds.all(func(f): return f.night_vision and f.eye.environment == ir),
+		"N switches the feeds to infrared")
+	_key(KEY_G)
+	await process_frame
+	_check(app.feeds.size() > 1 and app.feeds.all(func(f): return f.night_vision), "and it stays on for every feed in the grid")
+	_check(bool(app.save_state().night), "night vision is remembered with the window")
+	for i in 20:
+		await process_frame
+	var fps: float = app.feeds[0].FEED_FPS
+	var frames: float = app.feeds[0]._feed_time * fps
+	_check(frames >= 1.0 and absf(frames - roundf(frames)) < 0.001, "feeds tick on their own locked clock (%d frames at %d fps)" % [roundi(frames), fps])
+	_key(KEY_N)
+	await process_frame
+	_key(KEY_G)
+	await process_frame
+	_check(not app.night_on and app.feeds.all(func(f): return f.eye.environment == null), "N again switches it off")
 	_check(sim.time() == t0, "still no facility time spent")
 
 

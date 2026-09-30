@@ -10,12 +10,24 @@
 #
 # Robots' speech (SpeechDirector) floats over them as coloured text in any
 # feed whose camera is in the same room and can see them.
+#
+# Night vision: the facility has no lights, so every camera also has an
+# infrared mode. The feed's camera swaps to an Environment that floods the
+# scene with flat "IR" light, fading into black fog with distance (the
+# illuminator's reach), and the shader turns it green and grainy. Machine
+# lights and robot LEDs bloom out. Like panning, it's only looking.
+#
+# Frame rate: feeds are locked to FEED_FPS, whatever the desktop runs at.
+# The viewport renders once per tick and holds the picture in between; the
+# shader's grain and rolling band step on the same clock.
 class_name CCTVFeed
 extends Control
 
 signal clicked(feed: CCTVFeed)
 
 const FEED_SHADER := preload("res://os/cctv_feed.gdshader")
+## Locked feed frame rate.
+const FEED_FPS := 30.0
 
 ## Index into FacilityWorld.cameras.
 var cam := 0
@@ -34,8 +46,12 @@ var _speech_labels := {}
 var _speech_layer: Control
 ## Text size for speech (grid feeds use smaller text).
 var speech_font_size := 16
+var night_vision := false
 var _material: ShaderMaterial
 var _dragging := false
+var _frame_clock := 0.0     # time since the last rendered frame
+var _feed_time := 0.0       # the feed's own clock, in whole frames
+static var _ir_env: Environment
 
 
 func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index: int, is_interactive: bool) -> void:
@@ -62,6 +78,7 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	screen.material = _material
 	add_child(screen)
 	viewport = SubViewport.new()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE   # then once per feed frame, from _process
 	viewport.handle_input_locally = false
 	viewport.gui_disable_input = true
 	if world_viewport:
@@ -89,22 +106,59 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	add_child(ptz_label)
 
 
+## The CCTV artefacts (scanlines, grain, wash); night vision keeps its own look without them.
 func set_filter(on: bool) -> void:
-	screen.material = _material if on else null
+	_material.set_shader_parameter("cctv", 1.0 if on else 0.0)
+
+
+func set_night_vision(on: bool) -> void:
+	night_vision = on
+	_material.set_shader_parameter("night_vision", on)
+	eye.environment = ir_environment() if on else null
+
+
+## What a camera sees by its own infrared light: everything lit evenly
+## (no shadows, no colour), dark beyond the illuminator's reach.
+static func ir_environment() -> Environment:
+	if _ir_env == null:
+		var e := Environment.new()
+		e.background_mode = Environment.BG_COLOR
+		e.background_color = Color.BLACK
+		e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		e.ambient_light_color = Color(0.8, 0.8, 0.8)
+		e.ambient_light_energy = 1.0
+		e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		e.fog_enabled = true
+		e.fog_light_color = Color.BLACK
+		e.fog_density = 0.03
+		e.fog_sky_affect = 0.0
+		e.glow_enabled = true
+		e.glow_intensity = 1.2
+		e.glow_bloom = 0.15
+		e.glow_hdr_threshold = 0.8
+		_ir_env = e
+	return _ir_env
 
 
 func camera() -> SecurityCamera:
 	return world.cameras[cam] if world and cam < world.cameras.size() else null
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var src := camera()
 	if src == null or not is_visible_in_tree():
 		return
+	_frame_clock += delta
+	if _frame_clock < 1.0 / FEED_FPS:
+		return
+	_frame_clock = fmod(_frame_clock, 1.0 / FEED_FPS)
+	_feed_time += 1.0 / FEED_FPS
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_material.set_shader_parameter("feed_time", _feed_time)
 	eye.global_transform = src.global_transform
 	eye.fov = src.fov
 	var clock := FacilitySim.format_time(Facility.sim.time()) if Facility.running else ""
-	caption.text = "CAM %02d  %s\n%s  ● REC" % [cam + 1, src.display_name.to_upper(), clock]
+	caption.text = "CAM %02d  %s\n%s  ● REC%s" % [cam + 1, src.display_name.to_upper(), clock, "   IR" if night_vision else ""]
 	ptz_label.position.y = size.y - 24
 	var ptz := "AUTO-TRACK" if src.auto_track else "PAN %+4d°  TILT %+3d°" % [roundi(src.pan), roundi(src.tilt)]
 	ptz_label.text = "%s   ZOOM %.1fx" % [ptz, src.zoom_level()]

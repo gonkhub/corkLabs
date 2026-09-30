@@ -92,6 +92,10 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | The budget comes from shift reviews (grade A-F vs an 85% throughput target) | Performance drives resources; resources drive performance |
 | 2026-09-30 | Software packages are learned and installed through the **Terminal** (connect, corkpkg), approved by corporate by **clearance**, with install codes delivered via corkHQ | User's direction: the player learns the commands; corporate gates progress |
 | 2026-09-30 | Catalogue, packages and corkHQ lines are plain text data files | Content can grow without code |
+| 2026-09-30 | **The facility is dark**: no lights, no human amenities (water, washrooms, anything). Only machines give off light (status lamps, docks, robot LEDs); floor stencils and signs are unlit paint | User's direction: built for robots, not people; they work in the dark, literally and metaphorically |
+| 2026-09-30 | Cameras get **night vision** (N / checkbox): a per-camera IR Environment (flat light, black fog for the illuminator's reach) + green phosphor shader. It's only looking: free, per Cameras window, remembered | The player needs to see; the dark stays the default, so looking is a deliberate act |
+| 2026-09-30 | Robots carry a **status LED** (blue ok, amber low power, red blink offline) | How you find a robot in the dark without night vision; makes its state visible at a glance |
+| 2026-09-30 | Camera feeds are **locked to 30 fps** (render once per tick; grain and roll step on the same clock) | User's direction: reads as CCTV, and saves rendering with several feeds open |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)

@@ -10,13 +10,21 @@
 # otherwise) until the next player action changes it.
 #
 #   RobotView (this, on the rail)
-#   └── Swing (pendulum pivot)
-#       └── RobotActor (the baked robot, scaled by traits.visual_scale)
+#   ├── Swing (pendulum pivot)
+#   │   └── RobotActor (the baked robot, scaled by traits.visual_scale)
+#   └── Led (status light on the trolley: about the only light a robot gives off)
+#
+# The LED is how you spot a robot in the dark without night vision:
+# cold blue when it's fine, amber when its power is low, a slow red blink
+# while it's offline (crashed, stalled, rebooting).
 class_name RobotView
 extends Node3D
 
 ## Catch up with the sim within about this many seconds when far behind.
 const CATCH_UP_TIME := 2.0
+const LED_OK := Color(0.35, 0.75, 1.0)
+const LED_LOW := Color(1.0, 0.6, 0.1)
+const LED_OFFLINE := Color(1.0, 0.1, 0.05)
 
 var robot_id := ""
 var traits: RobotTraits
@@ -39,6 +47,9 @@ var _prev_vel := Vector3.ZERO
 var _disp := Vector2.ZERO
 var _disp_vel := Vector2.ZERO
 var _pendulum := 1.0
+var _led_light: OmniLight3D
+var _led_mat: StandardMaterial3D
+var _led_time := 0.0
 
 
 func setup(id: String, facility_layout: FacilityLayout) -> void:
@@ -55,6 +66,7 @@ func setup(id: String, facility_layout: FacilityLayout) -> void:
 	actor.position.y = -0.15 * traits.visual_scale
 	swing.add_child(actor)
 	_pendulum = 0.9 * traits.visual_scale
+	_build_led()
 	var st := layout.station(FacilitySetup.START_STATIONS.get(id, ""))
 	if not st.is_empty():
 		seg = st.segment
@@ -93,6 +105,7 @@ func _process(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, atan2(-moved.x, -moved.z), clampf(6.0 * delta, 0.0, 1.0))
 	rotation.y = _yaw
 	_swing(delta)
+	_update_led(a, delta)
 
 	# Working at a job: perform work clips, with short pauses between.
 	var at_work: bool = a.activity.kind == "work" and not a.moving and _route.is_empty()
@@ -170,3 +183,41 @@ func _play_work_clip(a: RobotAgent) -> void:
 		actor.play_random_action()
 	else:
 		actor.play_action(usable[_rng.randi() % usable.size()])
+
+
+func _build_led() -> void:
+	_led_mat = StandardMaterial3D.new()
+	_led_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_led_mat.emission_enabled = true
+	_led_mat.emission_energy_multiplier = 2.0
+	var bulb := MeshInstance3D.new()
+	bulb.name = "Led"
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.04 * traits.visual_scale
+	sphere.height = sphere.radius * 2.0
+	bulb.mesh = sphere
+	bulb.material_override = _led_mat
+	bulb.position = Vector3(0, -0.02, 0)
+	add_child(bulb)
+	_led_light = OmniLight3D.new()
+	_led_light.omni_range = 1.2 * traits.visual_scale
+	_led_light.light_energy = 0.3
+	bulb.add_child(_led_light)
+	_set_led(LED_OK, 1.0)
+
+
+func _update_led(a: RobotAgent, delta: float) -> void:
+	_led_time += delta
+	if a.offline():
+		_set_led(LED_OFFLINE, 1.0 if fmod(_led_time, 2.0) < 0.3 else 0.0)
+	elif a.power < 0.25:
+		_set_led(LED_LOW, 1.0)
+	else:
+		_set_led(LED_OK, 1.0)
+
+
+func _set_led(col: Color, level: float) -> void:
+	_led_mat.albedo_color = col * level
+	_led_mat.emission = col * level
+	_led_light.light_color = col
+	_led_light.light_energy = 0.3 * level

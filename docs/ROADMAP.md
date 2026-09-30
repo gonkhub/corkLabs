@@ -23,6 +23,7 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Rooms + rail network**: 4 rooms (huge main hall), routes with caveats (narrow, blocked, slow), re-routing, 3D world built from the layout, bigger Hauler | **New framework, needs a look** | Automated tests + screenshots |
 | **Robot speech**: floating CCTV text + voice blips; lines by trigger/condition in `barks.txt`; robot-to-robot exchanges | **New framework, needs a look** | Automated tests + screenshots (sound not checked by ear) |
 | **Software stability**: independence, whims, fixations, critical errors (crash/glitch), sabotage, reboots | **New framework, needs a look** | Automated tests + journal read-throughs |
+| **Dark facility + night vision**: no room lights, robot status LEDs, unlit signs; N / checkbox switches feeds to IR; feeds locked to 30 fps | **New, needs a look** | Automated tests + screenshots |
 | **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 
 ## Branches and pull requests
@@ -40,11 +41,12 @@ commits, and so on).
 | 4 | `feature/os-buildout` (PR #3, contains 1-4) | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
 | 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
 | 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
+| 7 | `feature/dark-facility` (on top of 6; worked on in the `corkLabs-dark` worktree) | Facility lights removed, robot status LEDs, unlit signs; night vision in Cameras (N); feeds locked to 30 fps | Open Cameras: is the dark too dark / NV too bright? Does 30 fps feel right? |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
 
-All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last one).
+All tests pass on each branch (`tools\run_tests.ps1`; 15 test files on the last one).
 
 ## Things to try first (about 15 minutes)
 
