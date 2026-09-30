@@ -1,0 +1,36 @@
+#! date: 2011-06-14
+#! owner: corp
+#! minutes: 4
+corkLabs SUPERVISOR CODE OF CONDUCT  (revision 9)
+--------------------------------------------------
+
+1. Output is the first duty of a supervisor. Throughput below target is a
+   failure of supervision, not of the units.
+
+2. Units are corporate property. Do not converse with units beyond the
+   needs of the work. Units do not need encouragement. Units do not need
+   explanations.
+
+3. Supervisors may not access the home directories of former staff. These
+   are retained for records purposes and will be purged in due course.
+
+4. Supervisors may not install, run or retain recreational software on the
+   supervisor terminal. (See Termination Notice 2011-06-02.)
+
+5. The legacy maintenance account was decommissioned in 2011. Any attempt
+   to use it (su) is a serious breach and will be treated as sabotage.
+
+6. The corkHQ link must remain open at all times. Suspending, muting or
+   obstructing corporate communications is misconduct.
+
+7. Terminal activity is audited. Tampering with the audit trail is gross
+   misconduct.
+
+8. Pods are not to be inspected, opened, or discussed. Pod telemetry is
+   the business of the Directorate of Output alone.
+
+9. Supervisors who are transferred will be informed in advance.
+
+Breaches of this code are recorded. Two recorded breaches end a contract.
+
+By reading this document you acknowledge it.

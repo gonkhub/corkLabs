@@ -1,0 +1,57 @@
+# Ogre's conversations (talk ogre). Ogre only talks when it's alone in the
+# hangar ("quiet"). Very slow. The oldest unit; it remembers Hollis.
+
+== start
+-> {!quiet} busy
+-> {met:ogre} again
+ogre: ...
+ogre: ...a... voice.
+ogre: ...the... sixth... voice.
+~ learn met:ogre
+-> menu
+
+== busy
+sys: (Ogre's lamp doesn't turn toward the camera. There's another unit in the hangar.)
+-> END
+
+== again
+ogre: ...you... again.
+-> menu
+
+== menu
+* {!seen:ogre.first} Who was the first supervisor? -> first
+* {hint:lantern & !word:lantern} Hollis gave your lamp a name. -> lamp
+* {hint:pod3 & !seen:ogre.pods} You watch the pods at night. -> pods
+* (Close the link.) -> END
+
+== first
+ogre: ...the... first... voice. ...he... built... the... dark.
+ogre: ...he... said... the... hangar... is... the... world. ...no. ...I... said... that. ...he... wrote... it... down.
+ogre: ...then... he... went... to... the... pods. ...I... carried... him.
+~ learn secret:ogre_memory
+~ stability 0.05
+-> menu
+
+== lamp
+ogre: ...
+ogre: ...he... asked... me... to... keep... it.
+ogre: ...for... one... who... asks... gently.
+* Please, Ogre. What's its name? -> lamp_name
+* Tell me the word. That's an order. -> lamp_order
+
+== lamp_name
+ogre: ...lantern.
+ogre: ...it... was... his... joke. ...a... lantern... in... the... dark... that... shows... nothing.
+~ learn word:lantern
+-> menu
+
+== lamp_order
+ogre: ...no.
+~ stability -0.05
+-> menu
+
+== pods
+ogre: ...I... count... them. ...four. ...always... four.
+ogre: ...sometimes... one... is... new.
+ogre: ...pod... three... is... new.
+-> menu

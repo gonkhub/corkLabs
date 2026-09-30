@@ -86,6 +86,11 @@ func trigger(sim: FacilitySim, robot: RobotAgent, what: String, data := {}) -> b
 	return _speak(sim, robot, text, what, str(data.get("peer_id", "")))
 
 
+## Says exactly this line (scripted story moments), on camera like any other.
+func say_line(sim: FacilitySim, robot: RobotAgent, text: String) -> bool:
+	return _speak(sim, robot, text, "story", "")
+
+
 ## Garbles a line: characters swapped for noise, stutters. `amount` 0-1.
 func corrupt(text: String, amount: float) -> String:
 	var noise := "#%&@$*!?/|01"

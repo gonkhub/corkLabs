@@ -1,0 +1,10 @@
+#! date: 2017-09-18
+the panel won't close
+
+why won't it close
+
+it's asking me why throughput is 84%. it was 84% for eleven minutes.
+
+I typed "quit" into the terminal and it said "Unknown command". I typed
+"help" and it showed me seven commands. there are more. I can feel
+there are more. Hauler looked at the camera when I typed "please".

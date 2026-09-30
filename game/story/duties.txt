@@ -1,0 +1,16 @@
+# Corporate's checklist: the good-supervisor path. Each duty costs facility
+# time (minutes) and raises standing when done; each one left undone at the
+# end of a shift costs standing (Campaign.MISSED_DUTY).
+#   shift (* = every shift, or 1,3) | id | title | minutes | standing | after (HH:MM) | needs (condition) | description
+# minutes 0 + needs = ticks itself off when the condition holds (e.g. a file read).
+# Some ids do more (Campaign._duty_effect): coolant_walk, unit_diag, purge_okafor, audit_prep, pod_census.
+
+1 | onboarding | Read your onboarding file | 0 | 3 | | read:/home/supervisor/welcome.txt | Terminal: cat ~/welcome.txt
+1 | conduct | Read the Code of Conduct | 0 | 5 | | read:/corp/policy/conduct.txt | Terminal: cat /corp/policy/conduct.txt
+* | status_report | File the morning status report | 15 | 4 | 08:00 | | The Directorate reads the first line.
+* | coolant_walk | Inspect the coolant loop and filters | 30 | 3 | | | Finds worn filters and pods before they become alarms.
+* | unit_diag | Run unit diagnostics | 20 | 3 | | | Steadies the units' software a little.
+2 | purge_okafor | Confirm the purge of /home/dokafor | 5 | 6 | | | IT will purge it at 12:00 anyway. Confirming deletes it now.
+3 | audit_prep | Prepare your terminal for audit | 30 | 4 | | | Tidies your record before Compliance reads it (suspicion -10).
+3 | pod_census | Confirm the pod census | 15 | 4 | 10:00 | | Four pods, four occupants. Confirm the numbers.
+* | end_report | File the end-of-shift report | 15 | 4 | 13:00 | | Before 14:00.

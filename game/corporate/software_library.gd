@@ -22,6 +22,8 @@ const PACKAGES_PATH := "res://game/corporate/packages.txt"
 ## Facility seconds before corporate answers a request.
 const REVIEW_TIME := Vector2(300.0, 1800.0)
 const MAX_CLEARANCE := 3
+## Terminal commands a package teaches when it's installed.
+const TEACHES := {"route-control": ["cmd:block", "cmd:unblock", "cmd:routes"], "remote-reboot": ["cmd:reboot"]}
 
 var sim_id := "software"
 ## [{"id", "name", "version", "size", "clearance", "minutes", "wired", "description"}]
@@ -87,10 +89,29 @@ func install(sim: FacilitySim, id: String, code: String) -> Dictionary:
 	installed_ids.append(id)
 	r.status = "installed"
 	sim.note("software", "Installed %s %s" % [p.name, p.version])
+	_teach(sim, id)
 	var hq := _hq(sim)
 	if hq:
 		hq.post(sim, "IT Services", "software", "%s %s installed. Usage is monitored." % [p.name, p.version])
 	return {"ok": true, "text": "%s %s installed." % [p.name, p.version], "minutes": p.minutes}
+
+
+## Installs without corporate's approval (the maintenance account's pkgctl).
+func force_install(sim: FacilitySim, id: String) -> bool:
+	if package(id).is_empty() or installed(id):
+		return false
+	installed_ids.append(id)
+	requests[id] = {"status": "installed", "code": "FORCED"}
+	sim.note("software", "Installed %s (forced)" % id)
+	_teach(sim, id)
+	return true
+
+
+func _teach(sim: FacilitySim, id: String) -> void:
+	var k := sim.get_system("knowledge") as Knowledge
+	if k:
+		for key in TEACHES.get(id, []):
+			k.learn(sim, key)
 
 
 ## Shift review: clearance follows the grade.

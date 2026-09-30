@@ -1,0 +1,45 @@
+#! date: today
+#! owner: supervisor
+#! learn: cmd:units cmd:jobs cmd:order cmd:priority cmd:plant cmd:log cmd:open cmd:duties
+#! minutes: 3
+WELCOME TO corkLabs
+Supervisor onboarding, facility C-7 ("the Compound")
+------------------------------------------------------
+
+Congratulations on your appointment.
+
+You supervise three maintenance units (TINKER, HAULER, OGRE) and the plant
+they keep running. You do not need to understand the plant. You need to
+keep its throughput at or above target, and you need to do your duties.
+
+YOUR DUTIES
+  The Duties app lists what corporate expects of you this shift. Duties
+  take time. Undone duties are noted on your record.
+
+  duties                        your checklist, from the terminal
+
+YOUR TERMINAL
+  Every action you take costs facility time. The facility does not wait
+  for you, and it does not move without you. Use your time well.
+
+  status                        the facility at a glance
+  units                         what each unit is doing
+  jobs                          open work orders
+  order <unit> <job#>           direct a unit (it may object; they do that)
+  order <unit> recharge|standby|cancel
+  priority <job#> <level>       low, normal, high, critical
+  plant                         every device and its state
+  log [lines] [category]        the facility journal
+  open <app>                    open an app by name
+
+  Type help to see the commands you know.
+
+A NOTE ON YOUR PREDECESSORS
+  The Compound has had several supervisors. Their home directories are
+  retained for records purposes only and are closed to you. Please read
+  the Code of Conduct (/corp/policy/conduct.txt) before the end of your
+  first shift.
+
+Your liaison is Ms. Pell. She will be in touch. She is always in touch.
+
+                                        corkLabs Human Resources

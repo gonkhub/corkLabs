@@ -1,0 +1,5 @@
+#! name: nightrun
+#! date: 2008-12-24
+#! exec: nightrun
+#! learn: cmd:run
+ELF  (binary: NIGHT RUN v0.9)  type "run nightrun" to play

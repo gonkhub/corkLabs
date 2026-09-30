@@ -1,0 +1,18 @@
+#! date: 1998-11-30
+#! owner: corp
+#! learn: cmd:routes
+FACILITY C-7: ROOMS AND PASSAGES (for supervisors)
+--------------------------------------------------
+
+  MAIN HALL     the big loop and the spine; bays 1-3
+  POD BAY       north. The pods. Do not dwell on the pods.
+  WORKSHOP      east. Relay panel, workbench.
+  MAINTENANCE   west. The docks.
+  HANGAR        south. OGRE. Freight arrives here.
+
+Passages (the terminal lists them with: routes)
+  The pod bay duct and the workshop hatch are narrow; only TINKER fits.
+  The freight gate jams. When it does, HAULER cannot reach the workshop.
+
+Units ride rails. They cannot go where the rails do not go.
+Neither can you. You don't go anywhere. You stay at the terminal.

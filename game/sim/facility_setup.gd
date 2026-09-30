@@ -132,8 +132,13 @@ const START_STATIONS := {"tinker": "t_dock", "hauler": "h_dock", "ogre": "o_main
 ## A fresh set of every facility system. Pass to Facility.start_session().
 static func systems() -> Array:
 	var l := layout()
-	var out: Array = [l, ShiftSchedule.new(), WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
-		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new()]
+	# The supervisor works the Day shift (06:00-14:00); the Campaign runs
+	# the nights in between without them.
+	var shifts := ShiftSchedule.new()
+	shifts.starts.assign([Campaign.SHIFT_START_HOUR])
+	shifts.names.assign(["Day"])
+	var out: Array = [l, shifts, WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
+		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new(), Knowledge.new(), Oversight.new(), Campaign.new()]
 	for id in START_STATIONS:
 		var st := l.station(START_STATIONS[id])
 		out.append(RobotAgent.new(id, null, st.segment, st.offset))

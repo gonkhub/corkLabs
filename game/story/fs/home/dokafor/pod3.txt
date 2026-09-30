@@ -1,0 +1,16 @@
+#! name: .pod3
+#! date: two days ago
+#! learn: secret:last_note
+if you're reading this you're the next one, and you found the hidden
+files (ls -a), so you're already in trouble. good. listen:
+
+1. the old maintenance account is real: su maint
+2. the password is Marrow's. she hid it in her game. "top score".
+3. as maint you can see the pods: podctl
+4. look at pod 3.
+
+I'm writing this at 13:40. Pell has asked me to "come to the hangar
+for a conversation" at the end of shift. there's no door from the
+terminal room to the hangar. there's no door from the terminal room to
+anywhere. I don't know how I would
+

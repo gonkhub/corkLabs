@@ -103,6 +103,9 @@ func sim_start(sim: FacilitySim) -> void:
 
 
 func sim_tick(sim: FacilitySim, dt: float) -> void:
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		return   # nobody to nag between shifts
 	_acc += dt
 	if _acc < CHECK_EVERY - 0.001:
 		return

@@ -1,0 +1,14 @@
+#! name: .plan
+#! date: 2011-05-31
+#! learn: cmd:auditctl
+PLAN
+  1. keep the units happy (talk to them. they get lonely. "stability" is
+     corporate's word for lonely)
+  2. keep the Directorate happy (the numbers; they only ever read the
+     numbers)
+  3. keep Pell out of my terminal (auditctl purge, once a shift, no more:
+     a clean log is as suspicious as a dirty one)
+  4. find out what's in the pods
+  5. don't get transferred
+
+  status: 1 ok, 2 ok, 3 ok, 4 done, 5 ...

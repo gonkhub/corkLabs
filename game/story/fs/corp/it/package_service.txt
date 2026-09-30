@@ -1,0 +1,20 @@
+#! date: 2024-01-09
+#! owner: corp
+#! learn: cmd:connect cmd:corkpkg
+CORK PACKAGE SERVICE
+--------------------
+
+Approved software for the supervisor terminal is distributed from:
+
+    cork://pkg.corklabs.int
+
+  connect cork://pkg.corklabs.int      open a session
+  corkpkg list                         what's available
+  corkpkg request <package>            ask IT Services (answer via corkHQ)
+  corkpkg install <package> <code>     install with the code IT gives you
+
+Packages are approved according to your clearance level. Clearance is
+raised by good shift reviews. It is lowered by bad ones.
+
+Do not attempt to install software from any other source.
+                                                     IT Services

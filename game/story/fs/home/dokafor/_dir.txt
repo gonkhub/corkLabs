@@ -1,0 +1,4 @@
+#! owner: dokafor
+#! restricted: 3
+#! learn: secret:former_staff
+#! gone_if: purged:dokafor

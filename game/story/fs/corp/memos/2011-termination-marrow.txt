@@ -1,0 +1,16 @@
+#! date: 2011-06-02
+#! owner: corp
+#! learn: transfer:marrow
+TERMINATION NOTICE                              Human Resources
+Re: Supervisor R. Marrow
+
+Supervisor Ruth Marrow's contract is terminated for cause:
+
+  - installation of recreational software on the supervisor terminal
+  - creation of an unauthorised maintenance account
+  - repeated unauthorised inspection of pod telemetry
+  - conversing with units beyond the needs of the work
+
+Ms. Marrow has been transferred to Long-Term Processing.
+
+The maintenance account has been decommissioned.

@@ -100,10 +100,46 @@ func save() -> void:
 	f.store_string(JSON.stringify(sim.save_data(), "\t"))
 
 
-## Deletes the save so the next session starts a brand-new facility (dev tool).
+## Deletes the save (and its shift checkpoint) so the next session starts a
+## brand-new facility.
 func wipe_save(path := SAVE_PATH) -> void:
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	for p in [path, checkpoint_path(path)]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+
+
+# --- Shift checkpoints ------------------------------------------------------------
+# The save as it was at the start of the current shift (its brief). Being
+# dismissed sends the supervisor back here: "retry the shift".
+
+static func checkpoint_path(path := SAVE_PATH) -> String:
+	return path.get_basename() + "_checkpoint.json"
+
+
+## Saves, and keeps a copy as the shift's checkpoint.
+func checkpoint() -> void:
+	if sim == null:
+		return
+	save()
+	var f := FileAccess.open(checkpoint_path(save_path), FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(sim.save_data(), "\t"))
+
+
+func has_checkpoint(path := SAVE_PATH) -> bool:
+	return FileAccess.file_exists(checkpoint_path(path))
+
+
+## Puts the checkpoint back as the save (call with the session closed).
+## Returns false if there isn't one.
+func restore_checkpoint(path := SAVE_PATH) -> bool:
+	if running or not has_checkpoint(path):
+		return false
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(FileAccess.get_file_as_string(checkpoint_path(path)))
+	return true
 
 
 func _notification(what: int) -> void:

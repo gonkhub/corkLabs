@@ -68,9 +68,107 @@ static func has_software(package_id: String) -> bool:
 	return sw != null and sw.installed(package_id)
 
 
-## Lets facility time pass while the supervisor watches.
-static func wait(seconds: float) -> void:
-	Facility.spend(seconds, "Supervisor waits %s" % _dur(seconds))
+# --- Story actions ------------------------------------------------------------------
+# Reading, talking, duties, programs: the actions that move the story, and
+# (like orders) the only things that move facility time.
+
+## Facility minutes a first conversation step costs: a line read, a reply chosen.
+const TALK_LINE := "dialogue_line"
+const TALK_CHOICE := "choice"
+## Talking to a unit is "conversing beyond the needs of the work" (conduct 2):
+## a small violation, once per conversation. It also steadies the unit.
+const TALK_VIOLATION := 1.5
+const TALK_STEADY := 0.06
+const TALK_STEADY_EVERY := 3600.0
+
+
+## Reads a file (Terminal cat, Files). Spends its reading time the first time.
+static func read_file(vpath: String) -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var r := Story.read_file(sim, vpath)
+	if r.ok and float(r.minutes) > 0.0:
+		Facility.spend(float(r.minutes) * 60.0, "Supervisor reads %s" % vpath)
+	return r
+
+
+## Tries a password on an encrypted file (a choice: 2 minutes).
+static func decrypt(vpath: String, password: String) -> Dictionary:
+	var r := Story.decrypt(Facility.sim, vpath, password)
+	Facility.act("choice", "Supervisor tries to decrypt %s" % vpath)
+	return r
+
+
+## Opens the link to a unit. Returns the conversation (or null: offline /
+## nothing to say) and the lines it opens with; each line costs facility time.
+static func talk_begin(bot: RobotAgent) -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	if bot.offline():
+		return {"runner": null, "lines": [], "error": "No response from %s (offline)." % bot.display_name()}
+	var d := Dialogue.for_robot(bot.robot_id)
+	if d == null:
+		return {"runner": null, "lines": [], "error": "%s has nothing to say." % bot.display_name()}
+	sim.note("supervisor", "Opens the unit link to %s" % bot.display_name())
+	var k := Story.knowledge(sim)
+	var key := "talked:" + bot.robot_id
+	if k and sim.time() - float(k.flags.get(key, -INF)) >= TALK_STEADY_EVERY:
+		bot.stability = minf(bot.stability + TALK_STEADY, 1.0)
+		k.forget(key)
+		k.learn(sim, key)
+	var o := Story.oversight(sim)
+	if o:
+		o.violate(sim, "conversation with unit %s" % bot.display_name(), TALK_VIOLATION)
+	var runner := Dialogue.Runner.new(d, bot.robot_id)
+	var lines := runner.begin(sim)
+	_spend_lines(bot, lines, "")
+	return {"runner": runner, "lines": lines, "error": ""}
+
+
+## Picks a reply. Returns the lines that follow.
+static func talk_choose(runner: Dialogue.Runner, bot: RobotAgent, i: int) -> Array[Dictionary]:
+	if i < 0 or i >= runner.choices.size():
+		return []
+	var said: String = runner.choices[i].text
+	Facility.sim.note("supervisor", "To %s: \"%s\"" % [bot.display_name(), said])
+	var lines := runner.choose(Facility.sim, i)
+	Facility.act(TALK_CHOICE, "Supervisor answers %s" % bot.display_name())
+	_spend_lines(bot, lines, "")
+	return lines
+
+
+static func _spend_lines(bot: RobotAgent, lines: Array[Dictionary], _cause: String) -> void:
+	for l in lines:
+		if l.speaker != "sys" and l.speaker != "you":
+			Facility.sim.note("speech", "%s (link): \"%s\"" % [bot.display_name(), l.text])
+	if not lines.is_empty():
+		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Talking with %s" % bot.display_name())
+
+
+## Does a duty from the checklist. Returns "" or why not.
+static func do_duty(id: String) -> String:
+	var sim: FacilitySim = Facility.sim
+	var camp := Story.campaign(sim)
+	if camp == null:
+		return "No duties."
+	var d := camp.duty(id)
+	var why := camp.duty_blocker(sim, d)
+	if not why.is_empty():
+		return why
+	sim.note("supervisor", "Duty: %s" % d.title)
+	camp.do_duty(sim, id)
+	if float(d.minutes) > 0.0:
+		Facility.spend(float(d.minutes) * 60.0, "Duty: %s" % d.title)
+	return ""
+
+
+## Time lost to a program (a round of Night Run). Recreational software is
+## a policy violation (conduct 4), logged once per session of play.
+static func play(minutes: float, what: String, violation := 0.0) -> void:
+	var sim: FacilitySim = Facility.sim
+	if violation > 0.0:
+		var o := Story.oversight(sim)
+		if o:
+			o.violate(sim, "recreational software: %s" % what, violation)
+	Facility.spend(minutes * 60.0, "Supervisor plays %s" % what)
 
 
 static func describe_order(sim: FacilitySim, kind: String, job_id: int) -> String:
@@ -89,8 +187,3 @@ static func describe_order(sim: FacilitySim, kind: String, job_id: int) -> Strin
 static func can_reach(sim: FacilitySim, bot: RobotAgent, job: Dictionary) -> bool:
 	return bot.why_cant_reach(sim, str(job.get("station", ""))).is_empty()
 
-
-static func _dur(seconds: float) -> String:
-	if seconds < 3600.0:
-		return "%d min" % int(seconds / 60.0)
-	return "%.1f h" % (seconds / 3600.0)
