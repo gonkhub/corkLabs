@@ -22,6 +22,10 @@ static func relaunch_if_xr(scene: Node) -> bool:
 		"--xr-mode", "off",
 		scene.scene_file_path,
 	])
+	var user_args := OS.get_cmdline_user_args()
+	if user_args.size() > 0:
+		args.append("--")
+		args.append_array(user_args)
 	var pid := OS.create_process(OS.get_executable_path(), args)
 	if pid <= 0:
 		push_error("FlatScreen: could not relaunch without VR")

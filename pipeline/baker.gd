@@ -119,6 +119,22 @@ static func bake_to_library(take: PerformanceTake, take_path: String, robot_id: 
 	return {"ok": true, "clip": clip, "path": anim_path, "report": result.report}
 
 
+# Removes a clip from a robot's library and deletes its baked file (it can
+# always be rebaked from the take).
+static func remove_from_library(robot_id: String, clip: String) -> void:
+	if robot_id.is_empty() or clip.is_empty():
+		return
+	var lib_path := RobotLibrary.library_path(robot_id)
+	if ResourceLoader.exists(lib_path):
+		var lib := ResourceLoader.load(lib_path, "", ResourceLoader.CACHE_MODE_REPLACE) as AnimationLibrary
+		if lib and lib.has_animation(clip):
+			lib.remove_animation(clip)
+			ResourceSaver.save(lib, lib_path)
+	var anim_path := "%s/%s.res" % [RobotLibrary.animation_dir(robot_id), clip]
+	if FileAccess.file_exists(anim_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(anim_path))
+
+
 static func clip_name_for(take: PerformanceTake, take_path: String) -> String:
 	var n := take.clip_name.strip_edges() if take.clip_name else ""
 	if n.is_empty():

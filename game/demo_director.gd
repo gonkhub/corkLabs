@@ -34,10 +34,12 @@ func _ready() -> void:
 	if FlatScreen.relaunch_if_xr(self):
 		return
 	_rng.randomize()
+	# Separate save from the real game, so demo poking never touches it.
+	Facility.start_session([ShiftSchedule.new()], "user://demo_facility_save.json")
 	_use_camera(0)
 	hauler_rider.arrived.connect(_on_hauler_arrived)
 	hauler_rider.travel_to(hauler_stations[0])
-	help_label.text = "Tab/1-3 camera   T tinker action   H hauler action   C CCTV filter\n" + _clip_summary()
+	help_label.text = "Tab/1-3 camera   T/H ask Tinker/Hauler to act (spends facility time)   C CCTV filter   F1 dev panel\n" + _clip_summary()
 
 
 func _process(delta: float) -> void:
@@ -55,10 +57,9 @@ func _process(delta: float) -> void:
 			hauler_rider.travel_to(hauler_stations[_station])
 			_hauler_wait = 1.5
 
-	var now := Time.get_datetime_dict_from_system()
-	cam_label.text = "CAM %02d  %s   %04d-%02d-%02d %02d:%02d:%02d   REC" % [
-		cam_index + 1, cameras[cam_index].name.to_upper(), now.year, now.month, now.day,
-		now.hour, now.minute, now.second]
+	# The corkLabs clock shows facility time, not the real clock.
+	cam_label.text = "CAM %02d  %s   %s   REC" % [
+		cam_index + 1, cameras[cam_index].name.to_upper(), FacilitySim.format_time(Facility.sim.time())]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -70,9 +71,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_1, KEY_2, KEY_3:
 			_use_camera(event.keycode - KEY_1)
 		KEY_T:
-			tinker.play_random_action()
+			var clip := tinker.play_random_action()
+			Facility.act("interaction", "Supervisor asked Tinker to act (%s)" % clip)
 		KEY_H:
-			hauler.play_random_action()
+			var clip := hauler.play_random_action()
+			Facility.act("interaction", "Supervisor asked Hauler to act (%s)" % clip)
 		KEY_C:
 			cctv.visible = not cctv.visible
 
