@@ -93,6 +93,7 @@ func _process(delta: float) -> void:
 	var a := agent()
 	if a == null:
 		return
+	_update_led(a, delta)   # first: whatever else happens this frame, the LED shows its state
 	if not _snapped:
 		seg = a.seg
 		off = a.off
@@ -105,7 +106,6 @@ func _process(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, atan2(-moved.x, -moved.z), clampf(6.0 * delta, 0.0, 1.0))
 	rotation.y = _yaw
 	_swing(delta)
-	_update_led(a, delta)
 
 	# Working at a job: perform work clips, with short pauses between.
 	var at_work: bool = a.activity.kind == "work" and not a.moving and _route.is_empty()
