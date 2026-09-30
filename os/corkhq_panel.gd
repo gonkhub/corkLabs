@@ -81,6 +81,7 @@ func _ready() -> void:
 	chime = AudioStreamPlayer.new()
 	chime.stream = _make_chime()
 	chime.volume_db = -4.0   # fixed: not tied to any OS setting
+	chime.bus = FeedAudio.UI
 	add_child(chime)
 	_rng.randomize()
 	get_viewport().size_changed.connect(_place)

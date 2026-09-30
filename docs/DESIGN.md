@@ -82,6 +82,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | Lines live in a plain text file (`barks.txt`: trigger / robot / condition / text) | Writable without code; conditions weight the choice so the robot's state shows |
 | 2026-09-30 | Voices are generated blips per robot (pitch, wave, speed in its traits); recorded samples can replace them | Placeholder sound now, real sound design later without code changes |
 | 2026-09-30 | You only hear a robot while it's on an open camera | The cameras are the player's senses |
+| 2026-09-30 | **Camera audio**: the facility is heard through one camera at a time (single view: the open one; grid: the one under the mouse); that feed's viewport is the 3D audio listener | The camera is the microphone; one listener keeps the mix readable and makes room rules possible |
+| 2026-09-30 | Buses: `Feed` (Voices + World under it) and `UI`, all to Master; the Cameras mute silences Feed | A mixer the sound designer can put inserts on in the editor; mute covers everything from the cameras and nothing from the OS |
+| 2026-09-30 | Sounds in another room than the listening camera are -30 dB and low-passed (per-emitter, eased) | Matches speech's same-room rule without making other rooms dead silent |
+| 2026-09-30 | Placeholder sounds are generated (`SoundSynth`); files in `game/sounds/` override them by name; the Terminal's `sound` command auditions them in place | Sound design can start by dropping in files, no code |
+| 2026-09-30 | Robot voices stay non-positional for now (on the Voices bus) | They already work well; making them 3D is a later call |
 | 2026-09-30 | The flat demo scene is retired (the OS is the game) | One place to see the facility; less to keep in step |
 | 2026-09-30 | "Purpose" becomes **software stability**: low stability makes a robot independent, unpredictable and unreliable (orders count for less, errant behaviour rises), then critical errors (crash/glitch), then sabotage | User's direction: instability is the robots' inner life and the facility's risk |
 | 2026-09-30 | Unpredictability is a **whim** per option that lasts 10 facility minutes, not per-think noise | Erratic but legible: an unstable robot surprises you, then follows through |
