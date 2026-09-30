@@ -33,11 +33,15 @@ var pan := 0.0
 var tilt := 0.0
 var zoom_fov := 60.0
 var auto_track := false
+## False while the tracked robot is out of this camera's room (the world
+## sets it): the camera waits at its home view instead of staring at a wall.
+var target_in_view := true
 
 var _home: Basis
 var _home_fov := 60.0
 var _pan_now := 0.0
 var _tilt_now := 0.0
+var _tracking := false
 
 
 func _ready() -> void:
@@ -51,10 +55,18 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	var k := clampf(motor_speed * delta, 0.0, 1.0)
 	fov = lerpf(fov, zoom_fov, k)
-	if auto_track and target:
+	if auto_track and target and target_in_view:
+		_tracking = true
 		var want := global_transform.looking_at(target.global_position + Vector3(0, -0.6, 0), Vector3.UP)
 		global_transform.basis = global_transform.basis.slerp(want.basis, clampf(pan_speed * delta, 0.0, 1.0)).orthonormalized()
 		return
+	if auto_track and not target_in_view:
+		if _tracking:
+			_take_over()        # start from where tracking left the head...
+			auto_track = true   # ...but keep tracking for when it comes back
+		pan = 0.0
+		tilt = 0.0
+	_tracking = auto_track and target != null and target_in_view
 	_pan_now = lerpf(_pan_now, pan, k)
 	_tilt_now = lerpf(_tilt_now, tilt, k)
 	global_transform.basis = _aim(_pan_now, _tilt_now)

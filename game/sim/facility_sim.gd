@@ -27,7 +27,7 @@ const TICK := 0.1
 ## Where a brand-new facility's clock starts: Day 1, 05:55 (the first shift
 ## starts at 06:00).
 const START_TIME := 5 * 3600 + 55 * 60
-const SAVE_VERSION := 4   # 3: robots, work board. 4: plant
+const SAVE_VERSION := 6   # 3: robots, work board. 4: plant. 5: rooms + rail network, chatter. 6: stability, corporate
 
 signal ticked(tick: int)
 signal event_fired(event_name: String, data: Dictionary)

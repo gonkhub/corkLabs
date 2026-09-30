@@ -41,8 +41,24 @@ func build() -> void:
 	_section("Pop-up notifications")
 	_check("Alarms", "toast_alarm", "")
 	_check("Shift reports", "toast_report", "")
-	_check("Messages from units", "toast_message", "")
 	add_child(OSTheme.label("Everything still goes to the notification centre (click the clock).", 12, OSTheme.TEXT_DIM))
+
+	_section("Robot voices")
+	_check("Voices (heard while a robot is on camera)", "voices", "")
+	var vol_row := HBoxContainer.new()
+	add_child(vol_row)
+	var vol_label := OSTheme.label("Voice volume", 14)
+	vol_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vol_row.add_child(vol_label)
+	var vol := HSlider.new()
+	vol.custom_minimum_size.x = 180
+	vol.min_value = 0.0
+	vol.max_value = 1.0
+	vol.step = 0.05
+	vol.value = float(OSSettings.get_value("voice_volume"))
+	vol.focus_mode = Control.FOCUS_NONE
+	vol.value_changed.connect(func(v: float): OSSettings.set_value("voice_volume", v))
+	vol_row.add_child(vol)
 
 	_section("Windows")
 	add_child(button_row([

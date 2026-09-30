@@ -19,7 +19,11 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Robot behaviour**: utility-AI robots with power + purpose needs, work board, orders they can push back on | **New, needs a look** | Automated tests + screenshots |
 | **Facility content**: pods, filters, coolant, relay, bays; faults chain; salvage hand-off between robots | **New, needs a look** | Automated tests + screenshots |
 | **corkLabs desktop OS**: login, windows, taskbar with facility clock, 6 apps, toasts | **New, needs a look** | Automated tests + screenshots |
-| **OS build-out**: boots into the OS, observation-only Cameras with pan/tilt/zoom + grid, snapping/maximise, remembered layout, notification centre, Terminal, Settings, Handbook | **New, needs a look** | Automated tests + screenshots + simulated clicks |
+| **OS build-out**: boots into the OS, observation-only Cameras with pan/tilt/zoom + grid, snapping/maximise, remembered layout, notification centre, Terminal, Settings | In PR #3 | Automated tests + screenshots + simulated clicks |
+| **Rooms + rail network**: 4 rooms (huge main hall), routes with caveats (narrow, blocked, slow), re-routing, 3D world built from the layout, bigger Hauler | **New framework, needs a look** | Automated tests + screenshots |
+| **Robot speech**: floating CCTV text + voice blips; lines by trigger/condition in `barks.txt`; robot-to-robot exchanges | **New framework, needs a look** | Automated tests + screenshots (sound not checked by ear) |
+| **Software stability**: independence, whims, fixations, critical errors (crash/glitch), sabotage, reboots | **New framework, needs a look** | Automated tests + journal read-throughs |
+| **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 
 ## Branches and pull requests
 
@@ -33,7 +37,9 @@ commits, and so on).
 | 1 | `feature/robot-behaviour` | Robots as facility systems: utility scores, power + purpose, work board, orders + push-back, `RobotView`, dev panel pages. Also carries the earlier unpushed ROADMAP commit from `docs/roadmap-after-merge` | Run the demo; open `robots/*/<id>_traits.tres` in the Inspector |
 | 2 | `feature/facility-content` | `FacilityPlant`: devices, faults, chains, salvage hand-off, shift reports; 3D props coloured by state | Watch the demo for a shift (F7 / Shift+F6); do the props read? |
 | 3 | `feature/desktop-os` | The corkLabs OS (`os/desktop.tscn`); 3D world split into `game/facility_world.tscn`; `Supervisor` actions | Play it: log on, give orders, break things (F9), log off/on |
-| 4 | `feature/os-buildout` | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
+| 4 | `feature/os-buildout` (PR #3, contains 1-4) | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
+| 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
+| 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
@@ -57,6 +63,19 @@ All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last 
 
 ## Decisions waiting for you
 
+- **What each software package should really do** (packages.txt; three are wired).
+- **Crated robots**: how a delivered unit gets activated (a new robot in the facility?).
+- **How visible sabotage should be** to the supervisor (now: only the Facility Log, and corkHQ sometimes notices).
+- **corkHQ's voice**: tone and how often it nags (hq_lines.txt, CHECK_EVERY).
+
+- **What goes in the rooms**, and **what the rooms are for** (they're empty
+  space now). More rooms? Which connect to which, and with what catches?
+- **Robot voices**: blips are placeholders. Recorded samples, a synth, or a
+  mix? Should the Facility Log keep showing speech (it's there for debugging)?
+- **The lines** in `game/speech/barks.txt` are a first pass: rewrite freely.
+- **When should route blocks happen** besides the freight gate jamming
+  (debris in ducts, lockdowns, shift changes, story events)?
+
 - **Boot screen text**: placeholder firmware lines ("Unit link: TINKER ... online").
   Rewrite freely; they're `BOOT_LINES` in `os/desktop.gd`.
 - **Handbook voice**: plain and friendly right now. Should it read like a
@@ -71,6 +90,9 @@ All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last 
   files; do they read as characters when you watch them?
 
 ## Next up
+
+0. **Try the rooms and speech framework** (branch 5), then decide what fills
+   the rooms and how robots should sound.
 
 1. **Your pass over the three branches** (above), and tuning traits/plant
    rates by eye.
@@ -97,10 +119,13 @@ All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last 
 ## Known issues
 
 - F5 (the OS) starts a VR session for a moment and restarts without VR, like
-  the other flat scenes. An exported game should ship with OpenXR off.
+  the other flat scenes, when the headset is on. An exported game should ship with OpenXR off.
 - Flat scenes (Robot Lab, demo, desktop) restart themselves without VR, so
   the editor's Stop button and Output panel don't reach them. Logs go to
   `%APPDATA%\Godot\app_userdata\corkLabs\logs\godot.log`.
 - Floating 3D labels are tiny in the smaller camera windows.
+- The main hall is huge, so from the hall cameras robots are small; zoom in, or use Cam 3 (tracks Hauler).
+- Speech text is drawn over walls (feeds check the robot's room, not line of sight).
+- An old facility save (before rooms) is discarded: a new facility starts.
 - Hauler still reads a little leggy from straight in front.
 - The recorder bakes when you press stop; long takes may hitch briefly in the headset.

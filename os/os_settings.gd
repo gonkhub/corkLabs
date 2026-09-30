@@ -1,6 +1,6 @@
 # The corkLabs OS's own preferences (not the facility: nothing here is game
 # state). Saved in user://os_settings.json:
-#   ui_scale, fullscreen, boot animation, which pop-ups to show,
+#   ui_scale, fullscreen, boot animation, which pop-ups to show, robot voices,
 #   and the window layout (which apps were open, where, and their view state)
 #   so the desktop comes back the way you left it.
 class_name OSSettings
@@ -14,7 +14,8 @@ const DEFAULTS := {
 	"restore_windows": true,
 	"toast_alarm": true,
 	"toast_report": true,
-	"toast_message": true,
+	"voices": true,
+	"voice_volume": 0.6,
 	"windows": {},     # app id -> {"rect": [x, y, w, h], "open": bool, "minimized": bool, "maximized": bool, "state": {...}}
 }
 

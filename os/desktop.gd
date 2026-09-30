@@ -14,7 +14,11 @@
 #                  see it happen; an alarm or shift report interrupts it),
 #                  and the facility clock (never the real clock). Click the
 #                  clock for the notification centre.
-#   Toasts         alarms, shift reports and robot replies pop up bottom right.
+#   Toasts         alarms and shift reports pop up bottom right.
+#   corkHQ         corporate's panel, pinned top-right above everything. It can't
+#                  be closed, moved, resized or muted (CorkHQPanel).
+#   Speech         robots talk as coloured text over them in camera feeds, with
+#                  voice blips (SpeechDirector; what they say comes from RobotChatter).
 #   Keys           go to the focused window's app (e.g. Cameras: arrows pan).
 #
 # The 3D facility runs once, hidden, in a SubViewport; camera windows render
@@ -42,10 +46,9 @@ const APPS := [
 	["units", preload("res://os/apps/units_app.gd")],
 	["work", preload("res://os/apps/work_app.gd")],
 	["plant", preload("res://os/apps/plant_app.gd")],
-	["messages", preload("res://os/apps/messages_app.gd")],
+	["requisitions", preload("res://os/apps/requisitions_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
 	["terminal", preload("res://os/apps/terminal_app.gd")],
-	["handbook", preload("res://os/apps/handbook_app.gd")],
 	["settings", preload("res://os/apps/settings_app.gd")],
 ]
 
@@ -83,7 +86,10 @@ var notice_panel: PanelContainer
 var notice_list: VBoxContainer
 var context_menu: PopupMenu
 var snap_preview: Panel
-var unread := 0
+## Robot speech for the camera feeds (exists while logged on).
+var speech: SpeechDirector
+## Corporate's panel (exists while logged on).
+var hq_panel: CorkHQPanel
 ## Newest last: {"t": facility time, "heading", "body", "color", "app"}
 var notifications: Array[Dictionary] = []
 var unseen_notifications := 0
@@ -154,6 +160,8 @@ func _input(event: InputEvent) -> void:
 		if notice_panel.visible and not notice_panel.get_global_rect().has_point(event.position) \
 				and not clock_button.get_global_rect().has_point(event.position):
 			notice_panel.visible = false
+		if hq_panel and hq_panel.get_global_rect().has_point(event.position):
+			return   # corkHQ is on top of everything; clicks there don't reach windows
 		for i in range(window_layer.get_child_count() - 1, -1, -1):
 			var w := window_layer.get_child(i) as OSWindow
 			if w and w.visible and w.get_global_rect().has_point(event.position):
@@ -242,6 +250,12 @@ func log_on() -> void:
 	add_child(world_viewport)
 	world = (load(WORLD_SCENE) as PackedScene).instantiate()
 	world_viewport.add_child(world)
+	speech = SpeechDirector.new()
+	speech.name = "Speech"
+	add_child(speech)
+	hq_panel = CorkHQPanel.new()
+	add_child(hq_panel)
+	move_child(hq_panel, window_layer.get_index() + 1)   # above every window
 	_journal_mark = Facility.sim.journal.added
 	login.visible = false
 	if OSSettings.get_value("restore_windows"):
@@ -266,6 +280,12 @@ func log_off() -> void:
 	unseen_notifications = 0
 	notice_panel.visible = false
 	Facility.end_session()
+	if speech:
+		speech.queue_free()
+		speech = null
+	if hq_panel:
+		hq_panel.queue_free()
+		hq_panel = null
 	if world_viewport:
 		world_viewport.queue_free()
 		world_viewport = null
@@ -358,8 +378,6 @@ func focus_window(win: OSWindow) -> void:
 	window_layer.move_child(win, -1)
 	for w in _windows.values():
 		w.set_focused(w == win)
-	if win.app.app_id == "messages":
-		unread = 0
 	_rebuild_taskbar()
 
 
@@ -506,7 +524,7 @@ static func _dur(seconds: float) -> String:
 
 ## Pops a notification up bottom right (if that kind is switched on in
 ## Settings) and files it in the notification centre. Clicking opens `app`.
-## kind: "alarm", "report", "message" or "" (always shown).
+## kind: "alarm", "report" or "" (always shown).
 func toast(heading: String, body: String, color := OSTheme.ACCENT, app := "", kind := "") -> void:
 	var t := Facility.sim.time() if Facility.running else 0.0
 	notifications.append({"t": t, "heading": heading, "body": body, "color": color, "app": app})
@@ -573,7 +591,7 @@ func _fill_notice_panel() -> void:
 		notice_list.add_child(_notice_card(n.heading, n.body, n.color, n.app, FacilitySim.format_clock(n.t)))
 
 
-# New journal lines: alarms, reports and robot replies become notifications.
+# New journal lines: alarms and shift reports become notifications.
 func _check_journal() -> void:
 	var journal := Facility.sim.journal
 	var fresh := journal.added_since(_journal_mark)
@@ -590,11 +608,6 @@ func _check_journal() -> void:
 		elif cat == "report":
 			toast("Shift report", text.trim_prefix("Shift report: "), OSTheme.INFO, "log", "report")
 			shown += 1
-		elif MessagesApp.is_message(e):
-			if not (is_open("messages") and _windows["messages"].is_focused):
-				unread += 1
-				toast(cat.capitalize(), MessagesApp.message_text(e), OSTheme.category_color(cat), "messages", "message")
-				shown += 1
 
 
 # --- Building ------------------------------------------------------------------------------
@@ -710,7 +723,6 @@ func _build_context_menu() -> void:
 	context_menu.add_item("Cascade windows", 1)
 	context_menu.add_item("Close all windows", 2)
 	context_menu.add_separator()
-	context_menu.add_item("Handbook", 3)
 	context_menu.add_item("Settings", 4)
 	context_menu.id_pressed.connect(_on_context_menu)
 	add_child(context_menu)
@@ -721,7 +733,6 @@ func _on_context_menu(id: int) -> void:
 		0: show_desktop()
 		1: cascade_windows()
 		2: close_all_windows()
-		3: open_app("handbook")
 		4: open_app("settings")
 
 
@@ -837,9 +848,6 @@ func _refresh_taskbar() -> void:
 		var faults := PlantApp.active_faults(plant)
 		alarm_button.visible = faults > 0
 		alarm_button.text = "ALARM  %d" % faults
-	for icon in icons.get_children():
-		if icon.title == "Messages":
-			icon.badge = unread
 
 
 func _build_login() -> void:

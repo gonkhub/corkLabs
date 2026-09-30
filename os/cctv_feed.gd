@@ -7,6 +7,9 @@
 #   scroll wheel    zoom
 #   double-click    back to the home view
 # All free: pointing a camera is only looking.
+#
+# Robots' speech (SpeechDirector) floats over them as coloured text in any
+# feed whose camera is in the same room and can see them.
 class_name CCTVFeed
 extends Control
 
@@ -25,6 +28,12 @@ var viewport: SubViewport
 var eye: Camera3D
 var caption: Label
 var ptz_label: Label
+## Speech: one label per robot, reused.
+var speech: SpeechDirector
+var _speech_labels := {}
+var _speech_layer: Control
+## Text size for speech (grid feeds use smaller text).
+var speech_font_size := 16
 var _material: ShaderMaterial
 var _dragging := false
 
@@ -66,6 +75,12 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	caption.position = Vector2(12, 8)
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(caption)
+	_speech_layer = Control.new()
+	_speech_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speech_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_speech_layer)
+	speech_font_size = 16 if interactive else 12
+
 	ptz_label = OSTheme.mono_label("", 12, Color(0.85, 1.0, 0.9, 0.8))
 	ptz_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	ptz_label.position = Vector2(12, -24)
@@ -93,6 +108,52 @@ func _process(_delta: float) -> void:
 	ptz_label.position.y = size.y - 24
 	var ptz := "AUTO-TRACK" if src.auto_track else "PAN %+4d°  TILT %+3d°" % [roundi(src.pan), roundi(src.tilt)]
 	ptz_label.text = "%s   ZOOM %.1fx" % [ptz, src.zoom_level()]
+	_draw_speech()
+
+
+# Floating words over each speaking robot this camera can see.
+func _draw_speech() -> void:
+	var shown := {}
+	if speech and world:
+		var cam_room: String = world.camera_rooms[cam] if cam < world.camera_rooms.size() else ""
+		for b in speech.bubbles():
+			var id: String = b.robot
+			if world.robot_room(id) != cam_room:
+				continue
+			var at := world.speech_anchor(id)
+			if eye.is_position_behind(at):
+				continue
+			var p := eye.unproject_position(at)
+			if p.x < -50 or p.y < -50 or p.x > size.x + 50 or p.y > size.y + 50:
+				continue
+			speech.mark_seen(id)
+			var l := _speech_label(id)
+			l.text = b.text
+			l.add_theme_color_override("font_color", b.color)
+			l.modulate.a = (b.color as Color).a
+			l.size = Vector2(l.custom_minimum_size.x, 0)   # fixed width, height fits the text
+			l.position = Vector2(clampf(p.x - l.size.x * 0.5, 4.0, maxf(size.x - l.size.x - 4.0, 4.0)),
+				clampf(p.y - l.size.y - 6.0, 4.0, maxf(size.y - l.size.y - 4.0, 4.0)))
+			l.visible = true
+			shown[id] = true
+	for id in _speech_labels:
+		if not shown.has(id):
+			_speech_labels[id].visible = false
+
+
+func _speech_label(id: String) -> Label:
+	if not _speech_labels.has(id):
+		var l := Label.new()
+		l.add_theme_font_size_override("font_size", speech_font_size)
+		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		l.add_theme_constant_override("outline_size", 6)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 300 if interactive else 200
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_speech_layer.add_child(l)
+		_speech_labels[id] = l
+	return _speech_labels[id]
 
 
 func _gui_input(event: InputEvent) -> void:

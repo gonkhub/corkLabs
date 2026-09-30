@@ -14,9 +14,14 @@ extends Resource
 
 @export var display_name := "Robot"
 
-@export_group("Rail travel")
-## Top speed along the rail, in m/s (facility time).
-@export_range(0.1, 3.0, 0.05) var rail_speed := 0.8
+@export_group("Body and travel")
+## Top speed along the rails, in m/s (facility time).
+@export_range(0.1, 5.0, 0.05) var rail_speed := 0.8
+## How wide the robot is, in meters. Routes narrower than this (a hatch, a
+## duct) are closed to it.
+@export_range(0.1, 6.0, 0.05) var width := 0.8
+## How big the 3D robot is drawn (its baked motion scales with it).
+@export_range(0.2, 6.0, 0.05) var visual_scale := 1.0
 
 @export_group("Skills")
 ## How good it is at heavy work (lifting, hauling, clearing). 0 = useless, 1 = built for it.
@@ -43,14 +48,23 @@ extends Resource
 ## Once charging, it stays on the dock until it reaches this.
 @export_range(0.3, 1.0, 0.01) var charge_until := 0.95
 
-@export_group("Purpose")
-## How quickly idleness makes it uneasy (purpose lost per idle second, 0-1 scale).
-## Robots think the work keeps THEM running; standing around feels like dying.
-@export_range(0.0, 0.01, 0.00001) var restlessness := 0.0004
-## Purpose regained per second of work.
-@export_range(0.0, 0.01, 0.00001) var purpose_from_work := 0.001
-## Purpose gained on finishing a job.
-@export_range(0.0, 1.0, 0.01) var purpose_per_job := 0.25
+@export_group("Software stability")
+## Stability lost per idle second (0-1 scale). Robots think the work keeps
+## THEM running; standing around makes their software drift.
+@export_range(0.0, 0.01, 0.00001) var stability_decay := 0.0004
+## Stability regained per second of work.
+@export_range(0.0, 0.01, 0.00001) var stability_from_work := 0.001
+## Stability gained on finishing a job.
+@export_range(0.0, 1.0, 0.01) var stability_per_job := 0.25
+## Stability lost when an order makes it drop what it wanted to do.
+@export_range(0.0, 0.2, 0.005) var order_stress := 0.02
+## How far low stability turns into independence: orders count for less,
+## choices get erratic, errant behaviour creeps in. 0 = stays obedient however unstable.
+@export_range(0.0, 1.0, 0.05) var independence := 0.6
+## Resistance to critical errors (crashes, glitches) when stability is critical.
+@export_range(0.0, 1.0, 0.05) var error_resistance := 0.3
+## How willing it is, at critical stability, to break things so there's work to do.
+@export_range(0.0, 1.0, 0.05) var sabotage_tendency := 0.4
 
 @export_group("Orders")
 ## How much a supervisor's order adds to a job's score. High = obedient.
@@ -65,6 +79,22 @@ extends Resource
 @export_range(0.0, 0.5, 0.01) var commitment := 0.1
 ## How much it cares about travel distance (0 = not at all, 1 = strongly prefers nearby work).
 @export_range(0.0, 1.0, 0.05) var distance_aversion := 0.4
+
+@export_group("Voice")
+## Colour of its words in the camera feeds.
+@export var speech_color := Color(0.8, 0.9, 1.0)
+## Voice blips: base pitch in Hz (low = big machine).
+@export_range(40.0, 2000.0, 1.0) var voice_pitch := 440.0
+## How much each blip's pitch wanders (0 = monotone).
+@export_range(0.0, 1.0, 0.01) var voice_variation := 0.25
+## Letters revealed (and blipped) per second.
+@export_range(5.0, 60.0, 1.0) var voice_speed := 22.0
+## Blip shape: "square" (buzzy), "sine" (soft), "saw" (harsh), "noise" (static).
+@export_enum("square", "sine", "saw", "noise") var voice_wave := "square"
+## Minimum facility seconds between things it says on its own.
+@export_range(0.0, 600.0, 1.0) var chatter_cooldown := 45.0
+## How chatty it is (0 = only speaks when it must, 1 = talks a lot).
+@export_range(0.0, 1.0, 0.05) var chattiness := 0.5
 
 @export_group("Animation")
 ## Clips to play while working, by job skill ("heavy", "precise", "general").

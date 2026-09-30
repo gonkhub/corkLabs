@@ -7,7 +7,7 @@
 #
 #     var props := FacilityProps.new()
 #     add_child(props)
-#     props.build({"tinker_loop": $TinkerRail, "hauler_line": $HaulerRail}, $Pods)
+#     props.build(layout)          # FacilityWorld does this
 #
 # Placeholder shapes, like the robots: swap in real models later, keeping the
 # state colours.
@@ -22,8 +22,8 @@ const DEAD := Color(0.08, 0.1, 0.1)
 ## Show a floating name + state label over each device.
 @export var labels := true
 
-var _rails := {}
-var _pods := {}           # device id -> MeshInstance3D (existing scene pods)
+var _layout: FacilityLayout
+var _pods := {}           # device id -> MeshInstance3D
 var _pod_mats := {}       # device id -> StandardMaterial3D
 var _lamps := {}          # device id -> [OmniLight3D, StandardMaterial3D]
 var _debris := {}         # bay id -> Node3D
@@ -33,29 +33,31 @@ var _bench_part: MeshInstance3D
 var _time := 0.0
 
 
-## rails: rail id -> Path3D. pods_node: the scene's Pods (children Pod1..Pod4).
-func build(rails: Dictionary, pods_node: Node3D = null) -> void:
-	_rails = rails
+## Builds a prop for every plant device at its station, and a charging clamp at each dock.
+func build(layout: FacilityLayout) -> void:
+	_layout = layout
 	if DisplayServer.get_name() == "headless":
 		return   # no renderer (tests): meshes would only spam errors
-	var layout := FacilitySetup.layout()
-	if pods_node:
-		for i in 4:
-			var mesh := pods_node.get_node_or_null("Pod%d" % (i + 1)) as MeshInstance3D
-			if mesh:
-				var mat := (mesh.get_surface_override_material(0) as StandardMaterial3D).duplicate() as StandardMaterial3D
-				mesh.set_surface_override_material(0, mat)
-				var id := "pod_%d" % (i + 1)
-				_pods[id] = mesh
-				_pod_mats[id] = mat
-				_add_label(id, mesh.global_position + Vector3(0, 1.4, 0))
+	var plant := FacilityPlant.new()   # just for the device list
+	var pods_at := {}   # station -> [pod ids]
+	for id in plant.device_ids():
+		var d := plant.device(id)
+		if d.kind == "pod":
+			if not pods_at.has(d.station):
+				pods_at[d.station] = []
+			pods_at[d.station].append(id)
+	for st in pods_at:
+		var ids: Array = pods_at[st]
+		for k in ids.size():
+			_build_pod(ids[k], _beside_rail(st, (k - (ids.size() - 1) * 0.5) * 4.0, 3.0))
 	for b in 3:
 		var bay := "bay_%d" % (b + 1)
-		_build_bay(bay, _station_floor(layout, bay))
-	_build_relay(_station_wall(layout, "relay"))
-	_build_bench(_station_wall(layout, "bench"))
-	for dock in ["t_dock", "h_dock"]:
-		_build_dock(dock, _station_point(layout, dock))
+		_build_bay(bay, _beside_rail(bay, 0.0, 3.5))
+	_build_relay(_by_wall("relay"))
+	_build_bench(_beside_rail("bench", 0.0, 0.0))
+	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
+	for dock in layout.stations_of("dock"):
+		_build_dock(dock, layout.station_world_pos(dock))
 
 
 func _process(delta: float) -> void:
@@ -83,6 +85,11 @@ func _process(delta: float) -> void:
 		(lamp[0] as OmniLight3D).light_energy = (0.3 + 2.5 * flash) if leaking else 0.35
 		(lamp[1] as StandardMaterial3D).emission = col
 		_debris["bay_%d" % n].visible = int(plant.device("bay_%d" % n).job) >= 0
+	var gate: Array = _lamps["gate"]
+	var jammed: bool = plant.device("gate").fault
+	(gate[0] as OmniLight3D).light_color = BAD if jammed else OK
+	(gate[0] as OmniLight3D).light_energy = (2.0 * flash) if jammed else 0.4
+	(gate[1] as StandardMaterial3D).emission = BAD if jammed else OK
 	var relay: Array = _lamps["relay"]
 	var out: bool = plant.device("relay").fault
 	(relay[0] as OmniLight3D).light_color = BAD if out else OK
@@ -131,25 +138,28 @@ static func _health_color(v: float) -> Color:
 
 # --- Placement ------------------------------------------------------------------------
 
-func _station_point(layout: FacilityLayout, station: String) -> Vector3:
-	var st := layout.station(station)
-	var path := _rails.get(st.rail) as Path3D
-	if path == null:
-		return Vector3.ZERO
-	return path.global_transform * path.curve.sample_baked(float(st.pos))
-
-
-# On the floor below the station (bays: beside Hauler's straight rail).
-func _station_floor(layout: FacilityLayout, station: String) -> Vector3:
-	var p := _station_point(layout, station)
+# A floor point near a station: `along` meters along its rail, `side` meters
+# to the side of it (+ = right when facing along the rail).
+func _beside_rail(station_id: String, along: float, side: float) -> Vector3:
+	var st := _layout.station(station_id)
+	var s := _layout.segment(st.segment)
+	var a: Vector3 = _layout.nodes[s.a].pos
+	var b: Vector3 = _layout.nodes[s.b].pos
+	var dir := Vector3(b.x - a.x, 0, b.z - a.z).normalized()
+	var right := dir.cross(Vector3.UP)
+	var p := _layout.station_world_pos(station_id) + dir * along + right * side
 	return Vector3(p.x, 0.0, p.z)
 
 
-# Pushed out from the room's centre towards the wall, at chest height.
-func _station_wall(layout: FacilityLayout, station: String) -> Vector3:
-	var p := _station_point(layout, station)
-	var out := Vector3(p.x, 0.0, p.z).normalized()
-	return Vector3(p.x, 1.2, p.z) + out * 0.9
+# On the wall of the station's room nearest to it, at chest height.
+func _by_wall(station_id: String) -> Vector3:
+	var st := _layout.station(station_id)
+	var p := _layout.station_world_pos(station_id)
+	var rect: Rect2 = _layout.rooms[st.room].rect
+	var pts := [Vector3(rect.position.x + 0.5, 1.2, p.z), Vector3(rect.end.x - 0.5, 1.2, p.z),
+		Vector3(p.x, 1.2, rect.position.y + 0.5), Vector3(p.x, 1.2, rect.end.y - 0.5)]
+	pts.sort_custom(func(u, v): return Vector2(u.x - p.x, u.z - p.z).length() < Vector2(v.x - p.x, v.z - p.z).length())
+	return pts[0]
 
 
 # --- Props ------------------------------------------------------------------------------
@@ -158,6 +168,7 @@ func _build_bay(bay: String, at: Vector3) -> void:
 	var root := Node3D.new()
 	root.name = bay.capitalize().replace(" ", "")
 	root.position = at
+	root.scale = Vector3.ONE * 2.0   # Hauler-sized
 	add_child(root)
 	# A coolant pipe running across the bay, and a filter housing.
 	var pipe := _mesh(_cyl(0.12, 2.2), _mat(Color(0.35, 0.45, 0.55), 0.8), root)
@@ -184,7 +195,32 @@ func _build_bay(bay: String, at: Vector3) -> void:
 		d.position = Vector3(rng.randf_range(-0.5, 0.3), 0.08, rng.randf_range(0.2, 0.7))
 		d.rotation.y = rng.randf() * TAU
 	_debris[bay] = debris
-	_add_label(bay, at + Vector3(0.55, 1.3, -0.6))
+	_add_label(bay, at + Vector3(1.1, 2.8, -1.2))
+
+
+func _build_pod(id: String, at: Vector3) -> void:
+	var mat := _mat(OK, 0.0, true)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(OK.r, OK.g, OK.b, 0.35)
+	var pod := _mesh(_cyl(0.6, 2.6), mat, self)
+	pod.position = at + Vector3(0, 1.3, 0)
+	_pods[id] = pod
+	_pod_mats[id] = mat
+	_add_label(id, at + Vector3(0, 3.0, 0))
+
+
+func _build_gate_panel(at: Vector3) -> void:
+	var post := _mesh(_box(Vector3(0.4, 1.4, 0.4)), _mat(Color(0.3, 0.3, 0.32), 0.5), self)
+	post.position = at + Vector3(0, 0.7, 0)
+	var lamp_mat := _mat(OK, 0.2, true)
+	var bulb := _mesh(_sphere(0.1), lamp_mat, self)
+	bulb.position = at + Vector3(0, 1.5, 0)
+	var light := OmniLight3D.new()
+	light.position = at + Vector3(0, 2.0, 0)
+	light.omni_range = 4.0
+	add_child(light)
+	_lamps["gate"] = [light, lamp_mat]
+	_add_label("gate", at + Vector3(0, 2.3, 0))
 
 
 func _build_relay(at: Vector3) -> void:
