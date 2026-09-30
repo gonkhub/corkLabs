@@ -5,8 +5,9 @@
 #   Single view   one camera, and you drive its pan/tilt/zoom head:
 #                 drag to pan/tilt, scroll to zoom, double-click to reset
 #                 (or arrow keys, + / -, Home). Auto-track follows a robot.
-#   Grid view     all four cameras at once; click one to open it.
-#   Keys          1-4 camera, G grid/single, F CCTV filter.
+#   Grid view     every camera at once; click one to open it.
+#   Keys          1-9 camera, G grid/single, F CCTV filter.
+#   Robots' speech floats over them in any feed that can see them.
 class_name CamerasApp
 extends OSApp
 
@@ -112,7 +113,7 @@ func _rebuild() -> void:
 		cam_buttons[i].disabled = grid_mode
 	if grid_mode:
 		var grid := GridContainer.new()
-		grid.columns = 2
+		grid.columns = ceili(sqrt(float(world.cameras.size())))
 		grid.set_anchors_preset(Control.PRESET_FULL_RECT)
 		grid.add_theme_constant_override("h_separation", 4)
 		grid.add_theme_constant_override("v_separation", 4)
@@ -121,18 +122,19 @@ func _rebuild() -> void:
 			var f := _feed(i, false)
 			f.clicked.connect(func(feed: CCTVFeed): show_camera(feed.cam))
 			grid.add_child(f)
-		hint.text = "Click a feed to open it.   Keys: 1-4 camera, G single/grid, F filter"
+		hint.text = "Click a feed to open it.   Keys: 1-9 camera, G single/grid, F filter"
 	else:
 		var f := _feed(cam, true)
 		f.set_anchors_preset(Control.PRESET_FULL_RECT)
 		body.add_child(f)
-		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-4 camera, G grid, F filter"
+		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, F filter"
 	refresh()
 
 
 func _feed(i: int, interactive: bool) -> CCTVFeed:
 	var f := CCTVFeed.new()
 	f.setup(_world(), desktop.world_viewport if desktop else null, i, interactive)
+	f.speech = desktop.speech if desktop else null
 	f.set_filter(filter_on)
 	feeds.append(f)
 	return f
@@ -149,7 +151,7 @@ func refresh() -> void:
 func key_input(event: InputEventKey) -> bool:
 	var c := _camera()
 	match event.keycode:
-		KEY_1, KEY_2, KEY_3, KEY_4:
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
 			var i: int = event.keycode - KEY_1
 			if i < cam_buttons.size():
 				show_camera(i)

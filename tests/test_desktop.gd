@@ -24,10 +24,10 @@ func _initialize() -> void:
 	desk.log_on()
 	await process_frame
 	_check(facility.running and not desk.login.visible, "log on opens the facility")
-	_check(desk.world != null and desk.world.cameras.size() == 4, "the 3D facility runs hidden, with its cameras")
+	_check(desk.world != null and desk.world.cameras.size() == 6, "the 3D facility runs hidden, with its cameras")
 	_check(str(desk.clock_button.text).contains(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_button.text)
 
-	for id in ["cameras", "units", "work", "plant", "messages", "log"]:
+	for id in ["cameras", "units", "work", "plant", "log", "terminal"]:
 		_check(desk.open_app(id) != null and desk.is_open(id), "the %s app opens in a window" % id)
 	var again: Object = desk.open_app("work")
 	_check(desk.window_layer.get_child_count() == 6 and again == desk._windows["work"].app, "opening an open app just brings it forward")
@@ -41,10 +41,9 @@ func _initialize() -> void:
 	var t0: float = sim.time()
 	work._assign("hauler")
 	_check(sim.time() - t0 >= 119.9, "an order from the Work app costs facility time")
-	_check(work.reply.text.begins_with("Hauler:"), "and shows the robot's answer (%s)" % work.reply.text)
-	work._assign("tinker")
-	_check(work.reply.text.contains("can't reach") or work.reply.text.contains("already"),
-		"Tinker can't take a job on Hauler's rail (%s)" % work.reply.text)
+	_check(work.reply.text.contains("Order sent to Hauler"), "and says the order went (%s)" % work.reply.text)
+	_check(str(facility.sim.journal.tail(20).map(func(e): return e.text)).contains("Hauler answers"),
+		"the robot's answer goes to the journal (and is spoken on camera)")
 
 	# Break something: toast + alarm light.
 	var toasts_before: int = desk.toast_box.get_child_count()
@@ -66,6 +65,10 @@ func _initialize() -> void:
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
 
 	# The taskbar Wait: passes time a step per frame, stops early on an alarm.
+	# (Cancel the plant's random faults first, so only our own alarm interrupts.)
+	for e in sim.scheduler.peek(1000):
+		if e.name == "plant_fault":
+			sim.scheduler.cancel(e.id)
 	var t2: float = sim.time()
 	desk.start_wait(20 * 60.0)
 	await process_frame

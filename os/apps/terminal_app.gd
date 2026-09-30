@@ -11,11 +11,14 @@ const HELP := [
 	["units", "what each robot is doing, its needs and order"],
 	["jobs", "open jobs on the work board"],
 	["plant", "every device and its state"],
+	["routes", "passages between rooms: clearance, open or blocked"],
+	["block <route> [reason]", "close a passage (dev: test re-routing)"],
+	["unblock <route>", "reopen a passage"],
 	["order <robot> <job#|recharge|standby|cancel>", "give an order (2 min)"],
 	["priority <job#> <low|normal|high|critical|+|->", "change a job's priority (2 min)"],
 	["wait <minutes>", "let facility time pass (an alarm stops it)"],
 	["log [lines] [category]", "the facility journal (category: alarm, work, plant, tinker...)"],
-	["open <app>", "open an app (cameras, units, work, plant, messages, log...)"],
+	["open <app>", "open an app (cameras, units, work, plant, log, settings...)"],
 	["clear", "clear the screen"],
 ]
 
@@ -81,6 +84,9 @@ func _submit(line: String) -> void:
 		"units", "robots": _units()
 		"jobs": _jobs()
 		"plant", "devices": _plant()
+		"routes", "passages": _routes()
+		"block": _block(args, true)
+		"unblock": _block(args, false)
 		"order": _order(args)
 		"priority", "prio": _priority(args)
 		"wait": _wait(args)
@@ -149,6 +155,27 @@ func _plant() -> void:
 		_print("  " + _esc(plant.device_text(id)))
 
 
+func _routes() -> void:
+	var layout := sim().get_system("layout") as FacilityLayout
+	for sid in layout.passages():
+		var s := layout.segment(sid)
+		var rooms := "%s - %s" % [layout.rooms[layout.nodes[s.a].room].name, layout.rooms[layout.nodes[s.b].room].name]
+		var clearance := "any size" if is_inf(s.clearance) else "%.1f m wide" % s.clearance
+		var state := ("[color=#%s]BLOCKED (%s)[/color]" % [_hex(OSTheme.ALARM), _esc(s.block_reason)]) if s.blocked else "open"
+		_print("  %-14s %-26s %-12s %s" % [sid, rooms, clearance, state])
+
+
+func _block(args: PackedStringArray, blocked: bool) -> void:
+	var layout := sim().get_system("layout") as FacilityLayout
+	if args.is_empty() or layout.segment(args[0]).is_empty():
+		_error("Usage: %s <route>   (see: routes)" % ("block" if blocked else "unblock"))
+		return
+	var reason := " ".join(args.slice(1)) if args.size() > 1 else "closed by supervisor"
+	layout.set_blocked(sim(), args[0], blocked, reason)
+	Facility.act("choice", "Supervisor %s %s" % ["closes" if blocked else "reopens", layout.segment(args[0]).name])
+	_print("  %s is now %s." % [layout.segment(args[0]).name, "blocked" if blocked else "open"])
+
+
 func _order(args: PackedStringArray) -> void:
 	if args.size() < 2:
 		_error("Usage: order <robot> <job#|recharge|standby|cancel>")
@@ -168,7 +195,7 @@ func _order(args: PackedStringArray) -> void:
 	else:
 		_error("Order what? A job number, recharge, standby or cancel.")
 		return
-	_print("  [color=#%s]%s:[/color] %s" % [_hex(OSTheme.category_color(bot.robot_id)), bot.display_name(), _esc(r.reply)])
+	_print("  Order sent to %s%s. (Its answer is on camera.)" % [bot.display_name(), "" if r.ok else ", but it's not doing it"])
 
 
 func _priority(args: PackedStringArray) -> void:

@@ -155,16 +155,15 @@ func _update_detail() -> void:
 		var bot := sim().get_system("robot_" + id) as RobotAgent
 		var b: Button = assign_buttons[id]
 		b.disabled = not open or not Supervisor.can_reach(sim(), bot, j)
-		b.tooltip_text = "" if not b.disabled or not open else "%s can't reach %s from its rail" % [bot.display_name(), j.get("station", "")]
+		b.tooltip_text = "" if not b.disabled or not open else "%s can't get there right now" % bot.display_name()
 	up_button.disabled = not open or int(j.get("priority", 3)) >= 3
 	down_button.disabled = not open or int(j.get("priority", 0)) <= 0
 
 
 func _assign(robot_id: String) -> void:
 	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
-	var r := Supervisor.order(bot, "job", selected_job)
-	reply.text = "%s: \"%s\"" % [bot.display_name(), r.reply]
-	reply.add_theme_color_override("font_color", OSTheme.ACCENT if r.ok else OSTheme.WARN)
+	Supervisor.order(bot, "job", selected_job)
+	reply.text = "Order sent to %s. (Its answer is on camera.)" % bot.display_name()
 	_signature = ""
 	refresh()
 

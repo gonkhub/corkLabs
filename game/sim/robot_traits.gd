@@ -14,9 +14,14 @@ extends Resource
 
 @export var display_name := "Robot"
 
-@export_group("Rail travel")
-## Top speed along the rail, in m/s (facility time).
-@export_range(0.1, 3.0, 0.05) var rail_speed := 0.8
+@export_group("Body and travel")
+## Top speed along the rails, in m/s (facility time).
+@export_range(0.1, 5.0, 0.05) var rail_speed := 0.8
+## How wide the robot is, in meters. Routes narrower than this (a hatch, a
+## duct) are closed to it.
+@export_range(0.1, 6.0, 0.05) var width := 0.8
+## How big the 3D robot is drawn (its baked motion scales with it).
+@export_range(0.2, 6.0, 0.05) var visual_scale := 1.0
 
 @export_group("Skills")
 ## How good it is at heavy work (lifting, hauling, clearing). 0 = useless, 1 = built for it.
@@ -65,6 +70,22 @@ extends Resource
 @export_range(0.0, 0.5, 0.01) var commitment := 0.1
 ## How much it cares about travel distance (0 = not at all, 1 = strongly prefers nearby work).
 @export_range(0.0, 1.0, 0.05) var distance_aversion := 0.4
+
+@export_group("Voice")
+## Colour of its words in the camera feeds.
+@export var speech_color := Color(0.8, 0.9, 1.0)
+## Voice blips: base pitch in Hz (low = big machine).
+@export_range(40.0, 2000.0, 1.0) var voice_pitch := 440.0
+## How much each blip's pitch wanders (0 = monotone).
+@export_range(0.0, 1.0, 0.01) var voice_variation := 0.25
+## Letters revealed (and blipped) per second.
+@export_range(5.0, 60.0, 1.0) var voice_speed := 22.0
+## Blip shape: "square" (buzzy), "sine" (soft), "saw" (harsh), "noise" (static).
+@export_enum("square", "sine", "saw", "noise") var voice_wave := "square"
+## Minimum facility seconds between things it says on its own.
+@export_range(0.0, 600.0, 1.0) var chatter_cooldown := 45.0
+## How chatty it is (0 = only speaks when it must, 1 = talks a lot).
+@export_range(0.0, 1.0, 0.05) var chattiness := 0.5
 
 @export_group("Animation")
 ## Clips to play while working, by job skill ("heavy", "precise", "general").

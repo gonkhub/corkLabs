@@ -1,0 +1,102 @@
+# The robots' lines. Edit freely; see game/speech/bark_library.gd for the format.
+#   trigger | robot | condition | text
+# Placeholders: {me} {peer} {job} {station} {place} {why} {power} {purpose} {room} {device}
+# Conditions: low_power full_power low_purpose restless uneasy content working idle
+
+# --- Starting a job ------------------------------------------------------------
+start_job | any | | Heading to {station}.
+start_job | any | | {job}. On my way.
+start_job | tinker | | Ooh, {job}. Mine.
+start_job | tinker | | {station}! Coming, coming.
+start_job | hauler | | {job}. Moving.
+start_job | hauler | | Going.
+start_job | any | low_purpose | Finally. Something to do.
+start_job | tinker | low_purpose | Work! I thought I'd been forgotten.
+start_job | hauler | low_purpose | Good. Standing still was wearing on me.
+start_job | any | low_power | {station}. Then a charge. Please.
+start_job | hauler | low_power | One more. Then the dock.
+
+# --- Finishing ---------------------------------------------------------------------
+job_done | any | | Done.
+job_done | tinker | | {job}: done. Next?
+job_done | tinker | | Fixed! That one hummed nicely.
+job_done | hauler | | Done. Heavy one.
+job_done | hauler | | Cleared.
+job_done | any | low_power | Done. Running thin now.
+job_done | tinker | content | Everything in its place. Good.
+
+# --- Power ---------------------------------------------------------------------------
+recharge | any | | Going to the dock.
+recharge | tinker | | Top-up time.
+recharge | hauler | | Need the dock.
+recharge | any | low_power | Dock. Now.
+recharge | tinker | low_power | Charge, charge, charge...
+charged | any | | Charged.
+charged | tinker | | Full! Everything's brighter.
+charged | hauler | | Full. Back to it.
+low_power | any | | Power's getting low.
+low_power | tinker | | Power's low. My thoughts are going slow.
+low_power | hauler | | Power low. Heavy.
+stalled | any | | ...power... gone...
+stalled | tinker | | Can't... move... someone...
+stalled | hauler | | Stalled. Emergency cells.
+restarted | any | | Back. Barely.
+restarted | tinker | | I'm awake! I'm awake. Where's the dock?
+
+# --- Purpose / mood -----------------------------------------------------------------
+wander | any | | Nothing here. Looking around.
+wander | tinker | | Just... checking the rails. For work. For anything.
+wander | hauler | | Patrolling.
+wander | any | uneasy | There must be something that needs me.
+mood_restless | tinker | | Is anyone going to need me?
+mood_restless | hauler | | Idle too long.
+mood_uneasy | tinker | | If there's no work, what am I for?
+mood_uneasy | hauler | | Stopped machines rust.
+mood_content | any | | That's better.
+idle | any | | Standing by.
+idle | any | | Nothing on the board.
+idle | tinker | | I wonder what the pods dream about. Do pods dream?
+idle | tinker | | Rails are warm today.
+idle | tinker | | Hmm. Hmmm. Hm.
+idle | hauler | | Holding.
+idle | hauler | | Rails are quiet.
+idle | hauler | content | Good hum in the rails.
+idle | tinker | content | Quiet shift. I like quiet. For a while.
+idle | tinker | restless | Tap tap tap. Nothing to fix?
+idle | tinker | uneasy | I counted the rivets again. There are still four hundred and twelve.
+idle | hauler | content | Quiet.
+idle | hauler | restless | ...
+idle | hauler | uneasy | Waiting. Always waiting.
+idle | any | low_power | Should charge soon.
+
+# --- Getting around -------------------------------------------------------------------
+route_blocked | any | | Can't get to {place}. {why}.
+route_blocked | hauler | | Too big for that. Or it's shut.
+route_blocked | tinker | | No way through to {place}! {why}.
+route_closed | any | | {device} just closed.
+route_closed | hauler | | {device}'s shut. That was my way.
+route_closed | tinker | | Huh. {device} is shut.
+
+# --- Alarms --------------------------------------------------------------------------
+alarm | any | | Alarm. {device}.
+alarm | tinker | | Did you hear that? {device}!
+alarm | hauler | | {device}. Trouble.
+alarm | any | low_power | Not now... {device}.
+
+# --- Talking to each other (a line, then the other robot answers) ---------------------
+peer_greet | tinker | | Hello, {peer}!
+peer_greet | tinker | uneasy | {peer}, do you ever run out of things to do?
+peer_greet | tinker | low_power | {peer}, is it just me or are the lights dimmer?
+peer_greet | hauler | | {peer}.
+peer_greet | hauler | low_power | {peer}. Running low.
+peer_reply | hauler | | {peer}.
+peer_reply | hauler | uneasy | Sometimes. Then I wait.
+peer_reply | hauler | low_power | Get to a dock, {peer}.
+peer_reply | tinker | | Hi {peer}! Busy shift?
+peer_reply | tinker | low_power | Me too. I'll charge after this.
+peer_info | any | | {peer}, {job} at {station}. That one's yours.
+peer_info | tinker | | {peer}! {job}, over at {station}. Heavy. You're good at heavy.
+peer_info | hauler | | {peer}. {station}. {job}. Fine work, your kind.
+peer_info_reply | any | | Noted.
+peer_info_reply | tinker | | On it! Thanks, {peer}.
+peer_info_reply | hauler | | I'll see to it.

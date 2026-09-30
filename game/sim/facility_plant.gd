@@ -13,6 +13,9 @@
 #   relay    The power relay. Its fuse blows at random ("Replace fuse",
 #            precise). While it's out, robot docks charge at 40%.
 #   bays     Debris falls in the bays at random ("Clear debris", heavy).
+#   gate     The freight gate between the main hall and the workshop. It
+#            jams at random, which BLOCKS that route on the rail network
+#            (Hauler's only way into the workshop) until it's unjammed.
 #
 # So problems chain: a leak nobody clamps heats the facility, the pods drift,
 # throughput drops, and a blown fuse slows the recharging robots who'd fix it.
@@ -35,7 +38,9 @@ const KINDS := {
 		"levels": [0.6, 0.35, 0.15], "start_priority": 0},
 	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.08, "priority": 2},
 	"relay": {"job": "Replace relay fuse", "skill": "precise", "work": 360.0, "rate": 0.05, "priority": 2},
-	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.15, "priority": 1},
+	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.1, "priority": 1},
+	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.04, "priority": 2,
+		"blocks": "freight_gate"},
 }
 ## Chance that cleared debris turns up a damaged part. The part goes to the
 ## workbench for repair (precise work), then back to its bay to be refitted
@@ -71,6 +76,7 @@ func _init() -> void:
 		_add("pipe_%d" % (b + 1), "pipe", "Bay %d coolant pipe" % (b + 1), bay)
 		_add("bay_%d" % (b + 1), "bay", "Bay %d" % (b + 1), bay)
 	_add("relay", "relay", "Power relay", "relay")
+	_add("gate", "gate", "Freight gate", "gate")
 
 
 func _add(id: String, kind: String, display_name: String, station: String) -> void:
@@ -219,7 +225,12 @@ func _fault(sim: FacilitySim, id: String) -> void:
 	var board := sim.get_system("work") as WorkBoard
 	if d.kind != "bay":
 		d.fault = true
-		sim.note("alarm", {"pipe": "COOLANT LEAK: %s", "relay": "%s FUSE BLOWN: docks charge at 40%%"}.get(d.kind, "FAULT: %s") % d.name)
+		sim.note("alarm", {"pipe": "COOLANT LEAK: %s", "relay": "%s FUSE BLOWN: docks charge at 40%%",
+			"gate": "%s JAMMED: the route is blocked"}.get(d.kind, "FAULT: %s") % d.name)
+		if k.has("blocks"):
+			var layout := sim.get_system("layout") as FacilityLayout
+			if layout:
+				layout.set_blocked(sim, k.blocks, true, "jammed")
 	var open_job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
 	if board and (open_job.is_empty() or not (open_job.status == "open" or open_job.status == "claimed")):
 		d.job = board.post(sim, _job_title(d), k.skill, d.station, k.work, int(k.priority), id)
@@ -241,6 +252,7 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"filter": sim.note("plant", "%s swept by %s" % [d.name, who])
 		"pipe": sim.note("plant", "%s clamped by %s" % [d.name, who])
 		"relay": sim.note("plant", "%s fuse replaced by %s: docks back to full charge" % [d.name, who])
+		"gate": sim.note("plant", "%s unjammed by %s" % [d.name, who])
 		"bay":
 			if sim.rng.randf() < SALVAGE_CHANCE:
 				var part: String = SALVAGE_PARTS[sim.rng.randi() % SALVAGE_PARTS.size()]
@@ -249,6 +261,10 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 				if board:
 					board.post(sim, "Repair salvaged %s" % part, "precise", "bench", REPAIR_WORK, 1,
 						"part:repair:%s:%s:%s" % [id, part, by])
+	if KINDS[d.kind].has("blocks"):
+		var layout := sim.get_system("layout") as FacilityLayout
+		if layout:
+			layout.set_blocked(sim, KINDS[d.kind].blocks, false)
 	if was_fault:
 		_book_fault(sim, id)
 
@@ -323,6 +339,7 @@ func device_text(id: String) -> String:
 		"filter": state = "clean %d%%" % _pct(d.value)
 		"pipe": state = "LEAKING" if d.fault else "sealed"
 		"relay": state = "FUSE BLOWN" if d.fault else "ok"
+		"gate": state = "JAMMED" if d.fault else "open"
 		"bay": state = "debris" if int(d.job) >= 0 else "clear"
 	return "%-20s %-10s%s" % [d.name, state, ("  job #%d" % int(d.job)) if int(d.job) >= 0 else ""]
 

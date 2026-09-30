@@ -2,7 +2,7 @@
 # without clicking around.
 #
 #   Godot --xr-mode off --path . --resolution 1280x720 --script res://tools/screenshot.gd -- \
-#       --scene res://game/demo_facility.tscn --wait 4 --out C:/temp/shot.png [--cam 2] [--nofilter]
+#       --scene res://os/desktop.tscn --wait 4 --out C:/temp/shot.png [--cam 2] [--nofilter]
 #       [--fault pipe_2 --fault relay] [--spend 1800]   (facility scenes: break things, pass facility time)
 #       [--call log_on --call open_app:cameras]         (call methods on the scene first)
 # Note: facility scenes use their normal save, so this moves the demo's facility on.
@@ -11,7 +11,7 @@ extends SceneTree
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
-	var scene_path := _arg(args, "--scene", "res://game/demo_facility.tscn")
+	var scene_path := _arg(args, "--scene", "res://os/desktop.tscn")
 	var wait := float(_arg(args, "--wait", "3"))
 	var out := _arg(args, "--out", "user://screenshot.png")
 	var cam := int(_arg(args, "--cam", "0"))

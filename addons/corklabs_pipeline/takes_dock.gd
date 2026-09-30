@@ -45,7 +45,7 @@ func _build_ui() -> void:
 	_button(bar, "Refresh", refresh)
 	_button(bar, "Name takes...", _name_takes)
 	_button(bar, "Bake all", _bake_all)
-	_button(bar, "Open demo", _open_demo)
+	_button(bar, "Open game", _open_demo)
 
 	tree = Tree.new()
 	tree.columns = 4
@@ -222,7 +222,7 @@ func log_line(line: String) -> void:
 
 
 func _open_demo() -> void:
-	EditorInterface.open_scene_from_path("res://game/demo_facility.tscn")
+	EditorInterface.open_scene_from_path("res://os/desktop.tscn")
 
 
 func _inspect_selected() -> void:

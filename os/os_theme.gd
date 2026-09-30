@@ -18,7 +18,7 @@ const WARN := Color("f0b447")
 const ALARM := Color("ff5a4a")
 const INFO := Color("7fb8ff")
 
-## Journal category -> colour (log app, messages, toasts).
+## Journal category -> colour (log app, toasts).
 const CATEGORY_COLORS := {
 	"alarm": ALARM, "report": INFO, "work": Color("a9c7bf"), "plant": ACCENT,
 	"supervisor": WARN, "shift": INFO, "facility": TEXT_DIM, "time": TEXT_DIM, "dev": TEXT_DIM,

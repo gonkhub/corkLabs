@@ -51,10 +51,9 @@ static func describe_order(sim: FacilitySim, kind: String, job_id: int) -> Strin
 	return kind
 
 
-## Can this robot reach this job at all (same rail)?
+## Can this robot get to this job right now (a route that fits it, not blocked)?
 static func can_reach(sim: FacilitySim, bot: RobotAgent, job: Dictionary) -> bool:
-	var layout := sim.get_system("layout") as FacilityLayout
-	return layout != null and layout.station(job.get("station", "")).get("rail", "") == bot.rail
+	return bot.why_cant_reach(sim, str(job.get("station", ""))).is_empty()
 
 
 static func _dur(seconds: float) -> String:

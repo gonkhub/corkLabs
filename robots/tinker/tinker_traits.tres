@@ -5,7 +5,9 @@
 [resource]
 script = ExtResource("1_traits")
 display_name = "Tinker"
-rail_speed = 0.9
+rail_speed = 1.6
+width = 0.7
+visual_scale = 1.0
 skill_heavy = 0.2
 skill_precise = 1.0
 skill_general = 0.8
@@ -24,6 +26,13 @@ refuse_below_skill = 0.3
 think_interval = 1.5
 commitment = 0.08
 distance_aversion = 0.3
+speech_color = Color(0.55, 0.9, 1, 1)
+voice_pitch = 620.0
+voice_variation = 0.35
+voice_speed = 26.0
+voice_wave = "sine"
+chatter_cooldown = 40.0
+chattiness = 0.75
 work_clips = {
 "precise": ["act_arms_test", "act_reach_demo"]
 }

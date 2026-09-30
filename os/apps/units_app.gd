@@ -66,7 +66,7 @@ func _card(bot: RobotAgent) -> Control:
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(spacer)
-	c.reply = OSTheme.label("", 13, OSTheme.category_color(bot.robot_id))
+	c.reply = OSTheme.label("", 12, OSTheme.TEXT_DIM)
 	c.reply.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(c.reply)
 	col.add_child(button_row([
@@ -81,8 +81,8 @@ func _card(bot: RobotAgent) -> Control:
 
 func _order(robot_id: String, kind: String) -> void:
 	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
-	var r := Supervisor.order(bot, kind)
-	cards[robot_id].reply.text = "\"%s\"" % r.reply
+	Supervisor.order(bot, kind)
+	cards[robot_id].reply.text = "Order sent: %s. (Its answer is on camera.)" % Supervisor.describe_order(sim(), kind, -1)
 
 
 func refresh() -> void:

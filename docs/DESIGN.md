@@ -70,6 +70,19 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | Pan/tilt/zoom lives on the `SecurityCamera` itself (a motorised head with limits), so every feed of a camera shows the same view | Like real CCTV; the demo and all feeds agree |
 | 2026-09-30 | OS preferences and window layout are saved separately from the facility (`os_settings.json`) | They're the player's desk, not game state; wiping a facility doesn't reset your desk |
 | 2026-09-30 | A Terminal app mirrors every supervisor action as typed commands | Fits the "supervisor terminal" fiction; handy for power users and testing |
+| 2026-09-30 | Priority is **frameworks over finished features**: build the structure each idea needs, with placeholder content | User's direction: develop the ideas for future implementation |
+| 2026-09-30 | **Rooms**: a very large main hall (80 x 50 m) with smaller rooms attached (pod bay, workshop, maintenance). Empty for now | User's direction; scale makes the robots feel like part of a huge machine |
+| 2026-09-30 | Rails are a **network across rooms**; robots plan routes for their own width. Passages have **caveats**: clearance (too narrow for Hauler), blocked (the freight gate jams), speed | User's direction: travel needs a valid path, and routes have catches |
+| 2026-09-30 | The floor plan is **data** (`FacilitySetup.layout()`); the 3D world builds itself from it | Sim and camera view can never disagree; adding a room is a few lines |
+| 2026-09-30 | A robot whose route closes re-plans; with no way at all it gives up and says why | Makes blocked routes visible and legible, not silent failures |
+| 2026-09-30 | **Hauler much larger** (2.6x drawn, 2.4 m wide) | User's direction; also what makes narrow routes matter |
+| 2026-09-30 | Messages app, robot-message pop-ups and Handbook **removed**. Facility Log kept (debug journal) | User's direction: robots speak on camera instead; the Log is how we debug decisions |
+| 2026-09-30 | Robots **speak as coloured floating text over them in CCTV feeds**, with voice blips; lines vary with their condition (power, purpose, mood); they talk to each other | User's direction |
+| 2026-09-30 | Speech is decided in the simulation (`RobotChatter`, own random numbers, saved) and shown by the OS (`SpeechDirector`) | Deterministic and journaled like everything else, without changing what else happens |
+| 2026-09-30 | Lines live in a plain text file (`barks.txt`: trigger / robot / condition / text) | Writable without code; conditions weight the choice so the robot's state shows |
+| 2026-09-30 | Voices are generated blips per robot (pitch, wave, speed in its traits); recorded samples can replace them | Placeholder sound now, real sound design later without code changes |
+| 2026-09-30 | You only hear a robot while it's on an open camera | The cameras are the player's senses |
+| 2026-09-30 | The flat demo scene is retired (the OS is the game) | One place to see the facility; less to keep in step |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)
