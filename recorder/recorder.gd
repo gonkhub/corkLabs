@@ -368,21 +368,18 @@ func _finish_recording() -> void:
 
 func _load_latest_take() -> void:
 	ghost.visible = false
-	var paths := TakeStore.list()
-	# Newest take outside the demo folder.
-	for i in range(paths.size() - 1, -1, -1):
-		if paths[i].contains("/demo/"):
-			continue
-		var loaded := TakeStore.load_take(paths[i])
-		if loaded:
-			last_take = loaded
-			last_take_path = paths[i]
-			last_clean = TakeCleanup.run(loaded).take
-			if loaded.eye_height > 0.0:
-				calibrated_eye_height = loaded.eye_height
-			ghost.visible = ghost_cubes_visible
-			status_line = "loaded %s" % paths[i].get_file()
-			return
+	var path := TakeStore.newest()
+	if path.is_empty():
+		return
+	var loaded := TakeStore.load_take(path)
+	if loaded:
+		last_take = loaded
+		last_take_path = path
+		last_clean = TakeCleanup.run(loaded).take
+		if loaded.eye_height > 0.0:
+			calibrated_eye_height = loaded.eye_height
+		ghost.visible = ghost_cubes_visible
+		status_line = "loaded %s" % path.get_file()
 
 
 # --- Ghost cubes (raw take, in place) -------------------------------------
