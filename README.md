@@ -140,9 +140,14 @@ that much time. Costs live in `Facility.COST` (`game/sim/facility.gd`):
 dialogue line 1 min, choice 2 min, interaction 5 min, task 15 min.
 Animations keep running in real time; the facility's *state* waits for you.
 
+There is **no Wait**: the player can't just let time pass. Time moves when
+they do something that matters: orders, duties, reading a file for the first
+time, a conversation, inspecting a device, a round of Night Run, clocking in.
+(The F1 dev keys still pass time, for testing.)
+
 Closing the game saves it; opening it resumes at the exact saved moment. The
 corkLabs OS clock shows facility time, never the real clock. A new facility
-starts at Day 1 05:55 (first shift at 06:00).
+starts at Day 1 05:55, at the first shift's brief (the shift starts at 06:00).
 
 | Piece | File | Job |
 | --- | --- | --- |
@@ -150,7 +155,8 @@ starts at Day 1 05:55 (first shift at 06:00).
 | `EventScheduler` | `game/sim/event_scheduler.gd` | Events booked at exact facility times; ties fire in booking order |
 | `FacilityLog` | `game/sim/facility_log.gd` | The journal: a timestamped line for everything that happens |
 | `Facility` (autoload) | `game/sim/facility.gd` | Session start/save, `spend()` / `act()`, `clock_text()` |
-| `ShiftSchedule` | `game/sim/shift_schedule.gd` | First real system: Day/Swing/Night shifts, and a template for new systems |
+| `ShiftSchedule` | `game/sim/shift_schedule.gd` | Books shift start/end events. The game uses one shift a day (Day, 06:00-14:00); a template for new systems |
+| `Campaign` | `game/story/campaign.gd` | The supervisor's three shifts: brief, duties, scripted events, end of shift, the night, endings (see below) |
 
 **Writing a system** (robots, pipes, pods...): any object with `sim_id`,
 `sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
@@ -411,6 +417,7 @@ placeholders.
 | `game/sounds/` | Sound files to audition by name (drop .wav/.ogg/.mp3 here) |
 | `game/speech/` | Robot speech: `barks.txt` (the lines), `RobotChatter` (when), `BarkLibrary`, `RobotVoice` |
 | `game/corporate/` | Corporate: `CorkHQ`, `Requisitions`, `SoftwareLibrary`, and their data files (`hq_lines.txt`, `catalog.txt`, `packages.txt`) |
+| `game/story/` | The story: `Campaign` (shifts), `Knowledge` (what you've found), `Oversight` (standing, suspicion, audits, dismissal), `VirtualFS` + `fs/` (the OS's files), `Dialogue` + `dialogue/` (conversations), `SupervisorArchive` (across runs), and the data files. See [docs/STORY.md](docs/STORY.md) (spoilers) |
 | `os/` | The corkLabs OS: desktop, windows, theme, and its apps (`os/apps/`) |
 | `addons/corklabs_pipeline/` | The editor Takes panel |
 | `tools/` | Command-line tools (bake all, demo takes, screenshots, test runner) |
@@ -428,7 +435,11 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Log on** opens the real facility (`user://facility_save.json`) exactly
   where you left it, and reopens the windows you had open, where they were.
   The greeting uses your Windows user name (the only thing it reads from the PC).
+  The login screen also shows your **personnel file** (every run so far).
   **Shut down** quits.
+- **Shift screens** cover the desktop between shifts: the **brief** (Clock
+  in), **end of shift** (Clock out: the night passes), **dismissal** (retry
+  the shift, or start over), and the **ending**. See "Shifts and the story".
 - **Windows**: open apps from the desktop icons (double-click), the
   **corkLabs** start menu, or a right-click on the desktop. Drag the title
   bar to move; drag to the left/right screen edge to snap to half the screen,
@@ -438,10 +449,11 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Desktop right-click**: show desktop (minimise all), cascade, close all,
   Settings.
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
-  broken (click: Plant), throughput, **Wait** (let 5 min / 15 min / 1 h / 4 h
-  of facility time pass, a minute per frame so you watch it happen; an alarm
-  or a shift report stops the wait early, and you can stop it yourself), and
-  the **facility clock** with the current shift (never the real clock).
+  broken (click: Plant), throughput, and the **facility clock** with the
+  shift (never the real clock). No Wait button, on purpose.
+- **Discoveries** (a secret, a new program) pop up as a toast. Some apps
+  aren't on the desktop until you find them (Night Run); the start menu shows
+  them as "???".
 - **Notifications**: alarms and shift reports pop up bottom right (each kind
   can be turned off in Settings) and are all kept in the
   **notification centre**: click the clock (a dot means there's something new).
@@ -450,19 +462,26 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 | App | What it shows | What you can do |
 | --- | --- | --- |
 | **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, **N night vision**, F filter, M mute. You hear the facility through the open camera (grid: the one under the mouse). Feeds run at a locked 30 fps. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
-| **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **remote reboot** (needs the remote-reboot package) |
+| **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
+| **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **Diagnose** (10 min, steadies it a little); **Talk** (once you know you can: opens the unit link in the Terminal); **remote reboot** (needs the remote-reboot package) |
 | **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
 | **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
-| **Plant** | Throughput, coolant, heat, dock power, every device's state and job | |
+| **Plant** | Throughput, coolant, heat, dock power, every device's state and job | Pick a device: **Inspect** (10 min: wear rate, when it needs work, who's on it), **Request maintenance** (post the job early, 2 min), **Use spare part** from Requisitions stock (shrinks the repair, 2 min) |
+| **Files** | The OS file system (the same files as the Terminal) | Read files (the first read costs time), decrypt, run programs; hidden files once you know they exist (`ls -a`) |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | A command line: `help`, `status`, `units`, `jobs`, `plant`, `routes`, `log [n] [category]`, and commands you have to learn (`connect`, `corkpkg`: see Corporate) | `order <robot> <job#/recharge/standby/cancel>`, `priority <job#> <level/+/->`, `wait <min>`, `block/unblock <route>` (needs route-control), `open <app>`; up/down for history |
+| **Terminal** | The command line you **learn**: `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `decrypt`, `run`), `talk <unit>` (numbered replies, 0 closes), `duties`/`duty <id>`, `whoami`, and the maintenance account (`su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`). Up/down for history, Esc cancels |
+| **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
 
 Robots answer orders out loud, on camera; the apps just say the order was sent.
 
 Every supervisor action goes through `Supervisor` (`game/supervisor.gd`),
-which journals it and spends the time (an order or priority change: 2 min).
-Opening apps and looking through cameras is free.
+which journals it and spends the time (an order or priority change: 2 min;
+reading, talking, duties, inspecting, playing: see docs/STORY.md). Opening
+apps and looking through cameras is free.
+
+The **corkHQ panel** has one button: **Reply**, a conversation with Liaison
+Pell inside the panel (it costs time; what you say is noted).
 
 OS preferences and the window layout are saved in `user://os_settings.json`
 (`OSSettings`), separate from the facility save: they're the player's
@@ -482,6 +501,37 @@ one `OSTheme` (`os/os_theme.gd`). Adding an app: copy one in `os/apps/`, give
 it an id/title/icon in `_init()`, and add it to `APPS` in `os/desktop.gd`.
 
 `tools/screenshot.gd` can drive it: `--call log_on --call open_app:plant`.
+
+## Shifts and the story
+
+The game is **three shifts** (Day 1-3, 06:00-14:00) in one continuous
+timeline, run by `Campaign` (`game/story/campaign.gd`). Each shift has a
+brief, **duties** (corporate's checklist), **scripted events** (corkHQ
+messages, robot lines, faults, audits, clips to perform) and ends at 14:00
+with a review. Clocking out runs the night (the facility carries on without
+you) up to the next brief. After shift 3: an ending, picked from what you did.
+
+`Oversight` (`game/story/oversight.gd`) is how corporate judges you:
+**standing** (0-100; reviews, duties, crashes; 0 = dismissed for
+performance), **suspicion** (policy violations; hourly audits; two catches =
+dismissed for misconduct) and **catastrophes** (coolant empty 30 min,
+throughput under 30% for an hour). Dismissal offers **retry the shift** (the
+save is checkpointed at every brief: `facility_save_checkpoint.json`) or
+**start over**.
+
+`Knowledge` (`game/story/knowledge.gd`) is what this supervisor has found:
+commands, files read, secrets, story flags. Conditions everywhere (files,
+events, duties, dialogue, endings) check it.
+
+The OS has a **file system** (`game/story/fs/`, one text file per file, with
+`#!` headers for hidden, encrypted, restricted, appearing, disappearing
+files), former supervisors' home folders, corporate memos, logs, a game.
+Units can be **talked to** (`game/story/dialogue/*.txt`: a small script
+format with choices, conditions and effects).
+
+Everything's data: rewrite any line without touching code. The full map of
+secrets, chains and endings, and the list of clips to perform in VR, is in
+**[docs/STORY.md](docs/STORY.md)** (spoilers).
 
 ## Corporate: corkHQ, requisitions, software
 
@@ -534,7 +584,7 @@ for one in code with `Supervisor.has_software("id")`.
 ## Using robots in the game
 
 ```
-RobotView (on the rail network)      game/robot_view.gd: rides routes, faces travel, catches up after a Wait
+RobotView (on the rail network)      game/robot_view.gd: rides routes, faces travel, catches up after time jumps, performs story clips
 └── Swing                            pendulum pivot (sway when it speeds up, brakes or turns)
     └── RobotActor                   robot_id = "hauler", scaled by traits.visual_scale
 ```
