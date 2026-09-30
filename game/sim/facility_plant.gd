@@ -20,6 +20,13 @@
 #            at the loading bay (Ogre's crane or a rail robot) and in the deep
 #            stacks (only Ogre reaches those).
 #
+# CRATES (the hand-off chain): what you order from Requisitions arrives as
+# crates in the deep stacks, and three units bring it in:
+#   Ogre     "Stack freight (Deep stacks)": lifts the crate to the loading bay
+#   a rail unit  "Haul crate: <item>" from the loading bay (rail units only)
+#   Tinker   "Unpack crate: <item>" at the workbench: then it's in stock
+# (Coolant is pumped straight into the reservoir; no crate.)
+#
 # So problems chain: a leak nobody clamps heats the facility, the pods drift,
 # throughput drops, and a blown fuse slows the recharging robots who'd fix it.
 #
@@ -53,6 +60,8 @@ const PARTS := {"filter": "filter_cartridges", "pipe": "pipe_clamps", "relay": "
 	"pod": "pod_calibration_kit", "gate": "gate_actuator"}
 const PART_WORK := 0.4
 const PART_BOOST := 0.3
+const HAUL_WORK := 360.0
+const UNPACK_WORK := 300.0
 ## Kinds that don't break: a "fault" is new work arriving (debris, freight).
 const ARRIVALS := ["bay", "freight"]
 ## Chance that cleared debris turns up a damaged part. The part goes to the
@@ -75,6 +84,8 @@ var coolant := 1.0
 var throughput := 1.0
 ## This shift so far: throughput samples, faults, jobs done.
 var shift_stats := {"output_sum": 0.0, "samples": 0, "faults": 0, "jobs": 0}
+## Crates waiting in the deep stacks for Ogre: requisition order ids, oldest first.
+var crates: Array[int] = []
 
 var _ids: Array[String] = []
 var _acc := 0.0
@@ -162,6 +173,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				_repaired(sim, id, str(data.get("by", "")))
 			elif id.begins_with("part:"):
 				_part_step(sim, id, str(data.get("by", "")))
+			elif id.begins_with("crate:"):
+				_crate_step(sim, id, str(data.get("by", "")))
 			shift_stats.jobs += 1
 		"job_cancelled":
 			var id := str(data.get("source", ""))
@@ -287,7 +300,10 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"pipe": sim.note("plant", "%s clamped by %s" % [d.name, who])
 		"relay": sim.note("plant", "%s fuse replaced by %s: docks back to full charge" % [d.name, who])
 		"gate": sim.note("plant", "%s unjammed by %s" % [d.name, who])
-		"freight": sim.note("plant", "Freight at %s stacked by %s" % [d.name, who])
+		"freight":
+			sim.note("plant", "Freight at %s stacked by %s" % [d.name, who])
+			if id == "freight_stacks" and not crates.is_empty():
+				_lift_crate(sim, who)
 		"bay":
 			if sim.rng.randf() < SALVAGE_CHANCE:
 				var part: String = SALVAGE_PARTS[sim.rng.randi() % SALVAGE_PARTS.size()]
@@ -323,6 +339,61 @@ func _part_step(sim: FacilitySim, source: String, by: String) -> void:
 			bits[4].trim_prefix("robot_").capitalize()])
 
 
+# --- Crates ----------------------------------------------------------------------------
+
+## A requisition has arrived: its crate waits in the deep stacks for Ogre.
+func receive_crate(sim: FacilitySim, order_id: int, label: String) -> void:
+	crates.append(order_id)
+	sim.note("plant", "Crate delivered to the deep stacks: %s" % label)
+	var d: Dictionary = devices["freight_stacks"]
+	var board := sim.get_system("work") as WorkBoard
+	var job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
+	if board and (job.is_empty() or not (job.status == "open" or job.status == "claimed")):
+		d.job = board.post(sim, _job_title(d), KINDS.freight.skill, d.station, KINDS.freight.work, 1, "freight_stacks")
+
+
+# Ogre has cleared the stacks: the oldest crate goes to the loading bay for a rail unit.
+func _lift_crate(sim: FacilitySim, who: String) -> void:
+	var order_id: int = crates.pop_front()
+	var label := _crate_label(sim, order_id)
+	var board := sim.get_system("work") as WorkBoard
+	sim.note("plant", "%s lowered the crate (%s) to the loading bay" % [who, label])
+	if board:
+		var jid := board.post(sim, "Haul crate: %s" % label, "heavy", "loading", HAUL_WORK, 1, "crate:haul:%d" % order_id)
+		board.get_job(jid).rail_only = true   # Ogre can't carry it anywhere
+	# More crates: the stacks aren't clear yet.
+	if not crates.is_empty():
+		var d: Dictionary = devices["freight_stacks"]
+		d.job = board.post(sim, _job_title(d), KINDS.freight.skill, d.station, KINDS.freight.work, 1, "freight_stacks")
+
+
+# "crate:haul:<order>" -> unpack at the workbench -> "crate:unpack:<order>" -> in stock.
+func _crate_step(sim: FacilitySim, source: String, by: String) -> void:
+	var bits := source.split(":")
+	if bits.size() < 3:
+		return
+	var order_id := int(bits[2])
+	var label := _crate_label(sim, order_id)
+	var who := by.trim_prefix("robot_").capitalize()
+	var board := sim.get_system("work") as WorkBoard
+	if bits[1] == "haul" and board:
+		sim.note("plant", "%s hauled the crate (%s) to the workshop" % [who, label])
+		board.post(sim, "Unpack crate: %s" % label, "precise", "bench", UNPACK_WORK, 1, "crate:unpack:%d" % order_id)
+	elif bits[1] == "unpack":
+		sim.note("plant", "%s unpacked the crate (%s)" % [who, label])
+		var req := sim.get_system("requisitions") as Requisitions
+		if req:
+			req.unpacked(sim, order_id)
+
+
+func _crate_label(sim: FacilitySim, order_id: int) -> String:
+	var req := sim.get_system("requisitions") as Requisitions
+	var o := req.get_order(order_id) if req else {}
+	if o.is_empty():
+		return "order #%d" % order_id
+	return "%dx %s" % [int(o.qty), req.item(o.item).get("name", o.item)]
+
+
 # Faults arrive at random (exponential gaps): the next one is booked when the
 # last is fixed.
 func _book_fault(sim: FacilitySim, id: String) -> void:
@@ -347,7 +418,7 @@ func sim_save() -> Dictionary:
 	for id in _ids:
 		devs[id] = {"value": devices[id].value, "fault": devices[id].fault, "job": devices[id].job}
 	return {"devices": devs, "coolant": coolant, "throughput": throughput,
-		"shift_stats": shift_stats.duplicate(), "acc": _acc}
+		"shift_stats": shift_stats.duplicate(), "acc": _acc, "crates": crates.duplicate()}
 
 
 func sim_load(data: Dictionary) -> void:
@@ -363,6 +434,9 @@ func sim_load(data: Dictionary) -> void:
 	shift_stats = {"output_sum": float(st.get("output_sum", 0.0)), "samples": int(st.get("samples", 0)),
 		"faults": int(st.get("faults", 0)), "jobs": int(st.get("jobs", 0))}
 	_acc = float(data.get("acc", 0.0))
+	crates.clear()
+	for c in data.get("crates", []):
+		crates.append(int(c))
 
 
 ## Uses a spare part on a device. Returns "" or why not.

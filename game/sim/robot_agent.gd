@@ -208,6 +208,8 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 		for j in board.open_jobs():
 			if j.status == "claimed" and j.claimed_by != sim_id:
 				continue
+			if traits.stationary and j.get("rail_only", false):
+				continue   # something to carry somewhere: not a job for a crane bolted to the ceiling
 			var r := _reach_station(layout, f, j.station)
 			if r.is_empty():
 				continue   # can't get there (too narrow, or blocked)

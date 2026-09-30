@@ -175,7 +175,7 @@ func refresh() -> void:
 		row.set_text(1, "%dx %s" % [o.qty, it.get("name", o.item)])
 		row.set_text(2, o.status)
 		row.set_custom_color(2, {"pending": OSTheme.WARN, "denied": OSTheme.ALARM, "in transit": OSTheme.INFO,
-			"delivered": OSTheme.ACCENT}.get(o.status, OSTheme.TEXT))
+			"delivered": OSTheme.ACCENT, "crated": OSTheme.INFO, "unpacked": OSTheme.ACCENT}.get(o.status, OSTheme.TEXT))
 		row.set_text(3, FacilitySim.format_clock(o.eta) if float(o.eta) >= 0.0 and o.status == "in transit" else "")
 	var lines := PackedStringArray()
 	for k in req.inventory:

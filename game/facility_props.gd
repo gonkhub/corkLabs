@@ -4,7 +4,9 @@
 # frame: pods glow green -> amber -> red as they lose sync, leaking bays flash
 # red, debris piles up, the relay panel goes dark when its fuse blows, docks
 # light up while a robot charges, repaired parts wait on the workbench,
-# freight crates pile up in the hangar until they're stacked.
+# freight crates pile up in the hangar until they're stacked, and a
+# requisition's crate waits on the loading bay (to be hauled) and then on the
+# workbench (to be unpacked).
 #
 #     var props := FacilityProps.new()
 #     add_child(props)
@@ -32,6 +34,8 @@ var _labels := {}         # device id -> Label3D
 var _docks := {}          # station id -> [OmniLight3D, StandardMaterial3D]
 var _freight := {}        # device id -> Node3D (the crates, shown while there's a job)
 var _bench_part: MeshInstance3D
+var _bench_crate: MeshInstance3D
+var _loading_crate: MeshInstance3D
 var _time := 0.0
 
 
@@ -64,6 +68,11 @@ func build(layout: FacilityLayout) -> void:
 			var st := layout.station(d.station)
 			var at := layout.station_world_pos(d.station)
 			_build_freight(id, _beside_rail(d.station, 0.0, 5.0) if not layout.is_pad(st.segment) else Vector3(at.x, 0.0, at.z))
+	# A requisition's crate on its way in (FacilityPlant's hand-off chain).
+	var crate_mat := _mat(Color(0.55, 0.45, 0.2), 0.25)
+	_loading_crate = _mesh(_box(Vector3(1.6, 1.3, 1.6)), crate_mat, self)
+	_loading_crate.position = _beside_rail("loading", 3.0, 2.5) + Vector3(0, 0.65, 0)
+	_loading_crate.visible = false
 	for dock in layout.stations_of("dock"):
 		if not layout.is_pad(layout.station(dock).segment):   # Ogre's mains coupling is part of its mount
 			_build_dock(dock, layout.station_world_pos(dock))
@@ -116,7 +125,10 @@ func _process(delta: float) -> void:
 		(_freight[id] as Node3D).visible = int(plant.device(id).job) >= 0
 	var board := Facility.sim.get_system("work") as WorkBoard
 	if _bench_part and board:
-		_bench_part.visible = board.open_jobs().any(func(j): return str(j.source).begins_with("part:repair"))
+		var open := board.open_jobs()
+		_bench_part.visible = open.any(func(j): return str(j.source).begins_with("part:repair"))
+		_bench_crate.visible = open.any(func(j): return str(j.source).begins_with("crate:unpack"))
+		_loading_crate.visible = open.any(func(j): return str(j.source).begins_with("crate:haul"))
 	if labels:
 		for id in _labels:
 			(_labels[id] as Label3D).text = _label_text(plant, id)
@@ -280,6 +292,9 @@ func _build_bench(at: Vector3) -> void:
 			leg.position = Vector3(at.x + dx, 0.45, at.z + dz)
 	_bench_part = _mesh(_cyl(0.12, 0.25), _mat(WARN, 0.4, true), self)
 	_bench_part.position = Vector3(at.x, 1.07, at.z)
+	_bench_crate = _mesh(_box(Vector3(0.7, 0.5, 0.7)), _mat(Color(0.55, 0.45, 0.2), 0.25), self)
+	_bench_crate.position = Vector3(at.x, 1.19, at.z + 0.3)
+	_bench_crate.visible = false
 
 
 func _build_dock(dock: String, at: Vector3) -> void:

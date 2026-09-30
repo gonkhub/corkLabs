@@ -132,21 +132,41 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			o.status = "delivered"
 			_deliver(sim, o, it)
 			if hq:
-				hq.post(sim, "Logistics", "order", "Requisition #%d delivered: %dx %s." % [o.id, o.qty, it.name])
+				hq.post(sim, "Logistics", "order", "Requisition #%d delivered: %dx %s.%s" % [o.id, o.qty, it.name,
+					"" if str(it.effect).begins_with("coolant:") else " Crated in the deep stacks; your units will bring it in."])
 
 
-# What arrives does something (framework: coolant is wired; the rest is stock).
+# What arrives: coolant is pumped straight into the reservoir; everything else
+# is a crate in the deep stacks that the units bring in (FacilityPlant: Ogre,
+# a rail unit, Tinker) and that's in stock once it's unpacked.
 func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 	var effect: String = it.effect
+	var plant := sim.get_system("plant") as FacilityPlant
 	if effect.begins_with("coolant:"):
-		var plant := sim.get_system("plant") as FacilityPlant
 		if plant:
 			plant.coolant = minf(plant.coolant + float(effect.trim_prefix("coolant:")) * int(o.qty), 1.0)
 			sim.note("plant", "Coolant topped up to %d%%" % roundi(plant.coolant * 100.0))
 		return
+	if plant:
+		o.status = "crated"
+		plant.receive_crate(sim, int(o.id), "%dx %s" % [int(o.qty), it.name])
+	else:
+		unpacked(sim, int(o.id))
+
+
+## The crate's been unpacked in the workshop: it's in stock.
+func unpacked(sim: FacilitySim, order_id: int) -> void:
+	var o := get_order(order_id)
+	if o.is_empty() or o.status == "unpacked":
+		return
+	var it := item(o.item)
+	o.status = "unpacked"
 	inventory[o.item] = int(inventory.get(o.item, 0)) + int(o.qty) * pack_size(it)
-	if effect.begins_with("robot:"):
-		sim.note("requisitions", "%s crated in maintenance, awaiting activation (not implemented yet)" % it.name)
+	var hq := _hq(sim)
+	if hq:
+		hq.post(sim, "Logistics", "order", "Requisition #%d unpacked in the workshop: %dx %s in stock." % [o.id, o.qty, it.name])
+	if str(it.effect).begins_with("robot:"):
+		sim.note("requisitions", "%s unpacked in the workshop, awaiting activation" % it.name)
 
 
 ## How many a catalogue item holds: "Fuse pack (x4)" -> 4.
