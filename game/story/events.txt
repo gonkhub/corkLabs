@@ -9,6 +9,7 @@
 #   fault | device                     a plant fault (pipe_1, relay, gate...)
 #   audit | strictness                 an audit right now (strictness adds to the odds)
 #   job | title | skill | station | work seconds
+#   perform | robot | clip             the robot performs a clip, if it's been recorded (see docs/STORY.md)
 #   stability | robot | amount         nudge a robot's software stability
 #   standing | amount | why            suspicion | amount | why
 #   end | ending id                    end the game now
@@ -23,11 +24,13 @@
 1 | 13:30 | | hq | Liaison Pell | notice | Thirty minutes left. Your end-of-shift report is due.
 2 | 06:02 | | hq | Liaison Pell | directive | IT will purge /home/dokafor at 12:00. Confirm it in Duties. There is nothing in it you need.
 2 | 08:40 | | say | tinker | Pod 3 is humming again. Four beats, a pause, three beats.
+2 | 08:40 | | perform | tinker | act_hum_pod3
 2 | 10:00 | !purged:dokafor | hq | Liaison Pell | notice | The purge is still unconfirmed, Supervisor.
 2 | 11:30 | | fault | relay
 2 | 12:00 | !purged:dokafor | learn | purged:dokafor
 2 | 12:00 | | hq | IT Services | notice | Scheduled maintenance complete: /home/dokafor purged.
 2 | 13:00 | | say | hauler | The last one logged off at this hour. Didn't log on again.
+2 | 13:00 | | perform | hauler | act_look_at_camera
 3 | 06:02 | | hq | Compliance | directive | Audit day. Your terminal activity will be reviewed at 13:00.
 3 | 07:30 | secret:pod3 | say | tinker | You looked in pod 3. I felt it through the rails. What is in there?
 3 | 09:00 | | fault | gate
@@ -35,3 +38,4 @@
 3 | 13:00 | | audit | 25
 3 | 13:01 | | hq | Compliance | notice | Audit complete. Results will be reflected in your review.
 3 | 13:45 | | say | ogre | ...the... light... stays... on...
+3 | 13:45 | | perform | ogre | act_lamp_to_pods

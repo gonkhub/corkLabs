@@ -92,6 +92,9 @@ func setup(id: String, facility_layout: FacilityLayout) -> void:
 		position = layout.world_pos(seg, off)
 
 
+var _perform_seen := 0
+
+
 func _ready() -> void:
 	_rng.randomize()
 
@@ -116,6 +119,10 @@ func _process(delta: float) -> void:
 	if a == null:
 		return
 	_update_led(a, delta)   # first: whatever else happens this frame, the LED shows its state
+	if int(a.perform.n) != _perform_seen:
+		_perform_seen = int(a.perform.n)
+		if actor and not str(a.perform.clip).is_empty():
+			actor.play_action(str(a.perform.clip))   # quietly nothing if it hasn't been performed yet
 	if not _snapped:
 		seg = a.seg
 		off = a.off

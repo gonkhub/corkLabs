@@ -361,6 +361,10 @@ func run_action(sim: FacilitySim, action: String, args: String) -> void:
 			var board := sim.get_system("work") as WorkBoard
 			if board and a.size() >= 4:
 				board.post(sim, a[0], a[1], a[2], float(a[3]), 2, "story")
+		"perform":
+			var bot := sim.get_system("robot_" + str(a[0])) as RobotAgent
+			if bot and a.size() >= 2:
+				bot.request_clip(a[1])
 		"stability":
 			var bot := sim.get_system("robot_" + str(a[0])) as RobotAgent
 			if bot and a.size() >= 2:

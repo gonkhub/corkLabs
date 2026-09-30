@@ -549,9 +549,12 @@ func _cat(args: PackedStringArray) -> void:
 	_print(_esc(str(r.text)))
 	if r.first and float(r.minutes) > 0.0:
 		_print("  [color=#%s](%d min reading)[/color]" % [_hex(OSTheme.TEXT_DIM), int(r.minutes)])
+	var cmds := PackedStringArray()
 	for key in r.learned:
 		if str(key).begins_with("cmd:"):
-			_print("  [color=#%s](new command noted: %s)[/color]" % [_hex(OSTheme.INFO), str(key).trim_prefix("cmd:")])
+			cmds.append(str(key).trim_prefix("cmd:"))
+	if not cmds.is_empty():
+		_print("  [color=#%s](new command%s noted: %s)[/color]" % [_hex(OSTheme.INFO), "" if cmds.size() == 1 else "s", ", ".join(cmds)])
 
 
 func _decrypt(args: PackedStringArray) -> void:

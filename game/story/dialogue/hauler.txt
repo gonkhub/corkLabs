@@ -23,6 +23,7 @@ hauler: Watching.
 * Fair enough. -> menu
 
 == night2
+~ perform act_look_at_camera
 hauler: The hangar door. At night Ogre's light goes down to the pods. Slow. Like it's counting.
 hauler: Sometimes it stops at one. Then there's a sound from the hangar I don't have a word for.
 hauler: The night before the last supervisor left, the light stopped at pod 3 for a long time.

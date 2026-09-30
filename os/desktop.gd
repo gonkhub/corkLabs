@@ -395,6 +395,16 @@ func open_app(id: String) -> OSApp:
 	return app
 
 
+static func app_title(id: String) -> String:
+	for a in APPS:
+		if a[0] == id:
+			var app: OSApp = a[1].new()
+			var t := app.title
+			app.free()
+			return t
+	return id
+
+
 ## Is this app on the desktop yet? (Hidden apps have to be found first.)
 func app_available(id: String) -> bool:
 	return not HIDDEN_APPS.has(id) or (Facility.running and Story.knows(Facility.sim, "app:" + id))
@@ -634,7 +644,7 @@ func _check_learned() -> void:
 		if key.begins_with("secret:"):
 			toast("Found", Knowledge.secret_title(key.trim_prefix("secret:")), OSTheme.WARN, "")
 		elif key.begins_with("app:"):
-			toast("New program", "%s is on your desktop." % key.trim_prefix("app:").capitalize(), OSTheme.INFO, key.trim_prefix("app:"))
+			toast("New program", "%s is on your desktop." % app_title(key.trim_prefix("app:")), OSTheme.INFO, key.trim_prefix("app:"))
 	_rebuild_icons()
 
 

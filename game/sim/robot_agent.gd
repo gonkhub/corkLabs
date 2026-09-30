@@ -96,6 +96,11 @@ var activity := {"kind": "idle"}
 ## The standing order: {} or {"kind": "job"/"recharge"/"standby", "job": int, "given": time}
 var order := {}
 var moving := false
+## A story moment asks the 3D robot to perform a clip ("act_hum_pod3"). The
+## view plays it if the robot has it (clips are performed in the VR recorder),
+## and does nothing if not, so story scripts can name clips before they exist.
+## Not saved: it's a one-off cue.
+var perform := {"clip": "", "n": 0}
 var jobs_done := 0
 ## The route being ridden: [{"seg", "from", "to"}...] (see FacilityLayout.plan).
 var route: Array = []
@@ -115,6 +120,10 @@ func _init(id: String, robot_traits: RobotTraits = null, start_seg := "", start_
 	traits = robot_traits if robot_traits else RobotTraits.load_for(id)
 	seg = start_seg
 	off = start_off
+
+
+func request_clip(clip: String) -> void:
+	perform = {"clip": clip, "n": int(perform.n) + 1}
 
 
 func display_name() -> String:

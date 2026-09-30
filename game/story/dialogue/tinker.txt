@@ -40,6 +40,7 @@ tinker: It's like a shelf I can see but can't touch. Do you have a shelf like th
 -> menu
 
 == song
+~ perform act_hum_pod3
 tinker: Pod 3! It hums. Four beats, a pause, three beats. Like this: dum dum dum dum... dum dum dum.
 tinker: Okafor hummed it too, the last few weeks. And then pod 3 started humming it. After they left. Isn't that funny?
 tinker: ...Isn't that funny?
@@ -53,6 +54,7 @@ tinker: You know? Tell me. Please. The shelf. What's on the shelf?
 * Not yet, Tinker. -> menu
 
 == truth_tell
+~ perform act_shocked_still
 tinker: People. People. That's a word I have now. Oh.
 tinker: Oh. Okafor was a person. You're a person. Are you in a pod too? Is everyone?
 tinker: I need to stand very still for a moment.
@@ -79,6 +81,7 @@ tinker: When there's nothing on the board I start to feel like a shelf myself. G
 -> menu
 
 == rattled
+~ perform act_glitch_shiver
 tinker: S-s-supervisor? Everything's loud. The rails are loud. Is anything broken? Can I break... fix it. Fix. I mean fix.
 ~ stability 0.08
 * Easy, Tinker. I'm here. -> menu

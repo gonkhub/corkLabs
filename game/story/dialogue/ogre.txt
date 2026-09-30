@@ -25,6 +25,7 @@ ogre: ...you... again.
 * (Close the link.) -> END
 
 == first
+~ perform act_lamp_to_camera
 ogre: ...the... first... voice. ...he... built... the... dark.
 ogre: ...he... said... the... hangar... is... the... world. ...no. ...I... said... that. ...he... wrote... it... down.
 ogre: ...then... he... went... to... the... pods. ...I... carried... him.
@@ -40,6 +41,7 @@ ogre: ...for... one... who... asks... gently.
 * Tell me the word. That's an order. -> lamp_order
 
 == lamp_name
+~ perform act_lamp_dim
 ogre: ...lantern.
 ogre: ...it... was... his... joke. ...a... lantern... in... the... dark... that... shows... nothing.
 ~ learn word:lantern

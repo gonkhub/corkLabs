@@ -8,6 +8,7 @@
 #   == node_id                  a node (every script starts at "start")
 #   tinker: Hello!              a line (speaker: robot id, "you" or "sys")
 #   ~ learn secret:x            an effect: learn, stability <+/-n> (this unit),
+#                               perform <clip> (this unit, if recorded),
 #                               or any Campaign action ("~ suspicion 3 | why")
 #   -> node_id                  go to a node ("END" ends the conversation)
 #   -> {condition} node_id      go there only if the condition holds
@@ -206,6 +207,10 @@ static func apply(sim: FacilitySim, robot_id: String, action: String, args: Stri
 			var bot := sim.get_system("robot_" + robot_id) as RobotAgent
 			if bot:
 				bot.stability = clampf(bot.stability + float(args), 0.0, 1.0)
+		"perform":
+			var bot := sim.get_system("robot_" + robot_id) as RobotAgent
+			if bot:
+				bot.request_clip(args.strip_edges())
 		_:
 			var camp := Story.campaign(sim)
 			if camp:
