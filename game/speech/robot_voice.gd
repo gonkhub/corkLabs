@@ -30,6 +30,7 @@ func setup(robot_traits: RobotTraits) -> void:
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
 		p.volume_db = volume_db
+		p.bus = FeedAudio.VOICES   # under the camera Feed bus: the feed's mute silences it
 		add_child(p)
 		_players.append(p)
 	for i in VARIANTS:

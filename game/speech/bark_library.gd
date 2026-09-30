@@ -12,7 +12,9 @@
 #              order_ignored, route_blocked, idle, alarm, route_closed,
 #              peer_greet, peer_reply, peer_info, peer_info_reply...
 #              (RobotChatter decides when each one fires.)
-#   robot      tinker, hauler, or any
+#   robot      tinker, hauler, ogre, or any. Several, space-separated, are
+#              fine; "!id" leaves a robot out: "any !ogre" = every robot but
+#              Ogre (for lines about riding the rails, which Ogre never does).
 #   condition  empty (always), or one of: low_power, full_power, stable,
 #              drifting, unstable, critical, working, idle. Several, space-separated,
 #              must all hold. Lines whose condition holds are picked more often
@@ -61,7 +63,7 @@ func load_text(text: String) -> void:
 func candidates(trigger: String, robot_id: String, ctx: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for b in lines:
-		if b.trigger != trigger or not (b.robot == "any" or b.robot == robot_id):
+		if b.trigger != trigger or not fits(b.robot, robot_id):
 			continue
 		var ok := true
 		for c in b.conditions:
@@ -70,10 +72,18 @@ func candidates(trigger: String, robot_id: String, ctx: Dictionary) -> Array[Dic
 				break
 		if ok:
 			var w := CONDITION_WEIGHT if not b.conditions.is_empty() else 1.0
-			if b.robot == robot_id:
+			if robot_id in b.robot.split(" ", false):
 				w *= 1.5   # its own lines over generic ones
 			out.append({"text": b.text, "weight": w})
 	return out
+
+
+## Does a line's robot field ("any", "tinker", "any !ogre"...) include this robot?
+static func fits(robot_field: String, robot_id: String) -> bool:
+	var words := robot_field.split(" ", false)
+	if words.has("!" + robot_id):
+		return false
+	return words.has("any") or words.has(robot_id)
 
 
 static func condition(name: String, ctx: Dictionary) -> bool:

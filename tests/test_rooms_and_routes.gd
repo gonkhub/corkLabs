@@ -38,9 +38,11 @@ func _test_floor_plan() -> void:
 	var hall: Rect2 = l.rooms.hall.rect
 	var biggest := true
 	for id in l.rooms:
-		if id != "hall" and (l.rooms[id].rect as Rect2).get_area() * 4.0 > hall.get_area():
+		var area := (l.rooms[id].rect as Rect2).get_area()
+		# Ogre's hangar is big by design (a 12 m robot lives in it), but still smaller than the hall.
+		if id != "hall" and (area * 4.0 > hall.get_area() if id != "hangar" else area >= hall.get_area()):
 			biggest = false
-	_check(biggest and hall.get_area() >= 3000.0, "the main hall is very large (%d m²) and the others much smaller" % hall.get_area())
+	_check(biggest and hall.get_area() >= 3000.0, "the main hall is very large (%d m²) and the others much smaller (Ogre's hangar: smaller)" % hall.get_area())
 	# Every room connects to the hall, some by more than one passage.
 	var links := {}
 	for sid in l.passages():

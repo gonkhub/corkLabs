@@ -9,6 +9,10 @@
 # turns, and performs its current activity (work clips at a job, idles
 # otherwise) until the next player action changes it.
 #
+# A stationary robot (Ogre) stays on its mount: no riding, no swinging. It
+# turns slowly on the spot to bring its crane round over whatever it's
+# working on.
+#
 #   RobotView (this, on the rail)
 #   ├── Swing (pendulum pivot)
 #   │   └── RobotActor (the baked robot, scaled by traits.visual_scale)
@@ -25,6 +29,10 @@ const CATCH_UP_TIME := 2.0
 const LED_OK := Color(0.35, 0.75, 1.0)
 const LED_LOW := Color(1.0, 0.6, 0.1)
 const LED_OFFLINE := Color(1.0, 0.1, 0.05)
+## Motor hum level at full rail speed (placeholder sound: SoundSynth "hum").
+const MOTOR_DB := -12.0
+## How quickly a stationary robot turns towards its work (fraction per second; low = massive).
+const SLEW_RATE := 0.3
 
 var robot_id := ""
 var traits: RobotTraits
@@ -50,6 +58,9 @@ var _pendulum := 1.0
 var _led_light: OmniLight3D
 var _led_mat: StandardMaterial3D
 var _led_time := 0.0
+## Motor hum while it rides (a FacilitySound: heard through the cameras).
+var motor: FacilitySound
+var _motor_level := 0.0
 
 
 func setup(id: String, facility_layout: FacilityLayout) -> void:
@@ -63,10 +74,17 @@ func setup(id: String, facility_layout: FacilityLayout) -> void:
 	actor = RobotActor.new()
 	actor.robot_id = id
 	actor.scale = Vector3.ONE * traits.visual_scale
-	actor.position.y = -0.15 * traits.visual_scale
+	actor.position.y = 0.0 if traits.stationary else -0.15 * traits.visual_scale
 	swing.add_child(actor)
 	_pendulum = 0.9 * traits.visual_scale
 	_build_led()
+	motor = FacilitySound.new()
+	motor.name = "Motor"
+	motor.robot_id = id
+	motor.stream = SoundSynth.builtin("hum")
+	motor.unit_size = 4.0 * traits.visual_scale   # bigger robots carry further
+	motor.position.y = 0.5 * traits.visual_scale
+	add_child(motor)
 	var st := layout.station(FacilitySetup.START_STATIONS.get(id, ""))
 	if not st.is_empty():
 		seg = st.segment
@@ -84,8 +102,12 @@ func agent() -> RobotAgent:
 	return Facility.sim.get_system("robot_" + robot_id) as RobotAgent
 
 
-## Where its words float in camera feeds.
+## Where its words float in camera feeds (a "SpeechAnchor" node in the robot's
+## scene if it has one, else just above the rail).
 func speech_anchor() -> Vector3:
+	var mark: Node3D = actor.rig.get_node_or_null("SpeechAnchor") as Node3D if actor and actor.rig else null
+	if mark:
+		return mark.global_position
 	return global_position + Vector3(0, 0.6 + 0.2 * traits.visual_scale, 0)
 
 
@@ -98,6 +120,14 @@ func _process(delta: float) -> void:
 		seg = a.seg
 		off = a.off
 		_snapped = true
+	if traits.stationary:
+		seg = a.seg
+		off = a.off
+		position = layout.world_pos(seg, off)
+		_slew(a, delta)
+		rotation.y = _yaw
+		_perform(a, delta)
+		return
 	_follow(a, delta)
 	var pos := layout.world_pos(seg, off)
 	var moved := pos - position
@@ -106,14 +136,48 @@ func _process(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, atan2(-moved.x, -moved.z), clampf(6.0 * delta, 0.0, 1.0))
 	rotation.y = _yaw
 	_swing(delta)
+	_motor_sound(moved.length() / maxf(delta, 0.0001), delta)
+	_perform(a, delta)
 
-	# Working at a job: perform work clips, with short pauses between.
+
+# Working at a job: perform work clips, with short pauses between.
+func _perform(a: RobotAgent, delta: float) -> void:
 	var at_work: bool = a.activity.kind == "work" and not a.moving and _route.is_empty()
 	if at_work and actor and not actor.is_busy():
 		_pause -= delta
 		if _pause <= 0.0:
 			_play_work_clip(a)
 			_pause = _rng.randf_range(0.4, 2.0)
+
+
+# Hum while riding: louder and higher the faster it goes; bigger robots hum lower.
+func _motor_sound(speed: float, delta: float) -> void:
+	var want := clampf(speed / maxf(traits.rail_speed, 0.1), 0.0, 1.5)
+	_motor_level = move_toward(_motor_level, want, delta * 3.0)
+	if _motor_level < 0.02:
+		if motor.playing:
+			motor.stop()
+		return
+	if not motor.playing:
+		motor.play()
+	motor.set_level_db(MOTOR_DB + linear_to_db(_motor_level))
+	motor.pitch_scale = clampf((0.8 + 0.3 * _motor_level) / sqrt(traits.visual_scale), 0.3, 2.0)
+
+
+# A stationary robot turns on the spot so its crane's resting reach points at
+# the station it's working at (or fixated on).
+func _slew(a: RobotAgent, delta: float) -> void:
+	var st := layout.station(str(a.activity.get("station", "")))
+	if st.is_empty() or st.segment == seg:
+		return
+	var to := layout.station_world_pos(st.id) - position
+	if Vector2(to.x, to.z).length() < 0.5:
+		return
+	var face := atan2(-to.x, -to.z)
+	var rest = actor.rig.get("tip_rest") if actor and actor.rig else null
+	if rest is Vector3:
+		face += atan2((rest as Vector3).x, -(rest as Vector3).z)   # the crane is off to one side
+	_yaw = lerp_angle(_yaw, face, clampf(SLEW_RATE * delta, 0.0, 1.0))
 
 
 # Ride toward where the sim has the robot.

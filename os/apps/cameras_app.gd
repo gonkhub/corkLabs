@@ -8,8 +8,11 @@
 #   Grid view     every camera at once; click one to open it.
 #   Night vision  the facility is dark (it was built for robots); N switches
 #                 every feed to infrared.
-#   Keys          1-9 camera, G grid/single, N night vision, F CCTV filter.
+#   Keys          1-9 camera, G grid/single, N night vision, F CCTV filter, M mute.
 #   Robots' speech floats over them in any feed that can see them.
+#   Sound         you hear the facility through one camera at a time: the
+#                 open one in single view, the one under the mouse in the
+#                 grid. Mute silences the whole Feed bus (voices + world).
 class_name CamerasApp
 extends OSApp
 
@@ -26,6 +29,7 @@ var grid_button: Button
 var track_button: Button
 var reset_button: Button
 var night_button: CheckBox
+var mute_button: Button
 var hint: Label
 
 
@@ -72,6 +76,13 @@ func build() -> void:
 		if c:
 			c.reset_view())
 	row.add_child(reset_button)
+	mute_button = Button.new()
+	mute_button.toggle_mode = true
+	mute_button.focus_mode = Control.FOCUS_NONE
+	mute_button.tooltip_text = "Mute the camera feed's sound: robot voices and the facility (M)"
+	mute_button.toggled.connect(set_muted)
+	row.add_child(mute_button)
+	_show_mute()
 	night_button = CheckBox.new()
 	night_button.text = "Night vision"
 	night_button.button_pressed = night_on
@@ -117,6 +128,33 @@ func set_night_vision(on: bool) -> void:
 		f.set_night_vision(on)
 
 
+func set_muted(on: bool) -> void:
+	FeedAudio.set_muted(on)
+	_show_mute()
+
+
+func _show_mute() -> void:
+	var on := FeedAudio.is_muted()
+	mute_button.set_pressed_no_signal(on)
+	mute_button.text = "Muted" if on else "Mute"
+	mute_button.modulate = OSTheme.WARN if on else Color.WHITE
+
+
+## Which feed you hear the facility through (null: none).
+func listen_to(feed: CCTVFeed) -> void:
+	for f in feeds:
+		f.listening = f == feed
+	var w := _world()
+	if w:
+		w.listener_cam = feed.cam if feed else -1
+
+
+func _exit_tree() -> void:
+	var w := _world()
+	if w and is_instance_valid(w):
+		w.listener_cam = -1
+
+
 func _rebuild() -> void:
 	for f in feeds:
 		f.queue_free()
@@ -141,13 +179,20 @@ func _rebuild() -> void:
 		for i in world.cameras.size():
 			var f := _feed(i, false)
 			f.clicked.connect(func(feed: CCTVFeed): show_camera(feed.cam))
+			f.hovered.connect(func(feed: CCTVFeed, on: bool):
+				if on:
+					listen_to(feed)
+				elif feed.listening:
+					listen_to(null))
 			grid.add_child(f)
-		hint.text = "Click a feed to open it.   Keys: 1-9 camera, G single/grid, N night vision, F filter"
+		listen_to(null)
+		hint.text = "Click a feed to open it · point at one to hear it.   Keys: 1-9 camera, G single/grid, N night vision, F filter, M mute"
 	else:
 		var f := _feed(cam, true)
 		f.set_anchors_preset(Control.PRESET_FULL_RECT)
 		body.add_child(f)
-		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, N night vision, F filter"
+		listen_to(f)
+		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, N night vision, F filter, M mute"
 	refresh()
 
 
@@ -169,6 +214,7 @@ func refresh() -> void:
 	track_button.disabled = not single or not c.can_track()
 	track_button.set_pressed_no_signal(single and c.auto_track)
 	reset_button.disabled = not single
+	_show_mute()
 
 
 func key_input(event: InputEventKey) -> bool:
@@ -189,6 +235,9 @@ func key_input(event: InputEventKey) -> bool:
 			filter_on = not filter_on
 			for f in feeds:
 				f.set_filter(filter_on)
+			return true
+		KEY_M:
+			set_muted(not FeedAudio.is_muted())
 			return true
 	if grid_mode or c == null:
 		return false

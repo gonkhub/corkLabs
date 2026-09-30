@@ -35,6 +35,11 @@ var views := {}            # robot id -> RobotView
 var props: FacilityProps
 var _shutters := {}        # passage segment id -> MeshInstance3D (shown while blocked)
 var _trackers := {}        # camera index -> robot id it follows
+## The camera you're listening through (its feed is the 3D audio listener),
+## or -1 for none. Set by the Cameras app; FacilitySound uses its room.
+var listener_cam := -1
+## Sounds started with play_sound() / attach_sound() (the Terminal's `sound`).
+var auditions: Array[FacilitySound] = []
 
 
 func _ready() -> void:
@@ -84,6 +89,73 @@ func speech_anchor(robot_id: String) -> Vector3:
 func robot_room(robot_id: String) -> String:
 	var v: RobotView = views.get(robot_id)
 	return layout.room_at(v.seg, v.off) if v else ""
+
+
+## The room of the camera you're listening through ("" if none).
+func listen_room() -> String:
+	return camera_rooms[listener_cam] if listener_cam >= 0 and listener_cam < camera_rooms.size() else ""
+
+
+## Which room a point is in (by floor plan; "" if it's in none).
+func room_at_point(p: Vector3) -> String:
+	for id in layout.rooms:
+		if (layout.rooms[id].rect as Rect2).has_point(Vector2(p.x, p.z)):
+			return id
+	return ""
+
+
+# --- Sound auditions ------------------------------------------------------------------------
+
+## Plays a sound at a point in the facility. `loop` repeats it until
+## stop_auditions(); otherwise it plays once (a looping stream once through).
+func play_sound(stream: AudioStream, at: Vector3, loop := false) -> FacilitySound:
+	var s := _audition(stream, loop)
+	s.position = at
+	add_child(s)
+	s.play()
+	return s
+
+
+## Plays a sound on a robot: it rides along and changes rooms with it.
+func attach_sound(stream: AudioStream, robot_id: String, loop := false) -> FacilitySound:
+	var v: RobotView = views.get(robot_id)
+	if v == null:
+		return null
+	var s := _audition(stream, loop)
+	s.robot_id = robot_id
+	s.position = Vector3(0, 1.0 * v.traits.visual_scale, 0)
+	v.add_child(s)
+	s.play()
+	return s
+
+
+func stop_auditions() -> int:
+	var n := 0
+	for s in auditions:
+		if is_instance_valid(s):
+			s.queue_free()
+			n += 1
+	auditions.clear()
+	return n
+
+
+func _audition(stream: AudioStream, loop: bool) -> FacilitySound:
+	var s := FacilitySound.new()
+	s.name = "Audition"
+	s.stream = stream
+	if loop:
+		s.finished.connect(s.play)   # streams that don't loop by themselves
+	else:
+		# Once through, even for streams that loop by themselves.
+		s.one_shot = true
+		var ref: WeakRef = weakref(s)   # it may free itself first (finished)
+		get_tree().create_timer(maxf(stream.get_length(), 0.1) + 0.05).timeout.connect(func():
+			var still: Node = ref.get_ref()
+			if still:
+				still.queue_free())
+	s.tree_exiting.connect(func(): auditions.erase(s))
+	auditions.append(s)
+	return s
 
 
 # --- Rooms --------------------------------------------------------------------------------
@@ -208,8 +280,13 @@ func _build_rails() -> void:
 	root.name = "Rails"
 	add_child(root)
 	var mat := _mat(RAIL_COLOR, 0.85, 0.35)
+	var pad_nodes := {}
 	for sid in layout.segments:
 		var s := layout.segment(sid)
+		if s.get("pad", false):   # no rail to a pad
+			pad_nodes[s.a] = true
+			pad_nodes[s.b] = true
+			continue
 		var pa: Vector3 = layout.nodes[s.a].pos
 		var pb: Vector3 = layout.nodes[s.b].pos
 		var beam := BoxMesh.new()
@@ -218,6 +295,8 @@ func _build_rails() -> void:
 		m.position = (pa + pb) * 0.5 + Vector3(0, 0.12, 0)
 		m.look_at_from_position(m.position, pb + Vector3(0, 0.12, 0), Vector3.UP if absf((pb - pa).normalized().y) < 0.99 else Vector3.RIGHT)
 	for nid in layout.nodes:
+		if pad_nodes.has(nid):
+			continue
 		var joint := BoxMesh.new()
 		joint.size = Vector3(0.4, 0.25, 0.4)
 		var j := _mesh(joint, mat, root)

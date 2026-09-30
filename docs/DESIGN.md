@@ -82,6 +82,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | Lines live in a plain text file (`barks.txt`: trigger / robot / condition / text) | Writable without code; conditions weight the choice so the robot's state shows |
 | 2026-09-30 | Voices are generated blips per robot (pitch, wave, speed in its traits); recorded samples can replace them | Placeholder sound now, real sound design later without code changes |
 | 2026-09-30 | You only hear a robot while it's on an open camera | The cameras are the player's senses |
+| 2026-09-30 | **Camera audio**: the facility is heard through one camera at a time (single view: the open one; grid: the one under the mouse); that feed's viewport is the 3D audio listener | The camera is the microphone; one listener keeps the mix readable and makes room rules possible |
+| 2026-09-30 | Buses: `Feed` (Voices + World under it) and `UI`, all to Master; the Cameras mute silences Feed | A mixer the sound designer can put inserts on in the editor; mute covers everything from the cameras and nothing from the OS |
+| 2026-09-30 | Sounds in another room than the listening camera are -30 dB and low-passed (per-emitter, eased) | Matches speech's same-room rule without making other rooms dead silent |
+| 2026-09-30 | Placeholder sounds are generated (`SoundSynth`); files in `game/sounds/` override them by name; the Terminal's `sound` command auditions them in place | Sound design can start by dropping in files, no code |
+| 2026-09-30 | Robot voices stay non-positional for now (on the Voices bus) | They already work well; making them 3D is a later call |
 | 2026-09-30 | The flat demo scene is retired (the OS is the game) | One place to see the facility; less to keep in step |
 | 2026-09-30 | "Purpose" becomes **software stability**: low stability makes a robot independent, unpredictable and unreliable (orders count for less, errant behaviour rises), then critical errors (crash/glitch), then sabotage | User's direction: instability is the robots' inner life and the facility's risk |
 | 2026-09-30 | Unpredictability is a **whim** per option that lasts 10 facility minutes, not per-think noise | Erratic but legible: an unstable robot surprises you, then follows through |
@@ -96,6 +101,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | Cameras get **night vision** (N / checkbox): a per-camera IR Environment (flat light, black fog for the illuminator's reach) + green phosphor shader. It's only looking: free, per Cameras window, remembered | The player needs to see; the dark stays the default, so looking is a deliberate act |
 | 2026-09-30 | Robots carry a **status LED** (blue ok, amber low power, red blink offline) | How you find a robot in the dark without night vision; makes its state visible at a glance |
 | 2026-09-30 | Camera feeds are **locked to 30 fps** (render once per tick; grain and roll step on the same clock) | User's direction: reads as CCTV, and saves rendering with several feeds open |
+| 2026-09-30 | New robot **Ogre**: a massive (8x, 12 m) spherical core with ONE arm, a knuckle-boom crane; dark muted greys, yellow core lights; its big eye throws a visible yellow light cone | User's design |
+| 2026-09-30 | Ogre is **stationary**: bolted to the centre of its hangar's ceiling, never changes rooms. Works anything within its crane's reach (20 m); charges from its own mains coupling | User's design. Built as a general `stationary` + `reach` trait so any future fixed robot works the same way |
+| 2026-09-30 | Ogre's hangar is a new room (50 x 40 m, 26 m tall) south of the main hall with a wide door; freight arrives there (heavy work). The loading bay is shared with rail robots, the deep stacks are Ogre-only (a railless "pad") | Gives the crane something to do, and a place where Ogre and the rail robots meet. Placeholder content for the user to redesign |
+| 2026-09-30 | The light cone is a fake volumetric mesh (additive shader, soft where it meets the floor) plus a real spotlight | Works in every renderer and costs little; no fog set-up needed |
+| 2026-09-30 | Crane mapping: right hand = jib tip (knuckle up), left trigger = winch, right trigger = grab; the hook hangs and sways on a spring | One arm for a one-armed robot; the knuckle points up so the crane never reads as a leg |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)
@@ -113,5 +123,6 @@ These all fit and can be combined; none is being built yet:
 | --- | --- | --- |
 | **Tinker** | Wheatley-style core on a tether, telescoping arms, drill-spin tool heads | Precise, quick, curious: 3 Hz body, 0.9x reach, 1.15x amplitude |
 | **Hauler** | Heavy hanging body, neck + head, long two-segment excavator arms, clamp claws | Brute labour: 1.2 Hz underdamped body (swings, winds up), 1.8x reach, plays 1.25x slower |
+| **Ogre** | Huge ceiling-mounted spherical core (drawn 8x), dark greys + yellow light rings, a searchlight eye with a light cone, one knuckle-boom crane with a hanging grab | Planet-slow: 0.35 Hz core that turns only part-way (the eye does the rest), 3x reach, plays 1.8x slower. Stationary |
 
-Both are placeholder primitives; final models will be rigid parts from Blender.
+All are placeholder primitives; final models will be rigid parts from Blender.

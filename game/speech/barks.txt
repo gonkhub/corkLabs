@@ -4,8 +4,8 @@
 # Conditions: low_power full_power stable drifting unstable critical working idle
 
 # --- Starting a job ------------------------------------------------------------
-start_job | any |  | Heading to {station}.
-start_job | any |  | {job}. On my way.
+start_job | any !ogre |  | Heading to {station}.
+start_job | any !ogre |  | {job}. On my way.
 start_job | tinker |  | Ooh, {job}. Mine.
 start_job | tinker |  | {station}! Coming, coming.
 start_job | hauler |  | {job}. Moving.
@@ -13,7 +13,7 @@ start_job | hauler |  | Going.
 start_job | any | unstable | Finally. Something to do.
 start_job | tinker | unstable | Work! I thought I'd been forgotten.
 start_job | hauler | unstable | Good. Standing still was wearing on me.
-start_job | any | low_power | {station}. Then a charge. Please.
+start_job | any !ogre | low_power | {station}. Then a charge. Please.
 start_job | hauler | low_power | One more. Then the dock.
 
 # --- Finishing ---------------------------------------------------------------------
@@ -26,10 +26,10 @@ job_done | any | low_power | Done. Running thin now.
 job_done | tinker | stable | Everything in its place. Good.
 
 # --- Power ---------------------------------------------------------------------------
-recharge | any |  | Going to the dock.
+recharge | any !ogre |  | Going to the dock.
 recharge | tinker |  | Top-up time.
 recharge | hauler |  | Need the dock.
-recharge | any | low_power | Dock. Now.
+recharge | any !ogre | low_power | Dock. Now.
 recharge | tinker | low_power | Charge, charge, charge...
 charged | any |  | Charged.
 charged | tinker |  | Full! Everything's brighter.
@@ -44,7 +44,7 @@ restarted | any |  | Back. Barely.
 restarted | tinker |  | I'm awake! I'm awake. Where's the dock?
 
 # --- Software stability -----------------------------------------------------------------
-wander | any |  | Nothing here. Looking around.
+wander | any !ogre |  | Nothing here. Looking around.
 wander | tinker |  | Just... checking the rails. For work. For anything.
 wander | hauler |  | Patrolling.
 wander | any | unstable | There must be something that needs me.
@@ -118,7 +118,7 @@ sabotage | hauler | | {device}. Heavy work soon.
 critical_error | any | | CRITICAL ERROR. Rebooting core process.
 critical_error | tinker | | I can't... I can't find myself...
 critical_error | hauler | | Fault. Shutting down.
-glitch | any | | Rails are singing. Must follow the singing.
+glitch | any !ogre | | Rails are singing. Must follow the singing.
 glitch | any | | Job complete. Job complete. Job complete.
 glitch | tinker | | Hello? Is someone in the pods? Hello?
 glitch | hauler | | Lift. Carry. Lift. Carry.
@@ -127,3 +127,36 @@ rebooting | tinker | | Oh no, not a reboot...
 rebooted | any | | Systems restored. Where was I?
 rebooted | tinker | | That was strange. I feel lighter.
 rebooted | hauler | | Back.
+
+# --- Ogre (never leaves its hangar; slow, few words, very big) -------------------------
+start_job | ogre |  | {job}. Lowering.
+start_job | ogre |  | I see it. Reaching.
+start_job | ogre | unstable | At last. Weight in the hook.
+job_done | ogre |  | Set down.
+job_done | ogre |  | Stacked. Square. Good.
+recharge | ogre |  | Drawing from the mains.
+charged | ogre |  | Mains full.
+low_power | ogre |  | The hook is heavy today.
+stalled | ogre |  | ...the lights... going...
+wander | ogre |  | ...
+wander | ogre | unstable | The hangar is so still.
+stability_drifting | ogre |  | Nothing moves in here but me.
+stability_unstable | ogre |  | I have counted every rivet in this ceiling.
+idle | ogre |  | Watching.
+idle | ogre |  | The hangar is quiet.
+idle | ogre | stable | Everything in reach. Everything in place.
+idle | ogre | unstable | They come and go. I stay.
+route_blocked | ogre |  | Out of my reach. Send the small ones.
+alarm | ogre |  | {device}. I cannot go to it.
+peer_greet | ogre |  | Little {peer}.
+peer_reply | ogre |  | Mm.
+peer_info | ogre |  | {peer}. {job}. {station}. Beyond my reach. Yours.
+peer_info_reply | ogre |  | If it comes to the hangar, I will lift it.
+stability_critical | ogre | | The walls. The walls are closer.
+order_ignored | ogre | | I decide what I lift.
+fixate | ogre | | {station}. Something moved at {station}.
+sabotage | ogre | | {device}. A little push.
+critical_error | ogre | | CORE FAULT. Dimming.
+glitch | ogre | | Lift. Hold. Lift. Hold. Lift.
+rebooting | ogre | | Spinning down.
+rebooted | ogre | | Awake. Still here.

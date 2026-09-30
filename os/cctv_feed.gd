@@ -11,6 +11,10 @@
 # Robots' speech (SpeechDirector) floats over them as coloured text in any
 # feed whose camera is in the same room and can see them.
 #
+# Sound: the feed you're `listening` to is the facility's 3D audio listener
+# (its camera is the microphone), so FacilitySounds are panned and attenuated
+# from that camera's point of view. The Cameras app picks which feed listens.
+#
 # Night vision: the facility has no lights, so every camera also has an
 # infrared mode. The feed's camera swaps to an Environment that floods the
 # scene with flat "IR" light, fading into black fog with distance (the
@@ -24,6 +28,8 @@ class_name CCTVFeed
 extends Control
 
 signal clicked(feed: CCTVFeed)
+## The mouse went onto / off this feed (the grid listens to the one you point at).
+signal hovered(feed: CCTVFeed, on: bool)
 
 const FEED_SHADER := preload("res://os/cctv_feed.gdshader")
 ## Locked feed frame rate.
@@ -47,6 +53,8 @@ var _speech_layer: Control
 ## Text size for speech (grid feeds use smaller text).
 var speech_font_size := 16
 var night_vision := false
+## This feed is the audio listener (see the header).
+var listening := false
 var _material: ShaderMaterial
 var _dragging := false
 var _frame_clock := 0.0     # time since the last rendered frame
@@ -63,6 +71,8 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mouse_default_cursor_shape = Control.CURSOR_MOVE if interactive else Control.CURSOR_POINTING_HAND
+	mouse_entered.connect(func(): hovered.emit(self, true))
+	mouse_exited.connect(func(): hovered.emit(self, false))
 
 	var bg := ColorRect.new()
 	bg.color = Color.BLACK
@@ -146,6 +156,7 @@ func camera() -> SecurityCamera:
 
 func _process(delta: float) -> void:
 	var src := camera()
+	viewport.audio_listener_enable_3d = listening and src != null and is_visible_in_tree()
 	if src == null or not is_visible_in_tree():
 		return
 	_frame_clock += delta
@@ -161,7 +172,10 @@ func _process(delta: float) -> void:
 	caption.text = "CAM %02d  %s\n%s  ● REC%s" % [cam + 1, src.display_name.to_upper(), clock, "   IR" if night_vision else ""]
 	ptz_label.position.y = size.y - 24
 	var ptz := "AUTO-TRACK" if src.auto_track else "PAN %+4d°  TILT %+3d°" % [roundi(src.pan), roundi(src.tilt)]
-	ptz_label.text = "%s   ZOOM %.1fx" % [ptz, src.zoom_level()]
+	var audio := ""
+	if listening:
+		audio = "   AUDIO MUTED" if FeedAudio.is_muted() else "   AUDIO"
+	ptz_label.text = "%s   ZOOM %.1fx%s" % [ptz, src.zoom_level(), audio]
 	_draw_speech()
 
 

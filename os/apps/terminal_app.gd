@@ -23,6 +23,8 @@ const HELP := [
 	["wait <minutes>", "let facility time pass (an alarm stops it)"],
 	["log [lines] [category]", "the facility journal (category: alarm, work, plant, tinker...)"],
 	["open <app>", "open an app (cameras, units, work, plant, log, settings...)"],
+	["sound [play|loop <name> [metres|robot|room]]", "audition a sound through the camera you're listening to"],
+	["sound stop | mute | unmute", "stop auditions; mute the camera feed"],
 	["clear", "clear the screen"],
 ]
 
@@ -98,6 +100,7 @@ func _submit(line: String) -> void:
 		"wait": _wait(args)
 		"log": _log(args)
 		"open": _open(args)
+		"sound": _sound(args)
 		"connect": _connect(args)
 		"disconnect": _disconnect()
 		"corkpkg": _corkpkg(args)
@@ -336,6 +339,63 @@ func _open(args: PackedStringArray) -> void:
 	var id := args[0].to_lower()
 	if desktop.open_app(id) == null:
 		_error("No app called '%s'." % id)
+
+
+# Auditioning: play a sound in the facility and hear it through the camera
+# you're listening to, with that camera's distance, panning and walls.
+func _sound(args: PackedStringArray) -> void:
+	var world: FacilityWorld = desktop.world if desktop else null
+	if world == null:
+		_error("No facility world (log on first).")
+		return
+	var sub := args[0].to_lower() if args.size() > 0 else "list"
+	match sub:
+		"list":
+			var listening := "camera %d (%s)" % [world.listener_cam + 1, world.cameras[world.listener_cam].display_name] 				if world.listener_cam >= 0 else "no camera (open Cameras; in the grid, point at a feed)"
+			_print("  Listening through: %s%s" % [_esc(listening), "  [MUTED]" if FeedAudio.is_muted() else ""])
+			_print("  Sounds (%s, then built-in): %s" % [SoundBank.SOUNDS_DIR, ", ".join(SoundBank.library())])
+			_print("  [color=#%s]sound play <name> [metres ahead | robot | room]   sound loop ...   sound stop[/color]" % _hex(OSTheme.TEXT_DIM))
+		"stop":
+			_print("  Stopped %d sound(s)." % world.stop_auditions())
+		"mute", "unmute":
+			FeedAudio.set_muted(sub == "mute")
+			if desktop.has_method("_refresh_all"):
+				desktop._refresh_all()
+			_print("  Camera feed %s." % ("muted" if sub == "mute" else "unmuted"))
+		"play", "loop":
+			if args.size() < 2:
+				_error("Usage: sound %s <name> [metres ahead | robot | room]" % sub)
+				return
+			var stream := SoundBank.find_stream(args[1])
+			if stream == null:
+				_error("No sound '%s'. Type 'sound' for the list." % args[1])
+				return
+			var loop := sub == "loop"
+			var where := args[2].to_lower() if args.size() > 2 else "10"
+			var s: FacilitySound
+			var said := ""
+			if world.views.has(where):
+				s = world.attach_sound(stream, where, loop)
+				said = "on " + where.capitalize()
+			elif world.layout.rooms.has(where):
+				var rect: Rect2 = world.layout.rooms[where].rect
+				s = world.play_sound(stream, Vector3(rect.get_center().x, 1.5, rect.get_center().y), loop)
+				said = "in the middle of " + str(world.layout.rooms[where].name)
+			elif where.is_valid_float():
+				if world.listener_cam < 0:
+					_error("Not listening through a camera: open Cameras, or give a robot or room.")
+					return
+				var cam := world.cameras[world.listener_cam]
+				var at := cam.global_position - cam.global_transform.basis.z * float(where)
+				s = world.play_sound(stream, at, loop)
+				said = "%s m in front of camera %d" % [where, world.listener_cam + 1]
+			else:
+				_error("'%s' isn't a distance, robot (%s) or room (%s)." % [where, ", ".join(world.views.keys()), ", ".join(world.layout.rooms.keys())])
+				return
+			_print("  %s '%s' %s (room: %s)%s" % ["Looping" if loop else "Playing", args[1], said,
+				s.current_room() if not s.current_room().is_empty() else "none", ", 'sound stop' to end" if loop else ""])
+		_:
+			_error("Usage: sound [list|play|loop|stop|mute|unmute]")
 
 
 # --- Output --------------------------------------------------------------------------------

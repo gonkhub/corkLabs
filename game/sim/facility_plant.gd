@@ -16,6 +16,9 @@
 #   gate     The freight gate between the main hall and the workshop. It
 #            jams at random, which BLOCKS that route on the rail network
 #            (Hauler's only way into the workshop) until it's unjammed.
+#   freight  Crates delivered to the hangar at random ("Stack freight", heavy):
+#            at the loading bay (Ogre's crane or a rail robot) and in the deep
+#            stacks (only Ogre reaches those).
 #
 # So problems chain: a leak nobody clamps heats the facility, the pods drift,
 # throughput drops, and a blown fuse slows the recharging robots who'd fix it.
@@ -41,7 +44,10 @@ const KINDS := {
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.1, "priority": 1},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.04, "priority": 2,
 		"blocks": "freight_gate"},
+	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1},
 }
+## Kinds that don't break: a "fault" is new work arriving (debris, freight).
+const ARRIVALS := ["bay", "freight"]
 ## Chance that cleared debris turns up a damaged part. The part goes to the
 ## workbench for repair (precise work), then back to its bay to be refitted
 ## (heavy work): a hand-off between the robots.
@@ -77,6 +83,8 @@ func _init() -> void:
 		_add("bay_%d" % (b + 1), "bay", "Bay %d" % (b + 1), bay)
 	_add("relay", "relay", "Power relay", "relay")
 	_add("gate", "gate", "Freight gate", "gate")
+	_add("freight_bay", "freight", "Loading bay", "loading")
+	_add("freight_stacks", "freight", "Deep stacks", "stacks")
 
 
 func _add(id: String, kind: String, display_name: String, station: String) -> void:
@@ -223,7 +231,9 @@ func _fault(sim: FacilitySim, id: String) -> void:
 	var k: Dictionary = KINDS[d.kind]
 	shift_stats.faults += 1
 	var board := sim.get_system("work") as WorkBoard
-	if d.kind != "bay":
+	if d.kind == "freight":
+		sim.note("plant", "Freight delivered: crates waiting at %s" % d.name)
+	elif not d.kind in ARRIVALS:
 		d.fault = true
 		sim.note("alarm", {"pipe": "COOLANT LEAK: %s", "relay": "%s FUSE BLOWN: docks charge at 40%%",
 			"gate": "%s JAMMED: the route is blocked"}.get(d.kind, "FAULT: %s") % d.name)
@@ -234,8 +244,8 @@ func _fault(sim: FacilitySim, id: String) -> void:
 	var open_job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
 	if board and (open_job.is_empty() or not (open_job.status == "open" or open_job.status == "claimed")):
 		d.job = board.post(sim, _job_title(d), k.skill, d.station, k.work, int(k.priority), id)
-	if d.kind == "bay":
-		_book_fault(sim, id)   # debris keeps falling whether or not it's cleared
+	if d.kind in ARRIVALS:
+		_book_fault(sim, id)   # debris keeps falling (and freight arriving) whether or not it's cleared
 	# Everyone reconsiders right away.
 	sim.schedule(sim.time(), "alarm", {"device": id})
 
@@ -270,6 +280,7 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"pipe": sim.note("plant", "%s clamped by %s" % [d.name, who])
 		"relay": sim.note("plant", "%s fuse replaced by %s: docks back to full charge" % [d.name, who])
 		"gate": sim.note("plant", "%s unjammed by %s" % [d.name, who])
+		"freight": sim.note("plant", "Freight at %s stacked by %s" % [d.name, who])
 		"bay":
 			if sim.rng.randf() < SALVAGE_CHANCE:
 				var part: String = SALVAGE_PARTS[sim.rng.randi() % SALVAGE_PARTS.size()]
@@ -358,6 +369,7 @@ func device_text(id: String) -> String:
 		"relay": state = "FUSE BLOWN" if d.fault else "ok"
 		"gate": state = "JAMMED" if d.fault else "open"
 		"bay": state = "debris" if int(d.job) >= 0 else "clear"
+		"freight": state = "crates" if int(d.job) >= 0 else "clear"
 	return "%-20s %-10s%s" % [d.name, state, ("  job #%d" % int(d.job)) if int(d.job) >= 0 else ""]
 
 
@@ -366,6 +378,6 @@ func sim_describe(_sim: FacilitySim) -> PackedStringArray:
 	lines.append("PLANT  throughput %d%%   coolant %d%%   heat %.1fx   dock charge %d%%" % [
 		_pct(throughput), _pct(coolant), heat(), _pct(charge_factor())])
 	for id in _ids:
-		if devices[id].kind != "bay" or int(devices[id].job) >= 0:
+		if not devices[id].kind in ARRIVALS or int(devices[id].job) >= 0:
 			lines.append("  " + device_text(id))
 	return lines
