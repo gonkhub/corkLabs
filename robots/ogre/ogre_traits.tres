@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="RobotTraits" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/sim/robot_traits.gd" id="1_traits"]
+
+[resource]
+script = ExtResource("1_traits")
+display_name = "Ogre"
+rail_speed = 0.1
+width = 12.0
+visual_scale = 8.0
+stationary = true
+reach = 20.0
+skill_heavy = 1.0
+skill_precise = 0.1
+skill_general = 0.35
+work_speed = 1.6
+drain_idle = 6e-05
+drain_move = 0.0
+drain_work = 0.0004
+charge_rate = 0.0015
+power_reserve = 0.2
+charge_until = 0.9
+stability_decay = 5e-05
+stability_from_work = 0.0006
+stability_per_job = 0.15
+independence = 0.35
+error_resistance = 0.7
+sabotage_tendency = 0.25
+order_stress = 0.005
+obedience = 0.7
+refuse_below_skill = 0.2
+think_interval = 5.0
+commitment = 0.2
+distance_aversion = 0.0
+speech_color = Color(1, 0.84, 0.25, 1)
+voice_pitch = 58.0
+voice_variation = 0.08
+voice_speed = 9.0
+voice_wave = "saw"
+chatter_cooldown = 150.0
+chattiness = 0.15
+work_clips = {
+"heavy": ["act_lift_demo", "act_reach_demo"]
+}

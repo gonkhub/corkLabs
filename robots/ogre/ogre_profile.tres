@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="RobotProfile" format=3]
+
+[ext_resource type="Script" path="res://robots/robot_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Ogre"
+description = "Massive stationary crane core, bolted to its hangar ceiling. Turns like a planet, looks with a searchlight eye, works with one knuckle-boom crane arm."
+reach_scale = 3.0
+travel_scale = 0.0
+travel_limit = 0.0
+amplitude = 0.9
+default_eye_height = 1.65
+body_frequency = 0.35
+body_damping = 0.9
+body_response = -0.2
+head_frequency = 1.0
+head_damping = 0.8
+head_response = 0.0
+neck_limit_deg = 35.0
+eye_frequency = 3.0
+eye_damping = 0.85
+eye_response = 0.3
+eye_limit_deg = 30.0
+stick_look_yaw_deg = 20.0
+stick_look_pitch_deg = 15.0
+hand_frequency = 0.9
+hand_damping = 0.7
+hand_response = -0.2
+tool_frequency = 2.0
+tool_damping = 0.8
+claw_open_deg = 50.0
+lid_closed_deg = 80.0
+lens_range = 0.2
+blink_release = 0.5
+glow_base = 8.0
+glow_flash = 14.0
+flash_release = 1.0
+retime = 1.8

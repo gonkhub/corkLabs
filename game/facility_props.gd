@@ -3,7 +3,8 @@
 # uses, so the two can't drift apart) and colours them by their state every
 # frame: pods glow green -> amber -> red as they lose sync, leaking bays flash
 # red, debris piles up, the relay panel goes dark when its fuse blows, docks
-# light up while a robot charges, repaired parts wait on the workbench.
+# light up while a robot charges, repaired parts wait on the workbench,
+# freight crates pile up in the hangar until they're stacked.
 #
 #     var props := FacilityProps.new()
 #     add_child(props)
@@ -29,6 +30,7 @@ var _lamps := {}          # device id -> [OmniLight3D, StandardMaterial3D]
 var _debris := {}         # bay id -> Node3D
 var _labels := {}         # device id -> Label3D
 var _docks := {}          # station id -> [OmniLight3D, StandardMaterial3D]
+var _freight := {}        # device id -> Node3D (the crates, shown while there's a job)
 var _bench_part: MeshInstance3D
 var _time := 0.0
 
@@ -56,8 +58,15 @@ func build(layout: FacilityLayout) -> void:
 	_build_relay(_by_wall("relay"))
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
+	for id in plant.device_ids():
+		var d := plant.device(id)
+		if d.kind == "freight":
+			var st := layout.station(d.station)
+			var at := layout.station_world_pos(d.station)
+			_build_freight(id, _beside_rail(d.station, 0.0, 5.0) if not layout.is_pad(st.segment) else Vector3(at.x, 0.0, at.z))
 	for dock in layout.stations_of("dock"):
-		_build_dock(dock, layout.station_world_pos(dock))
+		if not layout.is_pad(layout.station(dock).segment):   # Ogre's mains coupling is part of its mount
+			_build_dock(dock, layout.station_world_pos(dock))
 
 
 func _process(delta: float) -> void:
@@ -103,6 +112,8 @@ func _process(delta: float) -> void:
 		var light: OmniLight3D = _docks[dock][0]
 		light.light_energy = (0.6 + 0.6 * flash) * plant.charge_factor() if charging else 0.05
 		(_docks[dock][1] as StandardMaterial3D).emission_energy_multiplier = 2.0 if charging else 0.2
+	for id in _freight:
+		(_freight[id] as Node3D).visible = int(plant.device(id).job) >= 0
 	var board := Facility.sim.get_system("work") as WorkBoard
 	if _bench_part and board:
 		_bench_part.visible = board.open_jobs().any(func(j): return str(j.source).begins_with("part:repair"))
@@ -196,6 +207,28 @@ func _build_bay(bay: String, at: Vector3) -> void:
 		d.rotation.y = rng.randf() * TAU
 	_debris[bay] = debris
 	_add_label(bay, at + Vector3(1.1, 2.8, -1.2))
+
+
+# A painted loading square on the floor, and a stack of crates on it while
+# there's freight to shift.
+func _build_freight(id: String, at: Vector3) -> void:
+	var root := Node3D.new()
+	root.name = "Freight_" + id
+	root.position = at
+	add_child(root)
+	var square := _mesh(_box(Vector3(9.0, 0.03, 9.0)), _mat(WARN.darkened(0.55), 0.0), root)
+	square.position.y = 0.015
+	var crates := Node3D.new()
+	root.add_child(crates)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(id)
+	for i in 6:
+		var size := rng.randf_range(1.8, 2.6)
+		var c := _mesh(_box(Vector3(size, size * 0.8, size)), _mat(Color(0.42, 0.36, 0.26).darkened(rng.randf() * 0.3), 0.1), crates)
+		c.position = Vector3(rng.randf_range(-2.8, 2.8), size * 0.4 + (2.0 if i >= 4 else 0.0), rng.randf_range(-2.8, 2.8))
+		c.rotation.y = rng.randf_range(-0.4, 0.4)
+	_freight[id] = crates
+	_add_label(id, at + Vector3(0, 6.0, 0))
 
 
 func _build_pod(id: String, at: Vector3) -> void:

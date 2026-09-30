@@ -11,7 +11,7 @@ func _init() -> void:
 	_test_ik("hauler", "Body/ShoulderR/Upper/Fore/Wrist", Vector3(0.1, -0.4, -0.3))
 	_test_ik("tinker", "Core/ArmR/Wrist", Vector3(0.15, -0.3, -0.25))
 	_test_claw()
-	for id in ["tinker", "hauler"]:
+	for id in ["tinker", "hauler", "ogre"]:
 		_test_bake_matches_rig(id)
 	_test_loop_bake()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)

@@ -87,3 +87,19 @@ static func wave(t: float) -> PerformanceFrame:
 	f.right_stick = Vector2(0.0, 0.7 * up)   # eyes wide
 	f.right_buttons = PerformanceFrame.BTN_BY if t > 1.0 and t < 1.15 else 0   # glow flash
 	return f
+
+
+# A crane lift (for Ogre): reach out, pay out cable with the left trigger,
+# grab with the right trigger, hoist, swing the load across, lower it, let go.
+static func crane_lift(t: float) -> PerformanceFrame:
+	var f := idle(t * 0.5)
+	var out := smoothstep(0.0, 1.5, t) * (1.0 - smoothstep(6.0, 7.0, t))   # arm out and back
+	var across := smoothstep(3.6, 5.0, t) * (1.0 - smoothstep(6.0, 7.0, t))  # swing the load left
+	var lower := smoothstep(1.0, 2.0, t) - 0.7 * smoothstep(2.6, 3.6, t) + 0.6 * smoothstep(5.0, 5.6, t) - 0.9 * smoothstep(6.0, 6.8, t)
+	var grab := smoothstep(2.0, 2.6, t) * (1.0 - smoothstep(5.6, 6.0, t))
+	f.head = _head(Vector3(0.0, EYE_HEIGHT, 0.0), -0.4 * out + 0.6 * across, -0.3 * out)
+	f.right = _hand(Vector3(0.25 + 0.2 * out - 0.4 * across, 1.05 - 0.05 * out, -0.2 - 0.3 * out), 0.5 * across, -0.3)
+	f.left_trigger = clampf(lower, 0.0, 1.0)
+	f.right_trigger = grab
+	f.right_grip = grab * 0.8
+	return f
