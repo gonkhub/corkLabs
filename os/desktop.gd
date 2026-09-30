@@ -58,6 +58,7 @@ const BOOT_LINES := [
 	"Rail controllers ........................ 2 found",
 	"Unit link: TINKER ....................... online",
 	"Unit link: HAULER ....................... online",
+	"Unit link: OGRE ......................... online",
 	"Pod bus ................................. 4 pods in sync",
 	"Coolant loop ............................ pressurised",
 	"Mounting /facility ...................... OK",

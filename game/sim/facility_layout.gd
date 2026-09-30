@@ -13,6 +13,9 @@
 #              A segment that joins two rooms is a "passage" (a door, gate,
 #              duct...). Rooms can be joined by several passages.
 #   stations   named places along a segment (docks, pods, bays, the bench).
+#   pads       spots on the floor with no rail to them (add_pad): a segment
+#              nobody can ride (clearance 0). Only a stationary robot's reach
+#              gets there; Ogre is mounted on one.
 #
 # A position on the network is a segment id + an offset in meters from the
 # segment's first node (`a`). plan() finds the quickest route between two
@@ -67,6 +70,20 @@ func add_segment(id: String, a: String, b: String, display_name := "", clearance
 		"clearance": clearance, "speed": speed, "blocked": false, "block_reason": ""}
 	_links[a].append(id)
 	_links[b].append(id)
+
+
+## A spot with no rail to it, at (x, z) in `room` (at height `y` if given):
+## a tiny segment `id` that no rail robot can use and that isn't drawn as
+## rail. Put stations on it (offset 0.5 = its middle).
+func add_pad(id: String, room: String, x: float, z: float, display_name: String, y := -1.0) -> void:
+	add_node(id + "_a", room, x - 0.5, z, y)
+	add_node(id + "_b", room, x + 0.5, z, y)
+	add_segment(id, id + "_a", id + "_b", display_name, 0.0)
+	segments[id].pad = true
+
+
+func is_pad(seg: String) -> bool:
+	return segments.get(seg, {}).get("pad", false)
 
 
 func add_station(id: String, segment: String, offset: float, kind: String, display_name: String) -> void:
