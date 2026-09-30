@@ -1,9 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://633fgcqhe26g"]
 
 [ext_resource type="Script" path="res://game/demo_director.gd" id="1_director"]
-
 [ext_resource type="Shader" path="res://game/cctv.gdshader" id="5_cctv"]
-
 [ext_resource type="PackedScene" path="res://game/facility_world.tscn" id="6_world"]
 
 [sub_resource type="ShaderMaterial" id="Mat_cctv"]
