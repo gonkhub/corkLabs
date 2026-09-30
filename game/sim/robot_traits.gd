@@ -19,9 +19,16 @@ extends Resource
 @export_range(0.1, 5.0, 0.05) var rail_speed := 0.8
 ## How wide the robot is, in meters. Routes narrower than this (a hatch, a
 ## duct) are closed to it.
-@export_range(0.1, 6.0, 0.05) var width := 0.8
+@export_range(0.1, 12.0, 0.05) var width := 0.8
 ## How big the 3D robot is drawn (its baked motion scales with it).
-@export_range(0.2, 6.0, 0.05) var visual_scale := 1.0
+@export_range(0.2, 12.0, 0.05) var visual_scale := 1.0
+## Never leaves its spot (Ogre, bolted to its hangar ceiling). It works
+## anything within `reach` of its mount, charges on a dock within reach, and
+## turns down everything else ("out of my reach").
+@export var stationary := false
+## Stationary robots: how far it can reach from its mount, in meters, across
+## the floor (a crane's working radius).
+@export_range(0.0, 80.0, 0.5) var reach := 0.0
 
 @export_group("Skills")
 ## How good it is at heavy work (lifting, hauling, clearing). 0 = useless, 1 = built for it.
