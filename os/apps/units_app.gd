@@ -1,10 +1,12 @@
-# Units: one card per robot. What it's doing, its needs, its standing
-# order, and what it's weighing up right now (its top utility scores and
-# why). Orders from here cost facility time, and the robot answers.
+# Units: one card per robot. What it's doing, its power and software
+# stability (and how independent that's made it), its standing order, and
+# what it's weighing up right now (its top utility scores and why). Orders
+# from here cost facility time, and the robot answers on camera. Reboot needs
+# the remote-reboot software package.
 class_name UnitsApp
 extends OSApp
 
-var cards := {}   # robot_id -> {"name", "doing", "power", "power_txt", "purpose", "purpose_txt", "order", "think", "why", "reply"}
+var cards := {}   # robot_id -> {"name", "doing", "power", "power_txt", "stability", "stability_txt", "order", "think", "why", "reply", "reboot"}
 
 
 func _init() -> void:
@@ -49,12 +51,13 @@ func _card(bot: RobotAgent) -> Control:
 	grid.add_child(c.power)
 	c.power_txt = OSTheme.mono_label("", 13)
 	grid.add_child(c.power_txt)
-	grid.add_child(OSTheme.label("Purpose", 13, OSTheme.TEXT_DIM))
-	c.purpose = OSTheme.bar(bot.purpose, 0.6, 0.3)
-	c.purpose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_child(c.purpose)
-	c.purpose_txt = OSTheme.mono_label("", 13)
-	grid.add_child(c.purpose_txt)
+	grid.add_child(OSTheme.label("Stability", 13, OSTheme.TEXT_DIM))
+	c.stability = OSTheme.bar(bot.stability, 0.6, 0.35)
+	c.stability.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.stability.tooltip_text = "Software stability. Low stability = independent, unpredictable, and eventually critical errors."
+	grid.add_child(c.stability)
+	c.stability_txt = OSTheme.mono_label("", 13)
+	grid.add_child(c.stability_txt)
 	c.order = OSTheme.label("", 13, OSTheme.WARN)
 	col.add_child(c.order)
 	col.add_child(OSTheme.label("Weighing up", 12, OSTheme.TEXT_DIM))
@@ -75,6 +78,11 @@ func _card(bot: RobotAgent) -> Control:
 		["Cancel order", _order.bind(bot.robot_id, "cancel")],
 		["Assign a job...", func(): desktop.open_app("work")],
 	]))
+	c.reboot = Button.new()
+	c.reboot.text = "Remote reboot"
+	c.reboot.focus_mode = Control.FOCUS_NONE
+	c.reboot.pressed.connect(_reboot.bind(bot.robot_id))
+	col.add_child(c.reboot)
 	cards[bot.robot_id] = c
 	return panel
 
@@ -83,6 +91,12 @@ func _order(robot_id: String, kind: String) -> void:
 	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
 	Supervisor.order(bot, kind)
 	cards[robot_id].reply.text = "Order sent: %s. (Its answer is on camera.)" % Supervisor.describe_order(sim(), kind, -1)
+
+
+func _reboot(robot_id: String) -> void:
+	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
+	if Supervisor.reboot(bot):
+		cards[robot_id].reply.text = "Reboot sent. Offline for %d minutes." % int(RobotAgent.REBOOT_TIME / 60.0)
 
 
 func refresh() -> void:
@@ -96,8 +110,14 @@ func refresh() -> void:
 		c.doing.text = doing.left(1).to_upper() + doing.substr(1)
 		OSTheme.set_bar(c.power, bot.power, 0.35, bot.traits.power_reserve)
 		c.power_txt.text = "%3d%%" % roundi(bot.power * 100.0)
-		OSTheme.set_bar(c.purpose, bot.purpose, 0.6, 0.3)
-		c.purpose_txt.text = "%3d%% %s" % [roundi(bot.purpose * 100.0), bot.mood]
+		OSTheme.set_bar(c.stability, bot.stability, 0.6, 0.35)
+		c.stability_txt.text = "%3d%% %s" % [roundi(bot.stability * 100.0), bot.stability_state.to_upper() if bot.stability < 0.35 else bot.stability_state]
+		if bot.independence() > 0.2:
+			c.stability_txt.text += "  (independent %d%%)" % roundi(bot.independence() * 100.0)
+		var unlocked := Supervisor.has_software("remote-reboot")
+		c.reboot.disabled = not unlocked or bot.offline()
+		c.reboot.tooltip_text = "Offline %d min, restores stability" % int(RobotAgent.REBOOT_TIME / 60.0) if unlocked \
+			else "Needs the remote-reboot software package"
 		c.order.text = "" if bot.order.is_empty() else "Standing order: " + Supervisor.describe_order(sim(), bot.order.kind, int(bot.order.get("job", -1)))
 		var lines := PackedStringArray()
 		for o in bot.scores.slice(0, 3):

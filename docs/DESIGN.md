@@ -83,6 +83,15 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | Voices are generated blips per robot (pitch, wave, speed in its traits); recorded samples can replace them | Placeholder sound now, real sound design later without code changes |
 | 2026-09-30 | You only hear a robot while it's on an open camera | The cameras are the player's senses |
 | 2026-09-30 | The flat demo scene is retired (the OS is the game) | One place to see the facility; less to keep in step |
+| 2026-09-30 | "Purpose" becomes **software stability**: low stability makes a robot independent, unpredictable and unreliable (orders count for less, errant behaviour rises), then critical errors (crash/glitch), then sabotage | User's direction: instability is the robots' inner life and the facility's risk |
+| 2026-09-30 | Unpredictability is a **whim** per option that lasts 10 facility minutes, not per-think noise | Erratic but legible: an unstable robot surprises you, then follows through |
+| 2026-09-30 | An unstable robot sabotages devices **it can fix**, to make work for itself | Fits the premise (the work keeps *them* running); a self-feeding loop the supervisor must break |
+| 2026-09-30 | Being overruled by orders costs a little stability (`order_stress`) | Micromanaging has a price; trust vs control becomes a choice |
+| 2026-09-30 | The Hauler tracker camera is removed (tracking stays in the framework) | User's direction |
+| 2026-09-30 | **Corporate** = three systems (corkHQ messages and reviews, requisitions + budget, software packages) plus an unclosable, unmutable **corkHQ panel** top-right | User's direction: corporate is invasive and judges you |
+| 2026-09-30 | The budget comes from shift reviews (grade A-F vs an 85% throughput target) | Performance drives resources; resources drive performance |
+| 2026-09-30 | Software packages are learned and installed through the **Terminal** (connect, corkpkg), approved by corporate by **clearance**, with install codes delivered via corkHQ | User's direction: the player learns the commands; corporate gates progress |
+| 2026-09-30 | Catalogue, packages and corkHQ lines are plain text data files | Content can grow without code |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)

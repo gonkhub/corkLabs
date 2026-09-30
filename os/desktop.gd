@@ -15,6 +15,8 @@
 #                  and the facility clock (never the real clock). Click the
 #                  clock for the notification centre.
 #   Toasts         alarms and shift reports pop up bottom right.
+#   corkHQ         corporate's panel, pinned top-right above everything. It can't
+#                  be closed, moved, resized or muted (CorkHQPanel).
 #   Speech         robots talk as coloured text over them in camera feeds, with
 #                  voice blips (SpeechDirector; what they say comes from RobotChatter).
 #   Keys           go to the focused window's app (e.g. Cameras: arrows pan).
@@ -44,6 +46,7 @@ const APPS := [
 	["units", preload("res://os/apps/units_app.gd")],
 	["work", preload("res://os/apps/work_app.gd")],
 	["plant", preload("res://os/apps/plant_app.gd")],
+	["requisitions", preload("res://os/apps/requisitions_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
 	["terminal", preload("res://os/apps/terminal_app.gd")],
 	["settings", preload("res://os/apps/settings_app.gd")],
@@ -85,6 +88,8 @@ var context_menu: PopupMenu
 var snap_preview: Panel
 ## Robot speech for the camera feeds (exists while logged on).
 var speech: SpeechDirector
+## Corporate's panel (exists while logged on).
+var hq_panel: CorkHQPanel
 ## Newest last: {"t": facility time, "heading", "body", "color", "app"}
 var notifications: Array[Dictionary] = []
 var unseen_notifications := 0
@@ -155,6 +160,8 @@ func _input(event: InputEvent) -> void:
 		if notice_panel.visible and not notice_panel.get_global_rect().has_point(event.position) \
 				and not clock_button.get_global_rect().has_point(event.position):
 			notice_panel.visible = false
+		if hq_panel and hq_panel.get_global_rect().has_point(event.position):
+			return   # corkHQ is on top of everything; clicks there don't reach windows
 		for i in range(window_layer.get_child_count() - 1, -1, -1):
 			var w := window_layer.get_child(i) as OSWindow
 			if w and w.visible and w.get_global_rect().has_point(event.position):
@@ -246,6 +253,9 @@ func log_on() -> void:
 	speech = SpeechDirector.new()
 	speech.name = "Speech"
 	add_child(speech)
+	hq_panel = CorkHQPanel.new()
+	add_child(hq_panel)
+	move_child(hq_panel, window_layer.get_index() + 1)   # above every window
 	_journal_mark = Facility.sim.journal.added
 	login.visible = false
 	if OSSettings.get_value("restore_windows"):
@@ -273,6 +283,9 @@ func log_off() -> void:
 	if speech:
 		speech.queue_free()
 		speech = null
+	if hq_panel:
+		hq_panel.queue_free()
+		hq_panel = null
 	if world_viewport:
 		world_viewport.queue_free()
 		world_viewport = null

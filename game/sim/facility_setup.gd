@@ -94,11 +94,11 @@ static func layout() -> FacilityLayout:
 
 
 ## Security cameras: {"name", "room", "pos", "look", "track": robot id or ""}.
+## ("track" makes a camera follow a robot while it's in the camera's room.)
 static func cameras() -> Array[Dictionary]:
 	return [
 		{"name": "Main hall (south-east)", "room": "hall", "pos": Vector3(38, 13, 23), "look": Vector3(0, 2, 0), "track": ""},
 		{"name": "Main hall (north-west)", "room": "hall", "pos": Vector3(-38, 13, -23), "look": Vector3(0, 2, 5), "track": ""},
-		{"name": "Hauler tracker", "room": "hall", "pos": Vector3(0, 12, 24), "look": Vector3(0, 4, 10), "track": "hauler"},
 		{"name": "Pod bay", "room": "pod_bay", "pos": Vector3(10, 7, -27), "look": Vector3(-2, 1.5, -40), "track": ""},
 		{"name": "Workshop", "room": "workshop", "pos": Vector3(41, 5.5, 7), "look": Vector3(50, 1, -3), "track": ""},
 		{"name": "Maintenance", "room": "maintenance", "pos": Vector3(-41, 6.5, 5), "look": Vector3(-48, 2, -1), "track": ""},
@@ -112,7 +112,8 @@ const START_STATIONS := {"tinker": "t_dock", "hauler": "h_dock"}
 ## A fresh set of every facility system. Pass to Facility.start_session().
 static func systems() -> Array:
 	var l := layout()
-	var out: Array = [l, ShiftSchedule.new(), WorkBoard.new(), FacilityPlant.new(), RobotChatter.new()]
+	var out: Array = [l, ShiftSchedule.new(), WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
+		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new()]
 	for id in ["tinker", "hauler"]:
 		var st := l.station(START_STATIONS[id])
 		out.append(RobotAgent.new(id, null, st.segment, st.offset))

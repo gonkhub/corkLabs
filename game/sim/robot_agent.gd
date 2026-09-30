@@ -9,35 +9,44 @@
 #   If a route closes on the way it re-plans; if there's no way at all it
 #   gives up on that job and says so.
 #
-# NEEDS
-#   power    0-1. Drains while it's on, faster moving and working. Recharges
-#            on a dock. Below `power_reserve` it drops everything to recharge.
-#            At 0 it stalls and limps on emergency cells.
-#   purpose  0-1. Robots believe the work keeps *them* running, so standing
-#            idle wears it down ("restless", then "uneasy"); working and
-#            finishing jobs restore it. Low purpose makes it hungry for work,
-#            and eventually it wanders the rails looking for some.
+# POWER  0-1. Drains while it's on, faster moving and working. Recharges on a
+#        dock. Below `power_reserve` it drops everything to recharge. At 0 it
+#        stalls and limps on emergency cells.
+#
+# SOFTWARE STABILITY  0-1. The robots believe the work keeps *them* running:
+#   idleness makes their software drift, and so do stalling and being
+#   overruled. Work and finished jobs restore it. As it falls the robot turns
+#   INDEPENDENT (see `independence`):
+#     stable    >= 60%  does as it's told, sensible choices
+#     drifting  >= 35%  orders count for less, choices get noisy, it wanders
+#     unstable  >= 15%  mostly ignores orders; fixates on random places
+#     critical  <  15%  critical errors (it CRASHES and is offline for a while,
+#                       or GLITCHES and does something senseless), and it may
+#                       SABOTAGE a device so there's work it can do
+#   A reboot (after a crash, or remote-reboot from the supervisor) restores
+#   some stability.
 #
 # DECIDING (utility scores)
 #   Every `think_interval` facility seconds (and whenever something finishes)
 #   it scores every option: each open job it can reach, recharging, standing
-#   by, wandering. Highest score wins. Scores and reasons are kept in
-#   `scores` (F1 dev panel, Units app); every change of mind is journaled.
+#   by, wandering, and (when unstable) errant options. Highest score wins.
+#   Scores and reasons are kept in `scores` (F1 dev panel, Units app); every
+#   change of mind is journaled.
 #
 # ORDERS (a strong nudge, not a command)
-#   give_order() adds `obedience` to the ordered option's score. Usually that
-#   wins. But a robot below its power reserve recharges first, a robot won't
-#   take work it's hopeless at or can't get to, and a very restless robot
-#   finds it hard to "stand by". Its answer is spoken (RobotChatter).
+#   give_order() adds `obedience` to the ordered option's score, scaled down
+#   by independence. A robot below its power reserve recharges first, won't
+#   take work it's hopeless at or can't get to, and an unstable robot may just
+#   ignore you. Its answer is spoken (RobotChatter).
 #
 # SPEAKING
 #   It tells RobotChatter what just happened ("start_job", "low_power",
-#   "route_blocked"...); the chatter system decides whether and what it says.
+#   "critical_error"...); the chatter system decides whether and what it says.
 class_name RobotAgent
 extends RefCounted
 
-## Purpose bands, for moods.
-const MOODS := [[0.6, "content"], [0.3, "restless"], [0.0, "uneasy"]]
+## Stability bands, highest first: [threshold, name].
+const STATES := [[0.6, "stable"], [0.35, "drifting"], [0.15, "unstable"], [0.0, "critical"]]
 const ORDER_TIMEOUT := 3600.0   # a stand-by order lapses after an hour
 ## Robots act in steps of this many facility seconds (5 sim ticks).
 const STEP := 0.5
@@ -45,6 +54,25 @@ const EMERGENCY_CHARGE := 0.0002   # per second, while stalled
 const EMERGENCY_RESTART := 0.05    # restarts at this and limps to a dock
 ## Travel distance (m) at which a job counts as "far" when scoring.
 const FAR := 80.0
+## Stability lost when it runs out of power.
+const STALL_SHOCK := 0.15
+## Stability after a reboot (crash recovery or remote reboot) goes up by this.
+const REBOOT_RESTORE := 0.3
+## Chance per think, at 0% stability, of a critical error (scaled by error_resistance).
+const CRITICAL_ERROR_CHANCE := 0.04
+## Seconds offline after a crash / a remote reboot.
+const CRASH_TIME := Vector2(600.0, 2400.0)
+const REBOOT_TIME := 300.0
+## Seconds an errant fixation or glitch lasts.
+const FIXATE_TIME := Vector2(120.0, 420.0)
+const GLITCH_TIME := Vector2(60.0, 240.0)
+## Seconds spent at a device sabotaging it.
+const SABOTAGE_WORK := 25.0
+## An independent robot's whims (its random bias for or against each option)
+## hold this long before they change: erratic, but it follows through.
+const WHIM_TIME := 600.0
+## Independence at which errant fixations start.
+const FIXATE_FROM := 0.35
 
 var sim_id: String
 var robot_id: String
@@ -55,20 +83,25 @@ var traits: RobotTraits
 var seg := ""
 var off := 0.0
 var power := 1.0
-var purpose := 0.7
-## What it's doing: {"kind": "idle"/"work"/"recharge"/"wander"/"stalled",
-## "job": int (work), "station": String (work/recharge), "seg"/"off" (wander target)}
+## Software stability, 0-1.
+var stability := 0.8
+## Band name for `stability` ("stable", "drifting", "unstable", "critical").
+var stability_state := "stable"
+## What it's doing: {"kind": "idle"/"work"/"recharge"/"wander"/"fixate"/"sabotage"/
+## "glitch"/"crashed"/"rebooting"/"stalled", plus "job", "station", "seg"/"off",
+## "until", "device" as the kind needs}
 var activity := {"kind": "idle"}
 ## The standing order: {} or {"kind": "job"/"recharge"/"standby", "job": int, "given": time}
 var order := {}
 var moving := false
 var jobs_done := 0
-var mood := "content"
 ## The route being ridden: [{"seg", "from", "to"}...] (see FacilityLayout.plan).
 var route: Array = []
-var _route_goal := ""     # what `route` leads to ("station:bay_2", "wander")
+var _route_goal := ""     # what `route` leads to ("station:bay_2", "wander:...")
 var _think_left := 0.0
 var _step_left := 0.0
+var _whim_seed := 0
+var _whim_until := -1.0
 
 ## The last evaluation, best first: [{"key", "label", "score", "why"}]
 var scores: Array[Dictionary] = []
@@ -95,10 +128,21 @@ func world_pos(sim: FacilitySim) -> Vector3:
 	return _layout(sim).world_pos(seg, off)
 
 
+## 0 = does as it's told ... 1 = entirely its own robot. Grows as stability
+## falls below 70%, scaled by the robot's `independence` trait.
+func independence() -> float:
+	return clampf((0.7 - stability) / 0.6, 0.0, 1.0) * traits.independence
+
+
+## Out of action (crashed, rebooting, stalled): it can't think or take orders.
+func offline() -> bool:
+	return activity.kind in ["crashed", "rebooting", "stalled"]
+
+
 # --- System ---------------------------------------------------------------------
 
 func sim_start(sim: FacilitySim) -> void:
-	sim.note(robot_id, "%s online in %s (power %d%%)" % [display_name(), _room_name(sim), _pct(power)])
+	sim.note(robot_id, "%s online in %s (power %d%%, stability %d%%)" % [display_name(), _room_name(sim), _pct(power), _pct(stability)])
 	think(sim)   # decide straight away, so a new facility isn't all "standing by"
 
 
@@ -110,7 +154,8 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 	_step_left = 0.0
 	_think_left -= step
 	if _think_left <= 0.0:
-		_update_mood(sim)
+		_update_state(sim)
+		_maybe_critical_error(sim)
 		think(sim)
 	_perform(sim, step)
 
@@ -134,13 +179,16 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 
 # --- Deciding ---------------------------------------------------------------------
 
-## Scores every option, best first. Doesn't change anything.
+## Scores every option, best first. Doesn't change anything (except that an
+## erratic robot's random jitter uses the facility's random numbers).
 func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 	var layout := _layout(sim)
 	var board := _board(sim)
 	var out: Array[Dictionary] = []
 	var energy := clampf((power - traits.power_reserve) / 0.2, 0.0, 1.0)
-	var hunger := 1.0 + (1.0 - purpose) * 0.5
+	var hunger := 1.0 + (1.0 - stability) * 0.5
+	var ind := independence()
+	var listen := traits.obedience * (1.0 - ind)   # what an order is worth right now
 	var current := activity_key()
 	var f := _field(layout)   # travel costs to everywhere, once
 
@@ -164,8 +212,8 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 				if fit < traits.refuse_below_skill:
 					why += ", ordered but not built for it"
 				elif energy > 0.0:
-					s += traits.obedience
-					why += ", ORDERED"
+					s += listen
+					why += ", ORDERED" + (" (half-listening)" if ind > 0.3 else "")
 			out.append({"key": "work:%d" % j.id, "label": "work #%d %s" % [j.id, j.title], "score": s, "why": why})
 
 	# Recharge at the nearest dock it can get to.
@@ -180,27 +228,44 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 			s = maxf(s, 0.9)
 			why += ", charging to %d%%" % _pct(traits.charge_until)
 		if order.get("kind", "") == "recharge":
-			s += traits.obedience
+			s += listen
 			why += ", ORDERED"
 		out.append({"key": "recharge", "label": "recharge at " + str(dock.name), "score": s, "why": why})
 
-	# Stand by where it is. Content robots are happy to; restless ones aren't.
-	var idle := 0.12 + 0.2 * purpose
-	var idle_why := "purpose %d%% (%s)" % [_pct(purpose), mood]
+	# Stand by where it is. Stable robots are happy to; unstable ones aren't.
+	var idle := 0.12 + 0.2 * stability
+	var idle_why := "stability %d%% (%s)" % [_pct(stability), stability_state]
 	if order.get("kind", "") == "standby":
-		idle += traits.obedience * purpose
+		idle += listen * stability
 		idle_why += ", ORDERED to stand by"
 	out.append({"key": "idle", "label": "stand by", "score": idle, "why": idle_why})
 
-	# Wander the rails looking for something to do.
-	var restless := clampf(traits.restlessness / 0.0004, 0.0, 2.0)
-	var wander := restless * 0.25 * pow(1.0 - purpose, 1.5) * (0.3 + 0.7 * energy)
-	out.append({"key": "wander", "label": "wander the rails", "score": wander, "why": "looking for purpose (%d%%)" % _pct(purpose)})
+	# Errant behaviour: grows as stability falls.
+	var drift := clampf(traits.stability_decay / 0.0004, 0.3, 2.0)
+	var wander := drift * 0.25 * pow(1.0 - stability, 1.5) * (0.3 + 0.7 * energy)
+	out.append({"key": "wander", "label": "wander the rails", "score": wander, "why": "drifting (stability %d%%)" % _pct(stability)})
+	if ind > FIXATE_FROM:
+		out.append({"key": "fixate", "label": "fixate on something", "score": ind * 0.45 * (0.5 + 0.5 * energy),
+			"why": "unstable: an errant fixation (independence %d%%)" % _pct(ind)})
+	if stability < 0.25 and traits.sabotage_tendency > 0.0 and energy > 0.0:
+		var target := _sabotage_target(sim, f)
+		if not target.is_empty():
+			out.append({"key": "sabotage:" + str(target.id), "label": "tamper with " + str(target.name),
+				"score": traits.sabotage_tendency * (0.25 - stability) * 4.0 * 0.95,
+				"why": "critical: breaking %s would make work it can do" % target.name})
 
 	# Stick with a task already started (not with doing nothing).
 	for o in out:
 		if o.key == current and current != "idle":
 			o.score += traits.commitment
+	# Independence makes its choices erratic: a whim for or against each option.
+	if ind > 0.0:
+		if sim.time() >= _whim_until:
+			_whim_seed = sim.rng.randi()
+			_whim_until = sim.time() + WHIM_TIME
+		for o in out:
+			var whim := float(hash(str(o.key) + ":" + str(_whim_seed)) % 2001) / 1000.0 - 1.0   # -1..1, steady per option
+			o.score += whim * 0.35 * ind
 	out.sort_custom(func(a, b): return a.score > b.score or (a.score == b.score and a.key < b.key))
 	return out
 
@@ -208,7 +273,7 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 ## Re-scores and switches to the best option if it isn't already doing it.
 func think(sim: FacilitySim) -> void:
 	_think_left = traits.think_interval
-	if activity.kind == "stalled":
+	if offline() or activity.kind == "glitch":
 		return
 	scores = evaluate(sim)
 	if scores.is_empty():
@@ -219,7 +284,7 @@ func think(sim: FacilitySim) -> void:
 		if not j.is_empty() and (j.status == "open" or j.status == "claimed"):
 			_give_up(sim, "station:" + str(activity.station))
 	var best: Dictionary = scores[0]
-	if best.key == activity_key():
+	if best.key == activity_key() or (best.key == "fixate" and activity.kind == "fixate"):
 		return
 	_switch_to(sim, best)
 	var line := "%s: %s (%.2f: %s)" % [display_name(), best.label, best.score, best.why]
@@ -231,10 +296,9 @@ func think(sim: FacilitySim) -> void:
 func activity_key() -> String:
 	match activity.get("kind", "idle"):
 		"work": return "work:%d" % int(activity.job)
-		"recharge": return "recharge"
-		"wander": return "wander"
-		"stalled": return "stalled"
-	return "idle"
+		"sabotage": return "sabotage:" + str(activity.device)
+		"idle": return "idle"
+	return str(activity.kind)
 
 
 func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
@@ -256,8 +320,85 @@ func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
 	elif key == "wander":
 		activity = _wander_target(sim)
 		_say(sim, "wander", {})
+	elif key == "fixate":
+		var ids := _layout(sim).stations_of()
+		var st: String = ids[sim.rng.randi() % ids.size()]
+		activity = {"kind": "fixate", "station": st, "until": -1.0}
+		_say(sim, "fixate", {"station": _layout(sim).station(st).name})
+	elif key.begins_with("sabotage:"):
+		var plant := _plant(sim)
+		var dev: String = key.trim_prefix("sabotage:")
+		activity = {"kind": "sabotage", "device": dev, "station": plant.device(dev).station, "left": SABOTAGE_WORK}
+		sim.note("sabotage", "%s is heading for %s, intending to break it" % [display_name(), plant.device(dev).name])
+		_say(sim, "sabotage", {"device": plant.device(dev).name})
 	else:
 		activity = {"kind": "idle"}
+
+
+# A device it could break to make a job it's good at (and can reach).
+func _sabotage_target(sim: FacilitySim, f: Dictionary) -> Dictionary:
+	var plant := _plant(sim)
+	if plant == null:
+		return {}
+	var best := {}
+	var best_fit := 0.0
+	for id in plant.device_ids():
+		var d := plant.device(id)
+		if d.fault or int(d.job) >= 0 or not FacilityPlant.KINDS[d.kind].has("job"):
+			continue
+		var fit := traits.skill(FacilityPlant.KINDS[d.kind].skill)
+		if fit > best_fit and not _layout(sim).reach_station(f, d.station).is_empty():
+			best_fit = fit
+			best = d
+	return best
+
+
+# --- Critical errors -------------------------------------------------------------------
+
+func _maybe_critical_error(sim: FacilitySim) -> void:
+	if stability >= 0.15 or offline() or activity.kind == "glitch":
+		return
+	var chance := CRITICAL_ERROR_CHANCE * (0.15 - stability) / 0.15 * (1.0 - traits.error_resistance)
+	if sim.rng.randf() >= chance:
+		return
+	var board := _board(sim)
+	if activity.kind == "work" and board:
+		board.release(int(activity.job), sim_id)
+	route = []
+	_route_goal = ""
+	if sim.rng.randf() < 0.5:
+		var until := sim.time() + sim.rng.randf_range(CRASH_TIME.x, CRASH_TIME.y)
+		activity = {"kind": "crashed", "until": until}
+		sim.note("alarm", "%s CRITICAL ERROR: software crash. Offline until %s" % [display_name(), FacilitySim.format_clock(until)])
+		sim.schedule(sim.time(), "alarm", {"robot": robot_id})
+		_say(sim, "critical_error", {})
+	else:
+		var target := _wander_target(sim)
+		activity = {"kind": "glitch", "seg": target.seg, "off": target.off,
+			"until": sim.time() + sim.rng.randf_range(GLITCH_TIME.x, GLITCH_TIME.y)}
+		sim.note(robot_id, "%s is glitching: behaviour makes no sense" % display_name())
+		_say(sim, "glitch", {})
+
+
+## Remote reboot (supervisor): offline for REBOOT_TIME, then stability up.
+func reboot(sim: FacilitySim) -> void:
+	var board := _board(sim)
+	if activity.kind == "work" and board:
+		board.release(int(activity.job), sim_id)
+	route = []
+	order = {}
+	activity = {"kind": "rebooting", "until": sim.time() + REBOOT_TIME}
+	sim.note(robot_id, "%s is rebooting (remote)" % display_name())
+	_say(sim, "rebooting", {})
+
+
+func _finish_reboot(sim: FacilitySim) -> void:
+	stability = minf(stability + REBOOT_RESTORE, 1.0)
+	sim.note(robot_id, "%s back online after reboot (stability %d%%)" % [display_name(), _pct(stability)])
+	_say(sim, "rebooted", {})
+	activity = {"kind": "idle"}
+	_update_state(sim)
+	_think_left = 0.0
 
 
 # --- Orders ---------------------------------------------------------------------------
@@ -266,6 +407,8 @@ func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
 ## "recharge" or "standby"; "cancel" clears the standing order.
 ## Returns {"ok": bool, "reply": String}; the robot also says the reply.
 func give_order(sim: FacilitySim, kind: String, job_id := -1) -> Dictionary:
+	if offline():
+		return {"ok": false, "reply": "(no response: %s is %s)" % [display_name(), activity.kind]}
 	if kind == "cancel":
 		order = {}
 		return _reply(sim, true, "Understood. Back to my own judgement.")
@@ -282,18 +425,26 @@ func give_order(sim: FacilitySim, kind: String, job_id := -1) -> Dictionary:
 			return _reply(sim, false, "%s is already on job #%d." % [str(j.claimed_by).trim_prefix("robot_").capitalize(), job_id])
 		if traits.skill(j.skill) < traits.refuse_below_skill:
 			return _reply(sim, false, "No. '%s' is %s work; I'm not built for it." % [j.title, j.skill])
+	var before := evaluate(sim)   # what it wanted before the order (not the cached scores: those aren't saved)
+	var wanted_before: String = before[0].key if not before.is_empty() else ""
 	order = {"kind": kind, "job": job_id, "given": sim.time()}
 	scores = evaluate(sim)
 	var want: String = ("work:%d" % job_id) if kind == "job" else ("recharge" if kind == "recharge" else "idle")
 	var ok: bool = scores[0].key == want
 	var reply := "On it."
 	if not ok:
-		if power < traits.power_reserve or scores[0].key == "recharge":
+		if independence() > 0.4:
+			reply = "No. I have my own work."
+			_say(sim, "order_ignored", {})
+		elif power < traits.power_reserve or scores[0].key == "recharge":
 			reply = "Acknowledged. Recharging first, power at %d%%." % _pct(power)
 		elif kind == "standby":
 			reply = "I... will try. Standing still feels wrong right now."
 		else:
 			reply = "Acknowledged. Doing %s first." % scores[0].label
+	elif wanted_before != "" and wanted_before != want:
+		# Overruled: it complies, but it wears on its software.
+		stability = maxf(stability - traits.order_stress, 0.0)
 	var result := _reply(sim, ok, reply)
 	think(sim)
 	return result
@@ -348,27 +499,62 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				activity = {"kind": "idle"}
 				_think_left = 0.0
 			return
+		"crashed", "rebooting":
+			if sim.time() >= float(activity.until):
+				_finish_reboot(sim)
+			return
+		"glitch":
+			stability = maxf(stability - _decay(sim) * 0.5 * dt, 0.0)
+			var arrived := _travel(sim, "glitch:%s:%.2f" % [activity.seg, float(activity.off)], str(activity.seg), float(activity.off), dt)
+			if sim.time() >= float(activity.until):
+				sim.note(robot_id, "%s stops glitching" % display_name())
+				activity = {"kind": "idle"}
+				_think_left = 0.0
+			elif arrived:
+				var t := _wander_target(sim)
+				activity.seg = t.seg
+				activity.off = t.off
 		"idle":
-			purpose = maxf(purpose - traits.restlessness * dt, 0.0)
+			stability = maxf(stability - _decay(sim) * dt, 0.0)
 			if order.get("kind", "") == "standby" and sim.time() - float(order.given) > ORDER_TIMEOUT:
 				order = {}
 				sim.note(robot_id, "%s's stand-by order lapsed" % display_name())
 				_think_left = 0.0
 		"wander":
-			purpose = maxf(purpose - traits.restlessness * 0.5 * dt, 0.0)
+			stability = maxf(stability - _decay(sim) * 0.5 * dt, 0.0)
 			if _travel(sim, "wander:%s:%.2f" % [activity.seg, float(activity.off)], str(activity.seg), float(activity.off), dt):
 				activity = _wander_target(sim)
+		"fixate":
+			stability = maxf(stability - _decay(sim) * 0.7 * dt, 0.0)
+			var st := layout.station(activity.station)
+			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
+				if float(activity.until) < 0.0:
+					activity.until = sim.time() + sim.rng.randf_range(FIXATE_TIME.x, FIXATE_TIME.y)
+				elif sim.time() >= float(activity.until):
+					activity = {"kind": "idle"}
+					_think_left = 0.0
+		"sabotage":
+			var st := layout.station(activity.station)
+			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
+				activity.left = float(activity.left) - dt
+				if float(activity.left) <= 0.0:
+					var plant := _plant(sim)
+					if plant:
+						plant.sabotage(sim, str(activity.device), self)
+					stability = minf(stability + 0.05, 1.0)   # it did *something*
+					activity = {"kind": "idle"}
+					_think_left = 0.0
 		"work":
 			var st := layout.station(activity.station)
 			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
 				var board := _board(sim)
 				_use_power(sim, traits.drain_work * dt)
-				purpose = minf(purpose + traits.purpose_from_work * dt, 1.0)
+				stability = minf(stability + traits.stability_from_work * dt, 1.0)
 				var j := board.get_job(int(activity.job))
 				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * dt
 				if board.add_progress(sim, int(activity.job), sim_id, amount):
 					jobs_done += 1
-					purpose = minf(purpose + traits.purpose_per_job, 1.0)
+					stability = minf(stability + traits.stability_per_job, 1.0)
 					if _ordered_job() == int(activity.job):
 						order = {}
 					_say(sim, "job_done", {"job": j.get("title", "")})
@@ -447,31 +633,47 @@ func _use_power(sim: FacilitySim, amount: float) -> void:
 			board.release(int(activity.job), sim_id)
 		activity = {"kind": "stalled"}
 		route = []
+		stability = maxf(stability - STALL_SHOCK, 0.0)
 		sim.note(robot_id, "%s is OUT OF POWER, stalled in %s. Emergency cells engaged." % [display_name(), _room_name(sim)])
 		_say(sim, "stalled", {})
 
 
-func _update_mood(sim: FacilitySim) -> void:
-	var now := mood_for(purpose)
+func _update_state(sim: FacilitySim) -> void:
+	var now := state_for(stability)
 	# A little hysteresis so it doesn't flicker on a boundary.
-	if now != mood and absf(purpose - _band_edge(now, mood)) > 0.05:
-		sim.note(robot_id, "%s feels %s (purpose %d%%)" % [display_name(), now, _pct(purpose)])
-		_say(sim, "mood_" + now, {})
-		mood = now
+	if now != stability_state and absf(stability - _band_edge(now, stability_state)) > 0.03:
+		var worse := _band_index(now) > _band_index(stability_state)
+		sim.note("stability" if worse else robot_id, "%s software %s: stability %d%%" % [display_name(),
+			"now " + now.to_upper() if worse else "recovering, " + now, _pct(stability)])
+		_say(sim, "stability_" + now, {})
+		stability_state = now
 
 
-static func mood_for(p: float) -> String:
-	for m in MOODS:
-		if p >= m[0]:
-			return m[1]
-	return MOODS.back()[1]
+static func state_for(s: float) -> String:
+	for b in STATES:
+		if s >= b[0]:
+			return b[1]
+	return STATES.back()[1]
+
+
+static func _band_index(name: String) -> int:
+	for i in STATES.size():
+		if STATES[i][1] == name:
+			return i
+	return 0
 
 
 static func _band_edge(a: String, b: String) -> float:
-	for m in MOODS:
+	for m in STATES:
 		if m[1] == a or m[1] == b:
 			return m[0]
 	return 0.0
+
+
+# Stability lost per idle second: its trait, halved by the firmware-stabilizer package.
+func _decay(sim: FacilitySim) -> float:
+	var sw := sim.get_system("software") as SoftwareLibrary
+	return traits.stability_decay * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0)
 
 
 # Travel costs from where it is to every node. Cached: a robot standing still
@@ -540,6 +742,11 @@ func _board(sim: FacilitySim) -> WorkBoard:
 	return _board_ref
 
 
+func _plant(sim: FacilitySim) -> FacilityPlant:
+	_cache(sim)
+	return _plant_ref
+
+
 # Docks charge slower while the facility's power relay is out.
 func _charge_factor(sim: FacilitySim) -> float:
 	_cache(sim)
@@ -564,17 +771,18 @@ static func _pct(x: float) -> int:
 # --- Save / describe -------------------------------------------------------------------
 
 func sim_save() -> Dictionary:
-	return {"seg": seg, "off": off, "power": power, "purpose": purpose, "activity": activity.duplicate(),
-		"order": order.duplicate(), "moving": moving, "jobs_done": jobs_done, "mood": mood,
+	return {"seg": seg, "off": off, "power": power, "stability": stability, "stability_state": stability_state,
+		"activity": activity.duplicate(), "order": order.duplicate(), "moving": moving, "jobs_done": jobs_done,
 		"route": route.duplicate(true), "route_goal": _route_goal,
-		"think_left": _think_left, "step_left": _step_left}
+		"think_left": _think_left, "step_left": _step_left, "whim_seed": str(_whim_seed), "whim_until": _whim_until}
 
 
 func sim_load(d: Dictionary) -> void:
 	seg = str(d.get("seg", seg))
 	off = float(d.get("off", off))
 	power = float(d.get("power", 1.0))
-	purpose = float(d.get("purpose", 0.7))
+	stability = float(d.get("stability", 0.8))
+	stability_state = str(d.get("stability_state", "stable"))
 	activity = d.get("activity", {"kind": "idle"}).duplicate()
 	if activity.has("job"):
 		activity.job = int(activity.job)
@@ -583,13 +791,14 @@ func sim_load(d: Dictionary) -> void:
 		order.job = int(order.job)
 	moving = bool(d.get("moving", false))
 	jobs_done = int(d.get("jobs_done", 0))
-	mood = str(d.get("mood", "content"))
 	route = []
 	for leg in d.get("route", []):
 		route.append({"seg": str(leg.seg), "from": float(leg.from), "to": float(leg.to)})
 	_route_goal = str(d.get("route_goal", ""))
 	_think_left = float(d.get("think_left", 0.0))
 	_step_left = float(d.get("step_left", 0.0))
+	_whim_seed = int(str(d.get("whim_seed", "0")))
+	_whim_until = float(d.get("whim_until", -1.0))
 
 
 ## One line saying what it's doing, for panels and camera labels.
@@ -605,6 +814,16 @@ func doing_text(sim: FacilitySim) -> String:
 			return ("heading to " if moving else "charging at ") + str(_layout(sim).station(activity.station).get("name", "dock"))
 		"wander":
 			return "wandering (%s)" % _room_name(sim)
+		"fixate":
+			return "fixated on %s (no job there)" % _layout(sim).station(activity.station).get("name", "?")
+		"sabotage":
+			return "heading to %s (no job there)" % _layout(sim).station(activity.station).get("name", "?")
+		"glitch":
+			return "GLITCHING"
+		"crashed":
+			return "CRASHED (offline until %s)" % FacilitySim.format_clock(float(activity.until))
+		"rebooting":
+			return "rebooting (back at %s)" % FacilitySim.format_clock(float(activity.until))
 		"stalled":
 			return "STALLED (no power)"
 	return "standing by (%s)" % _room_name(sim)
@@ -616,8 +835,9 @@ func sim_describe(sim: FacilitySim) -> PackedStringArray:
 	var ord := "none"
 	if not order.is_empty():
 		ord = "job #%d" % int(order.job) if order.kind == "job" else str(order.kind)
-	lines.append("%s  %s   %s %.1f m   power %d%%   purpose %d%% %s   order: %s   jobs done %d" % [
-		display_name().to_upper(), doing_text(sim), seg, off, _pct(power), _pct(purpose), mood, ord, jobs_done])
+	lines.append("%s  %s   %s %.1f m   power %d%%   stability %d%% %s (independence %d%%)   order: %s   jobs done %d" % [
+		display_name().to_upper(), doing_text(sim), seg, off, _pct(power), _pct(stability), stability_state,
+		_pct(independence()), ord, jobs_done])
 	var parts := PackedStringArray()
 	for o in scores.slice(0, 4):
 		parts.append("%.2f %s" % [o.score, o.label])

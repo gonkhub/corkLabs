@@ -162,12 +162,30 @@ performing what it's doing (work clips at a job, idles otherwise).
 | Need | Goes down | Goes up | When it runs low |
 | --- | --- | --- | --- |
 | **Power** | always a little; more moving, most working | on its dock | below its reserve it drops everything to recharge; at 0 it stalls and limps on emergency cells |
-| **Purpose** | standing idle (robots think the work keeps *them* running) | working, and a jump for each finished job | "restless", then "uneasy": hungrier for work, and eventually it wanders the rails looking for some |
+| **Software stability** | standing idle (robots think the work keeps *them* running), stalling, being overruled by orders | working, finishing jobs, a reboot | it turns **independent and unpredictable** (below) |
+
+**Software stability** is the heart of a robot's reliability:
+
+| Stability | State | What the robot does |
+| --- | --- | --- |
+| 60%+ | stable | does as it's told, sensible choices |
+| 35%+ | drifting | orders count for less; its choices get whims; it wanders |
+| 15%+ | unstable | mostly ignores orders ("No. I have my own work."); errant fixations (loitering at random places) |
+| below 15% | critical | **critical errors**: it CRASHES (offline for 10-40 min, then reboots with stability back) or GLITCHES (senseless travel, garbled speech); and it may **sabotage** a device, so there's work it can do |
+
+How it works: *independence* (0 when stable, up to the robot's `independence`
+trait) scales down what orders are worth and adds a *whim* to every option:
+a random bias that holds for 10 facility minutes, so an unstable robot is
+erratic but still follows through. Errant options (fixate, sabotage) get
+weight as stability falls. Sabotage looks like an ordinary fault to the
+facility (corkHQ may notice "anomalous damage"); the journal's `sabotage`
+lines say who did it. Tinker (curious, fidgety) turns independent faster and
+is likelier to sabotage than stoic Hauler.
 
 **Deciding: utility scores, like a mixer.** Every couple of facility seconds
 a robot scores everything it could do (each reachable job, recharge, stand
 by, wander) and does the best. Job scores come from priority × skill ×
-distance × power × hunger for purpose. The F1 robots page shows the top scores
+distance × power × hunger for work (low stability makes it hungrier). The F1 robots page shows the top scores
 and the reason; every change of mind goes in the journal with the runner-up:
 
 ```
@@ -179,13 +197,14 @@ and the reason; every change of mind goes in the journal with the runner-up:
 that option. Usually it wins, and the robot says "On it." But below its power
 reserve it recharges first, it refuses work it's hopeless at ("No. 'Clear
 debris' is heavy work; I'm not built for it.") or can't get to ("I can't get
-to Workbench: Freight gate is blocked (jammed)."), and an uneasy robot finds
+to Workbench: Freight gate is blocked (jammed)."), and an unstable robot finds
 it hard to stand still. It says its answer on camera; it's also journaled.
 
 **Personality** lives in `robots/<id>/<id>_traits.tres` (open it in the
 Inspector; every value has a tooltip): rail speed, **width** (which routes
 it fits through) and **visual scale**, skills (heavy / precise / general),
-power drain and charge, restlessness, obedience, when it refuses, how often
+power drain and charge, software stability (decay, recovery, order stress,
+independence, error resistance, sabotage tendency), obedience, when it refuses, how often
 it rethinks, its **voice** (text colour, pitch, wave, speed, how chatty), and
 which clips it plays for each kind of work.
 
@@ -290,7 +309,7 @@ framework: the lines and voices are placeholders to replace.
   changes what else happens.
 - **What** (`game/speech/barks.txt`, a plain text file): one line per bark,
   `trigger | robot | condition | text`, with conditions (`low_power`,
-  `low_purpose`, `restless`, `uneasy`, `content`, `working`...) and
+  `stable`, `drifting`, `unstable`, `critical`, `working`...) and
   placeholders (`{station}`, `{job}`, `{peer}`, `{power}`...). Lines whose
   condition holds are picked more often, so a tired robot mostly sounds tired.
   Edit it freely; the format is at the top of `bark_library.gd`.
@@ -316,6 +335,7 @@ framework: the lines and voices are placeholders to replace.
 | `game/` | `RobotActor` (plays clips via AnimationTree), `RobotView` (3D robot rides the rails after its sim self, with pendulum sway), `FacilityWorld` (the 3D facility, built from the layout), props, cameras, Robot Lab |
 | `game/sim/` | The facility simulation: clock, scheduler, journal, rooms + rail network, work board, plant, robot agents and traits |
 | `game/speech/` | Robot speech: `barks.txt` (the lines), `RobotChatter` (when), `BarkLibrary`, `RobotVoice` |
+| `game/corporate/` | Corporate: `CorkHQ`, `Requisitions`, `SoftwareLibrary`, and their data files (`hq_lines.txt`, `catalog.txt`, `packages.txt`) |
 | `os/` | The corkLabs OS: desktop, windows, theme, and its apps (`os/apps/`) |
 | `addons/corklabs_pipeline/` | The editor Takes panel |
 | `tools/` | Command-line tools (bake all, demo takes, screenshots, test runner) |
@@ -354,12 +374,13 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Six CCTV cameras across the rooms, one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, F filter. Auto-track (Cam 3 follows Hauler while it's in the hall). All free: looking costs no time |
-| **Units** | Each robot: what it's doing, power, purpose and mood, standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min) |
+| **Cameras** | Five CCTV cameras across the rooms, one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, F filter. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
+| **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **remote reboot** (needs the remote-reboot package) |
+| **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
 | **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
 | **Plant** | Throughput, coolant, heat, dock power, every device's state and job | |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | A command line: `help`, `status`, `units`, `jobs`, `plant`, `routes`, `log [n] [category]` | `order <robot> <job#/recharge/standby/cancel>`, `priority <job#> <level/+/->`, `wait <min>`, `block/unblock <route>` (dev), `open <app>`; up/down for history |
+| **Terminal** | A command line: `help`, `status`, `units`, `jobs`, `plant`, `routes`, `log [n] [category]`, and commands you have to learn (`connect`, `corkpkg`: see Corporate) | `order <robot> <job#/recharge/standby/cancel>`, `priority <job#> <level/+/->`, `wait <min>`, `block/unblock <route>` (needs route-control), `open <app>`; up/down for history |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, robot voices + volume, forget window layout | |
 
 Robots answer orders out loud, on camera; the apps just say the order was sent.
@@ -383,6 +404,54 @@ one `OSTheme` (`os/os_theme.gd`). Adding an app: copy one in `os/apps/`, give
 it an id/title/icon in `_init()`, and add it to `APPS` in `os/desktop.gd`.
 
 `tools/screenshot.gd` can drive it: `--call log_on --call open_app:plant`.
+
+## Corporate: corkHQ, requisitions, software
+
+Corporate lives in three facility systems (`game/corporate/`) and one
+window the player can't get rid of.
+
+**corkHQ** (`CorkHQ` + `CorkHQPanel`, `os/corkhq_panel.gd`): pinned to the
+top-right corner of the OS, above every window. No close, minimise, move or
+resize; every new message chimes (at a fixed volume, whatever the settings),
+flashes and shakes. The header judges you: rating, funds, clearance. It
+posts: a welcome (including where the software server is), a directive each
+shift, a **graded review** at the end of each shift (A-F from throughput vs
+the 85% target), nagging when throughput is low or units sit idle, reactions
+to crashes and "anomalous damage", and feedback from requisitions and
+software (confirmations, approvals, denials, install codes). Its lines are
+in `game/corporate/hq_lines.txt`.
+
+**Requisitions** (`Requisitions` + the Requisitions app): a budget that
+corporate tops up after every review (more for a better grade), and a
+catalogue in `game/corporate/catalog.txt` (resources, replacement parts, new
+robot models: price, delivery hours, whether corporate must approve it, and
+what happens on delivery). Orders go pending → approved/denied (refunded) →
+in transit → delivered. Placeholders for now: delivered parts go into stock
+and robot units arrive crated; the coolant canister is wired (tops up the
+reservoir).
+
+**Software packages** (`SoftwareLibrary`, `game/corporate/packages.txt`):
+unlockables downloaded from the Cork package server **through the
+Terminal**. The commands aren't in `help`: IT Services' welcome in corkHQ
+gives the server address, and the server explains the rest.
+
+```
+connect cork://pkg.corklabs.int     open a session (then the server lists its commands)
+corkpkg list                        packages, their clearance level, what's LOCKED for you
+corkpkg info <package>
+corkpkg request <package>           IT reviews it; the answer (and an install code) arrives in corkHQ
+corkpkg install <package> <code>    downloads and installs (takes facility time)
+corkpkg installed
+```
+
+Corporate only approves packages up to your **clearance** (1-3), which rises
+with A/B reviews and falls with an F. Three packages already do something:
+`remote-reboot` (the Units app's Reboot button), `route-control` (the
+Terminal's `block` / `unblock`), `firmware-stabilizer` (robots' software
+drifts half as fast). The rest (peer-sync, pathfinder-pro,
+predictive-maintenance, self-service, diag-suite, night-watch, overclock)
+are placeholders for robot behaviours and supervisor tools to come. Check
+for one in code with `Supervisor.has_software("id")`.
 
 ## Using robots in the game
 

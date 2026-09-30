@@ -34,6 +34,40 @@ static func set_priority(job_id: int, priority: int) -> void:
 	Facility.act(PRIORITY_COST, "Supervisor re-prioritises job #%d" % job_id)
 
 
+## Places a requisition (Requisitions app, Terminal). A choice: costs facility
+## time. Returns {"ok", "text"}; corkHQ reports what happens next.
+static func requisition(item_id: String, qty := 1) -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var req := sim.get_system("requisitions") as Requisitions
+	if req == null:
+		return {"ok": false, "text": "Requisitions unavailable."}
+	var it := req.item(item_id)
+	var r := req.place(sim, item_id, qty)
+	if r.ok:
+		sim.note("supervisor", "Requisition: %dx %s" % [qty, it.get("name", item_id)])
+		Facility.act(ORDER_COST, "Supervisor files a requisition")
+	return r
+
+
+## Remote reboot (needs the "remote-reboot" software package). Returns false if locked.
+static func reboot(bot: RobotAgent) -> bool:
+	if not has_software("remote-reboot") or bot.offline():
+		return false
+	var sim: FacilitySim = Facility.sim
+	sim.note("supervisor", "Remote reboot: %s" % bot.display_name())
+	bot.reboot(sim)
+	Facility.act(ORDER_COST, "Supervisor reboots %s" % bot.display_name())
+	return true
+
+
+## Is this software package installed on the facility?
+static func has_software(package_id: String) -> bool:
+	if not Facility.running:
+		return false
+	var sw := Facility.sim.get_system("software") as SoftwareLibrary
+	return sw != null and sw.installed(package_id)
+
+
 ## Lets facility time pass while the supervisor watches.
 static func wait(seconds: float) -> void:
 	Facility.spend(seconds, "Supervisor waits %s" % _dur(seconds))

@@ -6,17 +6,19 @@
 #     trigger | robot | condition | text
 #
 #   trigger    what just happened: start_job, job_done, recharge, charged,
-#              low_power, stalled, restarted, wander, mood_restless,
-#              mood_uneasy, mood_content, route_blocked, idle, alarm,
-#              route_closed, peer_greet, peer_reply, peer_info, peer_info_reply...
+#              low_power, stalled, restarted, wander, fixate, sabotage,
+#              stability_stable/drifting/unstable/critical, critical_error,
+#              glitch (the line comes out garbled), rebooting, rebooted,
+#              order_ignored, route_blocked, idle, alarm, route_closed,
+#              peer_greet, peer_reply, peer_info, peer_info_reply...
 #              (RobotChatter decides when each one fires.)
 #   robot      tinker, hauler, or any
-#   condition  empty (always), or one of: low_power, full_power, low_purpose,
-#              restless, uneasy, content, working, idle. Several, space-separated,
+#   condition  empty (always), or one of: low_power, full_power, stable,
+#              drifting, unstable, critical, working, idle. Several, space-separated,
 #              must all hold. Lines whose condition holds are picked more often
 #              than plain ones, so a tired robot mostly sounds tired.
 #   text       what it says. {placeholders} get filled in: {me} {peer} {job}
-#              {station} {place} {why} {power} {purpose} {room} {device}
+#              {station} {place} {why} {power} {stability} {room} {device}
 #
 # Lines starting with # are comments.
 class_name BarkLibrary
@@ -55,7 +57,7 @@ func load_text(text: String) -> void:
 
 
 ## Lines that fit this trigger, robot and situation, with their weights.
-## ctx: {"power", "purpose", "mood", "working", ...}
+## ctx: {"power", "stability", "state", "working", ...}
 func candidates(trigger: String, robot_id: String, ctx: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for b in lines:
@@ -78,10 +80,10 @@ static func condition(name: String, ctx: Dictionary) -> bool:
 	match name:
 		"low_power": return float(ctx.get("power", 1.0)) < 0.3
 		"full_power": return float(ctx.get("power", 0.0)) > 0.85
-		"low_purpose": return float(ctx.get("purpose", 1.0)) < 0.3
-		"restless": return ctx.get("mood", "") == "restless"
-		"uneasy": return ctx.get("mood", "") == "uneasy"
-		"content": return ctx.get("mood", "") == "content"
+		"stable": return ctx.get("state", "") == "stable"
+		"drifting": return ctx.get("state", "") == "drifting"
+		"unstable": return ctx.get("state", "") in ["unstable", "critical"]
+		"critical": return ctx.get("state", "") == "critical"
 		"working": return bool(ctx.get("working", false))
 		"idle": return not bool(ctx.get("working", false))
 	push_warning("barks.txt: unknown condition '%s'" % name)
@@ -94,6 +96,6 @@ static func fill(text: String, ctx: Dictionary) -> String:
 	for k in ctx:
 		var v = ctx[k]
 		if v is float:
-			v = "%d%%" % roundi(v * 100.0) if k in ["power", "purpose"] else str(snappedf(v, 0.1))
+			v = "%d%%" % roundi(v * 100.0) if k in ["power", "stability"] else str(snappedf(v, 0.1))
 		out = out.replace("{%s}" % k, str(v))
 	return out

@@ -143,6 +143,8 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 func refresh() -> void:
 	var c := _camera()
 	var single := not grid_mode and c != null
+	var w := _world()
+	track_button.visible = w != null and w.cameras.any(func(cam): return cam.can_track())
 	track_button.disabled = not single or not c.can_track()
 	track_button.set_pressed_no_signal(single and c.auto_track)
 	reset_button.disabled = not single

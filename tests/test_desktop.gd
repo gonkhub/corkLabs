@@ -24,7 +24,7 @@ func _initialize() -> void:
 	desk.log_on()
 	await process_frame
 	_check(facility.running and not desk.login.visible, "log on opens the facility")
-	_check(desk.world != null and desk.world.cameras.size() == 6, "the 3D facility runs hidden, with its cameras")
+	_check(desk.world != null and desk.world.cameras.size() == FacilitySetup.cameras().size(), "the 3D facility runs hidden, with its cameras")
 	_check(str(desk.clock_button.text).contains(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_button.text)
 
 	for id in ["cameras", "units", "work", "plant", "log", "terminal"]:

@@ -72,8 +72,11 @@ func _test_cameras() -> void:
 	_check(cam.pan <= cam.pan_limit_deg and cam.tilt <= cam.tilt_limit_deg, "within its motor limits")
 	cam.reset_view()
 	_check(cam.pan == 0.0 and cam.zoom_level() == 1.0, "reset goes back to the home view")
+	_check(not desk.world.cameras.any(func(c): return c.can_track()), "no camera tracks a robot by default (the tracker cam is gone)")
 	var tracker: SecurityCamera = desk.world.cameras[2]
-	_check(tracker.auto_track, "the Hauler camera auto-tracks by default")
+	tracker.target = desk.world.views["hauler"].actor   # the framework still supports it
+	tracker.reset_view()
+	_check(tracker.auto_track, "a camera given a target auto-tracks it")
 	tracker.nudge(5.0, 0.0)
 	_check(not tracker.auto_track, "moving it by hand takes over from auto-tracking")
 	tracker.reset_view()
@@ -148,6 +151,8 @@ func _test_terminal() -> void:
 	out = term.run("order tinker %d" % leak)
 	_check(out.contains("not doing it"), "Terminal: says when a robot won't do it (%s)" % out.strip_edges())
 	_check(term.run("routes").contains("freight_gate"), "Terminal: routes lists the passages")
+	_check(term.run("block pod_door testing").contains("needs the route-control package"), "Terminal: block needs the route-control package")
+	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("route-control")
 	term.run("block pod_door testing")
 	var layout: FacilityLayout = facility.sim.get_system("layout")
 	_check(layout.segment("pod_door").blocked, "Terminal: block closes a route")

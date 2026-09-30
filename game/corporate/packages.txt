@@ -1,0 +1,15 @@
+# Software packages on the Cork package server. Edit freely.
+#   id | name | version | size (MB) | clearance | install (facility minutes) | wired | description
+# clearance: the supervisor clearance level needed before corporate will approve it (1-3)
+# wired:     yes = the package already does something in the game; no = placeholder for now
+
+remote-reboot | Remote Reboot | 1.2.0 | 14 | 1 | 10 | yes | Supervisor can reboot a unit remotely (Units app). Offline a few minutes, stability restored.
+route-control | Route Control | 2.0.1 | 22 | 1 | 15 | yes | Supervisor can close and reopen rail passages from the terminal (block / unblock).
+firmware-stabilizer | Firmware Stabilizer | 0.9.4 | 48 | 2 | 30 | yes | Units' software drifts half as fast when idle.
+peer-sync | Peer Sync | 3.1.0 | 36 | 1 | 20 | no | Units share their job lists and hand off work they're worse at.
+pathfinder-pro | Pathfinder Pro | 1.4.2 | 64 | 2 | 25 | no | Units plan routes around congestion and known faults.
+predictive-maintenance | Predictive Maintenance | 0.7.0 | 120 | 2 | 45 | no | Units service devices before they fail.
+self-service | Self-Service Protocol | 1.0.0 | 80 | 3 | 40 | no | Units can recharge and repair each other in the field.
+diag-suite | Diagnostics Suite | 5.2.3 | 30 | 1 | 10 | no | Deeper unit diagnostics for the supervisor.
+night-watch | Night Watch | 1.1.0 | 18 | 2 | 15 | no | Units patrol and report anomalies during quiet shifts.
+overclock | Overclock | 0.1.0 | 9 | 3 | 5 | no | Units move and work faster. Stability impact: unknown.

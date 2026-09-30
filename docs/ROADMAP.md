@@ -22,6 +22,8 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **OS build-out**: boots into the OS, observation-only Cameras with pan/tilt/zoom + grid, snapping/maximise, remembered layout, notification centre, Terminal, Settings | In PR #3 | Automated tests + screenshots + simulated clicks |
 | **Rooms + rail network**: 4 rooms (huge main hall), routes with caveats (narrow, blocked, slow), re-routing, 3D world built from the layout, bigger Hauler | **New framework, needs a look** | Automated tests + screenshots |
 | **Robot speech**: floating CCTV text + voice blips; lines by trigger/condition in `barks.txt`; robot-to-robot exchanges | **New framework, needs a look** | Automated tests + screenshots (sound not checked by ear) |
+| **Software stability**: independence, whims, fixations, critical errors (crash/glitch), sabotage, reboots | **New framework, needs a look** | Automated tests + journal read-throughs |
+| **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 
 ## Branches and pull requests
 
@@ -37,6 +39,7 @@ commits, and so on).
 | 3 | `feature/desktop-os` | The corkLabs OS (`os/desktop.tscn`); 3D world split into `game/facility_world.tscn`; `Supervisor` actions | Play it: log on, give orders, break things (F9), log off/on |
 | 4 | `feature/os-buildout` (PR #3, contains 1-4) | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
 | 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
+| 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
 
 `docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
 after that merges. Claude creates the PRs with `gh` once the branches are pushed.
@@ -59,6 +62,11 @@ All tests pass on each branch (`tools\run_tests.ps1`; 13 test files on the last 
 6. Log off, close, reopen: it resumes at the same facility minute, with your windows where you left them.
 
 ## Decisions waiting for you
+
+- **What each software package should really do** (packages.txt; three are wired).
+- **Crated robots**: how a delivered unit gets activated (a new robot in the facility?).
+- **How visible sabotage should be** to the supervisor (now: only the Facility Log, and corkHQ sometimes notices).
+- **corkHQ's voice**: tone and how often it nags (hq_lines.txt, CHECK_EVERY).
 
 - **What goes in the rooms**, and **what the rooms are for** (they're empty
   space now). More rooms? Which connect to which, and with what catches?

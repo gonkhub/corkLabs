@@ -2,6 +2,10 @@
 # typed, plus quick read-outs. Orders go through Supervisor like everywhere
 # else, so they cost the same facility time and get the same answers.
 # Up/down arrows walk your command history. Type "help".
+#
+# Some commands aren't in "help": the player learns them. IT Services'
+# welcome in corkHQ gives the package server's address (connect <address>);
+# the server's banner explains corkpkg (list, info, request, install).
 class_name TerminalApp
 extends OSApp
 
@@ -12,8 +16,8 @@ const HELP := [
 	["jobs", "open jobs on the work board"],
 	["plant", "every device and its state"],
 	["routes", "passages between rooms: clearance, open or blocked"],
-	["block <route> [reason]", "close a passage (dev: test re-routing)"],
-	["unblock <route>", "reopen a passage"],
+	["block <route> [reason]", "close a passage (needs route-control)"],
+	["unblock <route>", "reopen a passage (needs route-control)"],
 	["order <robot> <job#|recharge|standby|cancel>", "give an order (2 min)"],
 	["priority <job#> <low|normal|high|critical|+|->", "change a job's priority (2 min)"],
 	["wait <minutes>", "let facility time pass (an alarm stops it)"],
@@ -25,6 +29,8 @@ const HELP := [
 var output: RichTextLabel
 var input: LineEdit
 var history: PackedStringArray = []
+## Connected to the Cork package server (this terminal session only).
+var connected := false
 var _history_pos := 0
 
 
@@ -92,6 +98,9 @@ func _submit(line: String) -> void:
 		"wait": _wait(args)
 		"log": _log(args)
 		"open": _open(args)
+		"connect": _connect(args)
+		"disconnect": _disconnect()
+		"corkpkg": _corkpkg(args)
 		"clear", "cls": output.clear()
 		_: _error("Unknown command '%s'. Type help." % cmd)
 
@@ -115,6 +124,7 @@ func _on_input_key(event: InputEvent) -> void:
 func _help() -> void:
 	for h in HELP:
 		_print("  [color=#%s]%-48s[/color] %s" % [_hex(OSTheme.ACCENT), _esc(h[0]), h[1]])
+	_print("  [color=#%s](corporate servers have their own commands)[/color]" % _hex(OSTheme.TEXT_DIM))
 
 
 func _status() -> void:
@@ -133,8 +143,8 @@ func _status() -> void:
 func _units() -> void:
 	for bot in FacilitySetup.robots(sim()):
 		var order := "" if bot.order.is_empty() else "   order: " + Supervisor.describe_order(sim(), bot.order.kind, int(bot.order.get("job", -1)))
-		_print("  [color=#%s]%-7s[/color] %-46s power %3d%%  purpose %3d%% %s%s" % [_hex(OSTheme.category_color(bot.robot_id)),
-			bot.display_name().to_upper(), _esc(bot.doing_text(sim())), _pct(bot.power), _pct(bot.purpose), bot.mood, order])
+		_print("  [color=#%s]%-7s[/color] %-46s power %3d%%  stability %3d%% %s%s" % [_hex(OSTheme.category_color(bot.robot_id)),
+			bot.display_name().to_upper(), _esc(bot.doing_text(sim())), _pct(bot.power), _pct(bot.stability), bot.stability_state, order])
 
 
 func _jobs() -> void:
@@ -166,6 +176,10 @@ func _routes() -> void:
 
 
 func _block(args: PackedStringArray, blocked: bool) -> void:
+	var sw := sim().get_system("software") as SoftwareLibrary
+	if sw and not sw.installed("route-control"):
+		_error("%s: command needs the route-control package." % ("block" if blocked else "unblock"))
+		return
 	var layout := sim().get_system("layout") as FacilityLayout
 	if args.is_empty() or layout.segment(args[0]).is_empty():
 		_error("Usage: %s <route>   (see: routes)" % ("block" if blocked else "unblock"))
@@ -244,6 +258,75 @@ func _log(args: PackedStringArray) -> void:
 	for e in entries.slice(maxi(0, entries.size() - count)):
 		_print("  [color=#%s]%s[/color] [color=#%s]%-10s[/color] %s" % [_hex(OSTheme.TEXT_DIM), FacilitySim.format_clock(e.t),
 			_hex(OSTheme.category_color(e.cat)), e.cat, _esc(str(e.text))])
+
+
+# --- Cork package server ------------------------------------------------------
+
+func _connect(args: PackedStringArray) -> void:
+	if args.is_empty():
+		_error("Usage: connect <address>")
+		return
+	if args[0].to_lower() != CorkHQ.SERVER:
+		_error("connect: %s: host not found" % args[0])
+		return
+	connected = true
+	_print("[color=#%s]Connected to Cork Package Service (%s)[/color]" % [_hex(OSTheme.ACCENT), CorkHQ.SERVER])
+	_print("  Authorised supervisors only. All activity is logged.")
+	for line in [["corkpkg list", "packages on this server"], ["corkpkg info <package>", "details and clearance needed"],
+			["corkpkg request <package>", "ask IT Services for approval (answer arrives in corkHQ)"],
+			["corkpkg install <package> <code>", "install an approved package"], ["corkpkg installed", "what's installed"],
+			["disconnect", "close the session"]]:
+		_print("  [color=#%s]%-36s[/color] %s" % [_hex(OSTheme.ACCENT), line[0], line[1]])
+
+
+func _disconnect() -> void:
+	connected = false
+	_print("  Disconnected.")
+
+
+func _corkpkg(args: PackedStringArray) -> void:
+	var sw := sim().get_system("software") as SoftwareLibrary
+	var sub := args[0].to_lower() if not args.is_empty() else ""
+	if sub == "installed":
+		_print("  " + (", ".join(sw.installed_ids) if not sw.installed_ids.is_empty() else "No packages installed."))
+		return
+	if not connected:
+		_error("corkpkg: not connected to a package server")
+		return
+	match sub:
+		"list":
+			_print("  clearance: level %d" % sw.clearance)
+			for p in sw.packages:
+				var state := "installed" if sw.installed(p.id) else str(sw.requests.get(p.id, {}).get("status", ""))
+				var locked: bool = int(p.clearance) > sw.clearance
+				_print("  %-24s %-8s %5d MB  L%d %s  %s" % [p.id, p.version, p.size, p.clearance,
+					"[color=#%s]LOCKED[/color]" % _hex(OSTheme.ALARM) if locked else "      ", state])
+		"info":
+			var p := sw.package(args[1] if args.size() > 1 else "")
+			if p.is_empty():
+				_error("Usage: corkpkg info <package>")
+				return
+			_print("  %s %s  (%d MB, clearance %d, installs in %d min)" % [p.name, p.version, p.size, p.clearance, int(p.minutes)])
+			_print("  " + _esc(p.description))
+		"request":
+			if args.size() < 2:
+				_error("Usage: corkpkg request <package>")
+				return
+			_print("  " + _esc(sw.request(sim(), args[1])))
+		"install":
+			if args.size() < 3:
+				_error("Usage: corkpkg install <package> <code>")
+				return
+			var r := sw.install(sim(), args[1], args[2])
+			if not r.ok:
+				_error(r.text)
+				return
+			_print("  Downloading %s ..." % args[1])
+			_print("  [color=#%s][####################] 100%%[/color]" % _hex(OSTheme.ACCENT))
+			Facility.spend(float(r.minutes) * 60.0, "Installing %s" % args[1])
+			_print("  " + _esc(r.text) + " (%d facility minutes)" % int(r.minutes))
+		_:
+			_error("Usage: corkpkg list | info | request | install | installed")
 
 
 func _open(args: PackedStringArray) -> void:

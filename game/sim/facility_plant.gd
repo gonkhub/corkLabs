@@ -240,6 +240,23 @@ func _fault(sim: FacilitySim, id: String) -> void:
 	sim.schedule(sim.time(), "alarm", {"device": id})
 
 
+## A robot deliberately breaks a device (a critically unstable robot making
+## work for itself). To the facility it looks like an ordinary fault or drift;
+## only the journal's "sabotage" line says who did it.
+func sabotage(sim: FacilitySim, id: String, robot: RobotAgent) -> void:
+	var d: Dictionary = devices.get(id, {})
+	if d.is_empty():
+		return
+	sim.note("sabotage", "%s SABOTAGED %s" % [robot.display_name(), d.name])
+	var hq := sim.get_system("hq") as CorkHQ
+	if hq:
+		hq.noticed_damage(sim, robot)
+	if KINDS[d.kind].has("drift"):
+		d.value = maxf(float(d.value) - 0.45, 0.0)   # the job gets posted on the next update
+	else:
+		_fault(sim, id)
+
+
 func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 	var d: Dictionary = devices[id]
 	var was_fault: bool = d.fault

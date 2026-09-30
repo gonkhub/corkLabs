@@ -1,0 +1,22 @@
+# What corkHQ (corporate) says. Edit freely.
+#   trigger | condition | sender | text
+# condition: empty, or a grade (A B C D F) for reviews, or low / ok for throughput checks
+# placeholders: {grade} {throughput} {target} {budget} {funds} {robot} {shift} {clearance} {server}
+
+welcome | | Directorate of Output | Welcome to your post, Supervisor. Your facility's throughput target is {target}. You are being evaluated.
+welcome | | Procurement | Your opening budget is {funds}. Requisitions are reviewed. Waste is recorded.
+welcome | | IT Services | Approved software is distributed from {server}. Connect from your terminal: connect {server}
+shift_start | | Directorate of Output | {shift} shift has begun. Target throughput: {target}. We are watching the numbers.
+review | A | Directorate of Output | Shift review: {grade}. Throughput {throughput}. Acceptable. Do not let it go to your head. Budget allocated: {budget}.
+review | B | Directorate of Output | Shift review: {grade}. Throughput {throughput}. Adequate. Budget allocated: {budget}.
+review | C | Directorate of Output | Shift review: {grade}. Throughput {throughput}. Mediocre. Budget allocated: {budget}.
+review | D | Directorate of Output | Shift review: {grade}. Throughput {throughput}. Disappointing. Your budget has been reduced to {budget}.
+review | F | Directorate of Output | Shift review: {grade}. Throughput {throughput}. Unacceptable. This will be discussed. Budget: {budget}.
+clearance_up | | IT Services | Your software clearance has been raised to level {clearance}. Use it responsibly.
+clearance_down | | IT Services | Your software clearance has been lowered to level {clearance}.
+check | low | Directorate of Output | Throughput is at {throughput}. Target is {target}. Explain.
+check | low | Directorate of Output | {throughput}. We expected better.
+check | low | Directorate of Output | Output is below target. Corporate notices these things.
+crash | | Unit Oversight | Unit {robot} has suffered a critical error. Units are corporate property. Keep them running.
+sabotage | | Unit Oversight | Anomalous damage logged near unit {robot}. Investigate.
+idle_units | | Directorate of Output | Idle units detected. Idle units are wasted capital.

@@ -16,7 +16,8 @@
 # Some triggers always speak (order replies, stalls, blocked routes, low
 # power); the rest only if the robot's cooldown has passed and a roll against
 # its chattiness succeeds. Lines come from BarkLibrary (barks.txt) and depend
-# on the robot's condition (low power, low purpose, mood...).
+# on the robot's condition (low power, software stability...). A critically
+# unstable robot's lines sometimes come out garbled; "glitch" lines always do.
 #
 # It uses its own random numbers (seeded from the facility's), so talk never
 # changes what else happens, and it's saved, so replays say the same things.
@@ -37,10 +38,12 @@ const NO_REPEAT := 3
 ## Said lines kept for the camera feeds and panels.
 const RECENT := 40
 ## Triggers that always speak, ignoring cooldown and chattiness.
-const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restarted", "peer_reply", "peer_info_reply"]
+const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restarted", "peer_reply", "peer_info_reply",
+	"critical_error", "glitch", "rebooting", "rebooted", "stability_critical"]
 ## Base chance (before chattiness) for the rest.
 const CHANCE := {"start_job": 0.5, "job_done": 0.6, "recharge": 0.5, "charged": 0.5, "wander": 0.6,
-	"mood_restless": 0.8, "mood_uneasy": 0.9, "mood_content": 0.4, "idle": 0.15, "alarm": 0.8,
+	"stability_drifting": 0.8, "stability_unstable": 0.9, "stability_stable": 0.4, "idle": 0.15, "alarm": 0.8,
+	"fixate": 0.6, "sabotage": 0.5, "order_ignored": 0.9,
 	"route_closed": 0.7, "peer_greet": 0.6, "peer_info": 0.9}
 
 var sim_id := "chatter"
@@ -78,14 +81,31 @@ func trigger(sim: FacilitySim, robot: RobotAgent, what: String, data := {}) -> b
 	var text := _pick(what, robot, ctx)
 	if text.is_empty():
 		return false
+	if what == "glitch" or robot.stability_state == "critical" and rng.randf() < 0.3:
+		text = corrupt(text, 0.35 if what == "glitch" else 0.12)
 	return _speak(sim, robot, text, what, str(data.get("peer_id", "")))
+
+
+## Garbles a line: characters swapped for noise, stutters. `amount` 0-1.
+func corrupt(text: String, amount: float) -> String:
+	var noise := "#%&@$*!?/|01"
+	var out := ""
+	for ch in text:
+		var r := rng.randf()
+		if ch != " " and r < amount:
+			out += noise[rng.randi() % noise.length()]
+		elif ch != " " and r < amount * 1.4:
+			out += ch + "-" + ch
+		else:
+			out += ch
+	return out
 
 
 ## What placeholders and conditions see about a robot.
 func context(sim: FacilitySim, robot: RobotAgent) -> Dictionary:
 	var layout := sim.get_system("layout") as FacilityLayout
 	var room_id := robot.room(sim) if layout else ""
-	return {"me": robot.display_name(), "power": robot.power, "purpose": robot.purpose, "mood": robot.mood,
+	return {"me": robot.display_name(), "power": robot.power, "stability": robot.stability, "state": robot.stability_state,
 		"working": robot.activity.kind == "work",
 		"room": layout.rooms.get(room_id, {}).get("name", "") if layout else ""}
 
@@ -196,6 +216,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			if r and p:
 				trigger(sim, r, str(data.trigger), {"peer": p.display_name(), "peer_id": p.robot_id})
 		"alarm":
+			if not data.has("device"):
+				return
 			# The robot nearest the trouble comments.
 			var plant := sim.get_system("plant") as FacilityPlant
 			var device: Dictionary = plant.device(str(data.get("device", ""))) if plant else {}

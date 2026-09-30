@@ -48,14 +48,23 @@ extends Resource
 ## Once charging, it stays on the dock until it reaches this.
 @export_range(0.3, 1.0, 0.01) var charge_until := 0.95
 
-@export_group("Purpose")
-## How quickly idleness makes it uneasy (purpose lost per idle second, 0-1 scale).
-## Robots think the work keeps THEM running; standing around feels like dying.
-@export_range(0.0, 0.01, 0.00001) var restlessness := 0.0004
-## Purpose regained per second of work.
-@export_range(0.0, 0.01, 0.00001) var purpose_from_work := 0.001
-## Purpose gained on finishing a job.
-@export_range(0.0, 1.0, 0.01) var purpose_per_job := 0.25
+@export_group("Software stability")
+## Stability lost per idle second (0-1 scale). Robots think the work keeps
+## THEM running; standing around makes their software drift.
+@export_range(0.0, 0.01, 0.00001) var stability_decay := 0.0004
+## Stability regained per second of work.
+@export_range(0.0, 0.01, 0.00001) var stability_from_work := 0.001
+## Stability gained on finishing a job.
+@export_range(0.0, 1.0, 0.01) var stability_per_job := 0.25
+## Stability lost when an order makes it drop what it wanted to do.
+@export_range(0.0, 0.2, 0.005) var order_stress := 0.02
+## How far low stability turns into independence: orders count for less,
+## choices get erratic, errant behaviour creeps in. 0 = stays obedient however unstable.
+@export_range(0.0, 1.0, 0.05) var independence := 0.6
+## Resistance to critical errors (crashes, glitches) when stability is critical.
+@export_range(0.0, 1.0, 0.05) var error_resistance := 0.3
+## How willing it is, at critical stability, to break things so there's work to do.
+@export_range(0.0, 1.0, 0.05) var sabotage_tendency := 0.4
 
 @export_group("Orders")
 ## How much a supervisor's order adds to a job's score. High = obedient.
