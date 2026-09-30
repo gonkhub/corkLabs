@@ -22,7 +22,7 @@ New-Item -ItemType Directory $tmp | Out-Null
 Get-ChildItem $project -Force | Where-Object { $_.Name -notin @(".godot", ".git") } | Copy-Item -Destination $tmp -Recurse
 
 # Let Godot scan the copy once (builds the class list). Show only real problems.
-& $Godot --headless --xr-mode off --editor --path $tmp --quit 2>&1 | ForEach-Object { "$_" } |
+& $Godot --headless --xr-mode off --editor --path $tmp --quit-after 300 2>&1 | ForEach-Object { "$_" } |
     Where-Object { $_ -match "SCRIPT ERROR|Parse Error" } | Select-Object -First 20
 
 $failed = 0
