@@ -6,7 +6,9 @@
 #                 drag to pan/tilt, scroll to zoom, double-click to reset
 #                 (or arrow keys, + / -, Home). Auto-track follows a robot.
 #   Grid view     every camera at once; click one to open it.
-#   Keys          1-9 camera, G grid/single, F CCTV filter, M mute.
+#   Night vision  the facility is dark (it was built for robots); N switches
+#                 every feed to infrared.
+#   Keys          1-9 camera, G grid/single, N night vision, F CCTV filter, M mute.
 #   Robots' speech floats over them in any feed that can see them.
 #   Sound         you hear the facility through one camera at a time: the
 #                 open one in single view, the one under the mouse in the
@@ -17,6 +19,7 @@ extends OSApp
 var cam := 0
 var grid_mode := false
 var filter_on := true
+var night_on := false
 
 var body: Control
 var feeds: Array[CCTVFeed] = []
@@ -25,6 +28,7 @@ var single_button: Button
 var grid_button: Button
 var track_button: Button
 var reset_button: Button
+var night_button: CheckBox
 var mute_button: Button
 var hint: Label
 
@@ -79,6 +83,13 @@ func build() -> void:
 	mute_button.toggled.connect(set_muted)
 	row.add_child(mute_button)
 	_show_mute()
+	night_button = CheckBox.new()
+	night_button.text = "Night vision"
+	night_button.button_pressed = night_on
+	night_button.focus_mode = Control.FOCUS_NONE
+	night_button.tooltip_text = "See by the cameras' own infrared light (N)"
+	night_button.toggled.connect(set_night_vision)
+	row.add_child(night_button)
 	var filt := CheckBox.new()
 	filt.text = "CCTV filter"
 	filt.button_pressed = filter_on
@@ -93,7 +104,8 @@ func build() -> void:
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(body)
 	hint = OSTheme.label("", 12, OSTheme.TEXT_DIM)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # never forces the window wider
+	hint.clip_text = true   # a long hint never sets how narrow the window can be
+	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	add_child(hint)
 	_rebuild()
 
@@ -107,6 +119,13 @@ func show_camera(i: int) -> void:
 func set_grid(on: bool) -> void:
 	grid_mode = on
 	_rebuild()
+
+
+func set_night_vision(on: bool) -> void:
+	night_on = on
+	night_button.set_pressed_no_signal(on)
+	for f in feeds:
+		f.set_night_vision(on)
 
 
 func set_muted(on: bool) -> void:
@@ -167,13 +186,13 @@ func _rebuild() -> void:
 					listen_to(null))
 			grid.add_child(f)
 		listen_to(null)
-		hint.text = "Click a feed to open it · point at one to hear it.   Keys: 1-9 camera, G single/grid, F filter, M mute"
+		hint.text = "Click a feed to open it · point at one to hear it.   Keys: 1-9 camera, G single/grid, N night vision, F filter, M mute"
 	else:
 		var f := _feed(cam, true)
 		f.set_anchors_preset(Control.PRESET_FULL_RECT)
 		body.add_child(f)
 		listen_to(f)
-		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, F filter, M mute"
+		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, N night vision, F filter, M mute"
 	refresh()
 
 
@@ -182,6 +201,7 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 	f.setup(_world(), desktop.world_viewport if desktop else null, i, interactive)
 	f.speech = desktop.speech if desktop else null
 	f.set_filter(filter_on)
+	f.set_night_vision(night_on)
 	feeds.append(f)
 	return f
 
@@ -207,6 +227,9 @@ func key_input(event: InputEventKey) -> bool:
 			return true
 		KEY_G:
 			set_grid(not grid_mode)
+			return true
+		KEY_N:
+			set_night_vision(not night_on)
 			return true
 		KEY_F:
 			filter_on = not filter_on
@@ -252,11 +275,13 @@ func _toggle(row: Container, text: String, group: ButtonGroup, action: Callable)
 
 
 func save_state() -> Dictionary:
-	return {"cam": cam, "grid": grid_mode, "filter": filter_on}
+	return {"cam": cam, "grid": grid_mode, "filter": filter_on, "night": night_on}
 
 
 func load_state(state: Dictionary) -> void:
 	cam = clampi(int(state.get("cam", 0)), 0, maxi(cam_buttons.size() - 1, 0))
 	grid_mode = bool(state.get("grid", false))
 	filter_on = bool(state.get("filter", true))
+	night_on = bool(state.get("night", false))
+	night_button.set_pressed_no_signal(night_on)
 	_rebuild()

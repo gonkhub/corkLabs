@@ -1,8 +1,15 @@
 # The 3D facility, built from the same floor plan the simulation uses
 # (FacilitySetup.layout()): rooms (floor, walls with openings where passages
-# go through), the rail network, the robots, the plant's props, lights and
-# security cameras. Change the layout and the world follows; nothing here is
-# placed by hand.
+# go through), the rail network, the robots, the plant's props and security
+# cameras. Change the layout and the world follows; nothing here is placed by
+# hand.
+#
+# There are no lights. The facility was built for robots, and robots don't
+# need to see: no lamps, no windows, no washrooms or water fountains. What
+# light there is comes from the machines themselves (status lamps, charging
+# docks, the robots' own LEDs); the cameras see the rest in night vision
+# (CCTVFeed). The Environment keeps a trace of ambient light, so shapes are
+# only just there on a normal feed.
 #
 # It shows whatever Facility session is running (robots follow their sim
 # selves via RobotView, props show the plant, blocked passages show a closed
@@ -37,7 +44,6 @@ var auditions: Array[FacilitySound] = []
 
 func _ready() -> void:
 	layout = FacilitySetup.layout()
-	_build_lights()
 	for id in layout.rooms:
 		_build_room(id)
 	_build_rails()
@@ -171,6 +177,7 @@ func _build_room(id: String) -> void:
 	label.font_size = 256
 	label.pixel_size = 0.004 * clampf(rect.size.x / 20.0, 0.6, 2.5)
 	label.modulate = Color(1, 1, 1, 0.12)
+	label.shaded = true   # painted on the floor, not lit: only night vision picks it up
 	label.rotation.x = -PI / 2
 	label.position = fl.position + Vector3(0, 0.02, 0)
 	root.add_child(label)
@@ -255,6 +262,7 @@ func _build_passage(sid: String, at: Vector3, dir: Vector2, w: float, bottom: fl
 	sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sign.modulate = col.lightened(0.3)
 	sign.outline_size = 8
+	sign.shaded = true   # stencilled paint, not a lit sign
 	sign.position = Vector3(0, top + 0.8, 0)
 	frame.add_child(sign)
 	var shutter_box := BoxMesh.new()
@@ -265,7 +273,7 @@ func _build_passage(sid: String, at: Vector3, dir: Vector2, w: float, bottom: fl
 	_shutters[sid] = shutter
 
 
-# --- Rails, lights, cameras --------------------------------------------------------------------
+# --- Rails, cameras --------------------------------------------------------------------
 
 func _build_rails() -> void:
 	var root := Node3D.new()
@@ -293,27 +301,6 @@ func _build_rails() -> void:
 		joint.size = Vector3(0.4, 0.25, 0.4)
 		var j := _mesh(joint, mat, root)
 		j.position = layout.nodes[nid].pos + Vector3(0, 0.12, 0)
-
-
-func _build_lights() -> void:
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-60, 30, 0)
-	sun.light_energy = 0.15
-	add_child(sun)
-	for id in layout.rooms:
-		var r: Dictionary = layout.rooms[id]
-		var rect: Rect2 = r.rect
-		var nx := maxi(1, roundi(rect.size.x / 25.0))
-		var nz := maxi(1, roundi(rect.size.y / 25.0))
-		for i in nx:
-			for k in nz:
-				var lamp := OmniLight3D.new()
-				lamp.position = Vector3(rect.position.x + rect.size.x * (i + 0.5) / nx, float(r.height) - 1.0,
-					rect.position.y + rect.size.y * (k + 0.5) / nz)
-				lamp.omni_range = maxf(rect.size.x / nx, rect.size.y / nz) * 1.1 + float(r.height)
-				lamp.light_energy = 3.0 if rect.size.x > 40.0 else 2.0
-				lamp.light_color = Color(1, 0.94, 0.84)
-				add_child(lamp)
 
 
 func _build_cameras() -> void:
