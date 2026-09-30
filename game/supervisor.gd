@@ -80,6 +80,7 @@ const TALK_CHOICE := "choice"
 const TALK_VIOLATION := 1.5
 const TALK_STEADY := 0.06
 const TALK_STEADY_EVERY := 3600.0
+const INSPECT_MINUTES := 10.0
 
 
 ## Reads a file (Terminal cat, Files). Spends its reading time the first time.
@@ -123,6 +124,35 @@ static func talk_begin(bot: RobotAgent) -> Dictionary:
 	return {"runner": runner, "lines": lines, "error": ""}
 
 
+## Opens a reply to Liaison Pell (the corkHQ panel). Lines and answers cost
+## time like a conversation with a unit; talking to corporate isn't a violation.
+static func reply_begin() -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var d := Dialogue.for_robot("pell")
+	if d == null:
+		return {"runner": null, "lines": []}
+	sim.note("supervisor", "Replies to Liaison Pell")
+	var runner := Dialogue.Runner.new(d, "pell")
+	var lines := runner.begin(sim)
+	if not lines.is_empty():
+		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Reading the liaison's reply")
+	return {"runner": runner, "lines": lines}
+
+
+static func reply_choose(runner: Dialogue.Runner, i: int) -> Array[Dictionary]:
+	if i < 0 or i >= runner.choices.size():
+		return []
+	var sim: FacilitySim = Facility.sim
+	sim.note("supervisor", "To Liaison Pell: \"%s\"" % runner.choices[i].text)
+	var lines := runner.choose(sim, i)
+	Facility.act(TALK_CHOICE, "Supervisor writes to the liaison")
+	for l in lines:
+		sim.note("hq", "Liaison Pell (reply): %s" % l.text)
+	if not lines.is_empty():
+		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Reading the liaison's reply")
+	return lines
+
+
 ## Picks a reply. Returns the lines that follow.
 static func talk_choose(runner: Dialogue.Runner, bot: RobotAgent, i: int) -> Array[Dictionary]:
 	if i < 0 or i >= runner.choices.size():
@@ -141,6 +171,44 @@ static func _spend_lines(bot: RobotAgent, lines: Array[Dictionary], _cause: Stri
 			Facility.sim.note("speech", "%s (link): \"%s\"" % [bot.display_name(), l.text])
 	if not lines.is_empty():
 		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Talking with %s" % bot.display_name())
+
+
+## Inspects a device properly (Plant app): 10 facility minutes. Returns the read-out.
+static func inspect_device(id: String) -> String:
+	var sim: FacilitySim = Facility.sim
+	var plant := sim.get_system("plant") as FacilityPlant
+	sim.note("supervisor", "Inspects %s" % plant.device(id).get("name", id))
+	Facility.spend(INSPECT_MINUTES * 60.0, "Supervisor inspects %s" % plant.device(id).get("name", id))
+	return plant.inspect_text(sim, id)
+
+
+## Authorises a spare part from stock on a device (a choice: 2 minutes).
+static func use_part(id: String) -> String:
+	var sim: FacilitySim = Facility.sim
+	var why := (sim.get_system("plant") as FacilityPlant).use_part(sim, id)
+	if why.is_empty():
+		Facility.act("choice", "Supervisor authorises a spare part")
+	return why
+
+
+## Posts a maintenance job for a worn device before it's an alarm (2 minutes).
+static func request_maintenance(id: String) -> String:
+	var sim: FacilitySim = Facility.sim
+	var plant := sim.get_system("plant") as FacilityPlant
+	var board := sim.get_system("work") as WorkBoard
+	var d := plant.device(id)
+	if d.is_empty() or not FacilityPlant.KINDS[d.kind].has("drift"):
+		return "That isn't something you service; it breaks, and then it's fixed."
+	var job: Dictionary = board.get_job(int(d.job)) if int(d.job) >= 0 else {}
+	if not job.is_empty() and (job.status == "open" or job.status == "claimed"):
+		return "There's already job #%d for it." % int(d.job)
+	if float(d.value) >= 0.95:
+		return "%s doesn't need it." % d.name
+	var k: Dictionary = FacilityPlant.KINDS[d.kind]
+	d.job = board.post(sim, FacilityPlant._job_title(d), k.skill, d.station, k.work * maxf(1.0 - float(d.value), 0.3), 1, id)
+	sim.note("supervisor", "Requests maintenance: %s" % d.name)
+	Facility.act("choice", "Supervisor requests maintenance")
+	return ""
 
 
 ## Does a duty from the checklist. Returns "" or why not.

@@ -1,0 +1,87 @@
+# Liaison Pell (the corkHQ panel's Reply button). Corporate's voice with a
+# face: polite, watchful, never quite answering. What you say to her moves
+# your standing and suspicion. Format: see game/story/dialogue.gd.
+
+== start
+-> {!met:pell} first
+pell: Supervisor.
+-> menu
+
+== first
+~ learn met:pell
+pell: Supervisor. You found the reply button. Most don't, for a while.
+pell: I'm here to help you succeed. Success here is simple: numbers up, questions down.
+-> menu
+
+== menu
+* How am I doing? -> perf
+* {!seen:pell.okafor} What happened to the last supervisor? -> okafor
+* {transfer:okafor & !seen:pell.transfer} What is Long-Term Processing? -> transfer
+* {!seen:pell.door} Where's the door? -> door
+* {secret:former_staff & !seen:pell.confess} I read the former staff files. -> confess
+* {shift>=2 & !purged:dokafor & !seen:pell.purge} Why purge Okafor's files? -> purge
+* {secret:pod3 & !seen:pell.pod3} I know who's in pod 3. -> pod3
+* {secret:hq_silence & !seen:pell.silence} Did you notice the link went quiet? -> silence
+* Nothing. (Close the reply.) -> END
+
+== perf
+-> {standing>=70} perf_good
+-> {standing>=40} perf_ok
+pell: Your standing is poor. I'd concentrate on the numbers. And on your duties.
+-> menu
+
+== perf_good
+pell: The Directorate is pleased with you. Keep it that way.
+-> menu
+
+== perf_ok
+pell: Adequate. The Directorate prefers better than adequate.
+-> menu
+
+== okafor
+pell: Supervisor Okafor was transferred. Transfers are routine.
+pell: They were a valued member of staff. You are a valued member of staff.
+-> menu
+
+== transfer
+pell: Long-Term Processing is where supervisors go when their contribution here is complete.
+pell: It's very quiet. Nobody has ever complained.
+~ standing -1 | asked the liaison about transfers
+-> menu
+
+== door
+pell: You won't need one.
+-> menu
+
+== confess
+pell: I know. I see what you open.
+* I'm sorry. It won't happen again. -> confess_sorry
+* They were here before me. I wanted to know. -> confess_honest
+
+== confess_sorry
+pell: Good. Contrition is noted.
+~ standing 3 | apologised to the liaison
+~ learn apologised
+-> menu
+
+== confess_honest
+pell: Curiosity is a quality we screen for, Supervisor. In both directions.
+~ suspicion 5 | admitted reading former staff files
+-> menu
+
+== purge
+pell: Because there is nothing in them you need. If there were, I would have told you.
+pell: Confirm the purge in your duties. It will be noticed either way.
+-> menu
+
+== pod3
+pell: ...
+pell: Pods are not to be inspected, opened or discussed, Supervisor. That includes with me.
+pell: Especially with me.
+~ suspicion 10 | discussed pod telemetry with the liaison
+-> menu
+
+== silence
+pell: The link is never quiet, Supervisor. Sometimes you just can't hear it.
+~ suspicion 4 | asked the liaison about the suspended link
+-> menu

@@ -73,7 +73,7 @@ func _test_requisitions() -> void:
 	_check(r.order.status == "delivered" and plant.coolant > 0.65, "it's delivered, and coolant tops up the reservoir (%d%%)" % roundi(plant.coolant * 100))
 	var parts := req.place(sim, "fuse_pack", 2)
 	sim.advance(2.1 * 3600.0)
-	_check(int(req.inventory.get("fuse_pack", 0)) == 2, "parts go into stock")
+	_check(int(req.inventory.get("fuse_pack", 0)) == 8, "parts go into stock (two packs of four fuses: %d)" % int(req.inventory.get("fuse_pack", 0)))
 	# Needs approval: approved with a decent rating, denied (and refunded) with a poor one.
 	req.funds = 10000
 	hq.grade = "B"
@@ -132,7 +132,8 @@ func _test_panel() -> void:
 	var panel = desk.hq_panel
 	_check(panel != null and panel.list.get_child_count() >= 3, "the corkHQ panel shows corporate's messages")
 	_check(panel.position.x > 1000 and panel.position.y < 40, "pinned in the top-right corner (%s)" % panel.position)
-	_check(panel.find_children("*", "Button", true, false).is_empty(), "with no buttons: no close, no minimise")
+	var buttons: Array = panel.find_children("*", "Button", true, false)
+	_check(buttons.size() == 1 and buttons[0].text == "Reply", "no close, no minimise: its one button is Reply")
 	_check(panel.get_index() > desk.window_layer.get_index(), "above every window")
 	var hq: CorkHQ = facility.sim.get_system("hq")
 	hq.post(facility.sim, "Test", "notice", "Hello")

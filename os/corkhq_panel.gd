@@ -11,6 +11,10 @@
 # The one way to quieten it: the maintenance account's "hqctl mute". While
 # the link is suspended the panel goes dark and holds new messages; they all
 # arrive at once when it comes back. Corporate notices at the next audit.
+#
+# Reply: the one button it has. It opens a conversation with Liaison Pell
+# (game/story/dialogue/pell.txt) in the panel itself; lines and answers cost
+# facility time like any conversation, and what you say is noted.
 class_name CorkHQPanel
 extends PanelContainer
 
@@ -35,6 +39,12 @@ var _shake := 0.0
 var _home := Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
 var _suspended: Label
+var _scroll: ScrollContainer
+var _reply_box: VBoxContainer
+var _reply_scroll: ScrollContainer
+var _reply_button: Button
+## The conversation with Pell, while the reply is open.
+var reply_runner: Dialogue.Runner
 
 
 func _ready() -> void:
@@ -64,6 +74,14 @@ func _ready() -> void:
 	var sub := OSTheme.label("  Corporate Liaison", 12, Color(1, 1, 1, 0.75))
 	sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(sub)
+	_reply_button = Button.new()
+	_reply_button.text = "Reply"
+	_reply_button.flat = true
+	_reply_button.focus_mode = Control.FOCUS_NONE
+	_reply_button.add_theme_color_override("font_color", Color(1, 0.9, 0.85))
+	_reply_button.tooltip_text = "Reply to your liaison"
+	_reply_button.pressed.connect(open_reply)
+	row.add_child(_reply_button)
 	row.add_child(OSTheme.mono_label("● LIVE", 11, Color(1, 0.85, 0.8)))
 	var body := MarginContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -75,16 +93,24 @@ func _ready() -> void:
 	status = OSTheme.mono_label("", 12, Color("f0d9b5"))
 	inner.add_child(status)
 	inner.add_child(HSeparator.new())
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	inner.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	inner.add_child(_scroll)
 	list = VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 8)
-	scroll.add_child(list)
-	_suspended = OSTheme.mono_label("LINK SUSPENDED
-(maintenance)", 18, Color(1, 0.4, 0.35, 0.8))
+	_scroll.add_child(list)
+	_reply_scroll = ScrollContainer.new()
+	_reply_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_reply_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_reply_scroll.visible = false
+	inner.add_child(_reply_scroll)
+	_reply_box = VBoxContainer.new()
+	_reply_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reply_box.add_theme_constant_override("separation", 6)
+	_reply_scroll.add_child(_reply_box)
+	_suspended = OSTheme.mono_label("LINK SUSPENDED\n(maintenance)", 18, Color(1, 0.4, 0.35, 0.8))
 	_suspended.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_suspended.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_suspended.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -117,7 +143,9 @@ func _process(delta: float) -> void:
 	var o := Facility.sim.get_system("oversight") as Oversight
 	var muted := o != null and o.hq_muted(Facility.sim)
 	_suspended.visible = muted
-	list.get_parent().visible = not muted
+	_scroll.visible = not muted and reply_runner == null
+	_reply_scroll.visible = not muted and reply_runner != null
+	_reply_button.disabled = muted
 	if hq.posted != _mark and not muted:
 		_mark = hq.posted
 		_rebuild(hq)
@@ -148,8 +176,71 @@ func _refresh_status(hq: CorkHQ) -> void:
 	status.text = "RATING %s   FUNDS %s cr   CLEARANCE %d" % [hq.grade if hq.grade != "" else "pending",
 		_thousands(req.funds) if req else "?", sw.clearance if sw else 1]
 	if o:
-		status.text += "
-STANDING %d/100%s" % [roundi(o.standing), "   WARNINGS %d" % o.strikes if o.strikes > 0 else ""]
+		status.text += "\nSTANDING %d/100%s" % [roundi(o.standing), "   WARNINGS %d" % o.strikes if o.strikes > 0 else ""]
+
+
+# --- Replying to the liaison -------------------------------------------------------
+
+## Opens the conversation with Pell in the panel.
+func open_reply() -> void:
+	if reply_runner != null or not Facility.running:
+		return
+	var r: Dictionary = Supervisor.reply_begin()
+	if r.runner == null:
+		return
+	reply_runner = r.runner
+	for c in _reply_box.get_children():
+		c.free()
+	_add_lines(r.lines)
+	_add_choices()
+
+
+func close_reply() -> void:
+	reply_runner = null
+	for c in _reply_box.get_children():
+		c.queue_free()
+
+
+## Picks reply `i` (tests call this too).
+func choose_reply(i: int) -> void:
+	if reply_runner == null or i < 0 or i >= reply_runner.choices.size():
+		return
+	var said: String = reply_runner.choices[i].text
+	for c in _reply_box.get_children():
+		if c is Button:
+			c.queue_free()
+	var you := OSTheme.label("> " + said, 13, Color("f0d9b5"))
+	you.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	you.custom_minimum_size.x = WIDTH - 40.0
+	_reply_box.add_child(you)
+	_add_lines(Supervisor.reply_choose(reply_runner, i))
+	_add_choices()
+
+
+func _add_lines(lines: Array) -> void:
+	for l in lines:
+		var who := OSTheme.label("LIAISON PELL" if l.speaker == "pell" else str(l.speaker).to_upper(), 11, KIND_COLORS.directive)
+		_reply_box.add_child(who)
+		var text := OSTheme.label(str(l.text), 13, OSTheme.TEXT)
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.custom_minimum_size.x = WIDTH - 40.0
+		_reply_box.add_child(text)
+
+
+func _add_choices() -> void:
+	if reply_runner == null or reply_runner.done or reply_runner.choices.is_empty():
+		close_reply()
+		return
+	for i in reply_runner.choices.size():
+		var b := Button.new()
+		b.text = reply_runner.choices[i].text
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.focus_mode = Control.FOCUS_NONE
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.custom_minimum_size.x = WIDTH - 40.0
+		b.pressed.connect(choose_reply.bind(i))
+		_reply_box.add_child(b)
+	_reply_scroll.set_deferred("scroll_vertical", 100000)
 
 
 ## Redraws right away (after the link is suspended or restored).

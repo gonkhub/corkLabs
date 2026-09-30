@@ -39,6 +39,7 @@ func _initialize() -> void:
 
 	await _test_terminal()
 	await _test_apps()
+	await _test_plant_and_liaison()
 	await _test_nightrun()
 	await _test_maint()
 	await _test_fired_and_retry()
@@ -135,6 +136,51 @@ func _test_apps() -> void:
 	t0 = sim().time()
 	units._diagnose("hauler")
 	_check(sim().time() - t0 >= 599.0 and units.cards["hauler"].reply.text.contains("DIAG"), "Diagnose takes 10 minutes and reads the unit out")
+
+
+func _test_plant_and_liaison() -> void:
+	# Plant: inspect, request maintenance, spare parts from Requisitions stock.
+	var plant_app = desk.open_app("plant")
+	await process_frame
+	var plant := sim().get_system("plant") as FacilityPlant
+	var board := sim().get_system("work") as WorkBoard
+	var req := sim().get_system("requisitions") as Requisitions
+	plant.device("filter_2").value = 0.8
+	plant_app.selected = "filter_2"
+	var t0 := sim().time()
+	var text: String = load("res://game/supervisor.gd").inspect_device("filter_2")
+	_check(text.contains("Bay 2 filters") and text.contains("Needs work in about") and sim().time() - t0 >= 599.0,
+		"Inspect reads a device out in 10 minutes (%s)" % text.replace("\n", " / "))
+	var why: String = load("res://game/supervisor.gd").request_maintenance("filter_2")
+	var job := board.get_job(int(plant.device("filter_2").job))
+	_check(why.is_empty() and not job.is_empty() and job.status in ["open", "claimed"], "Request maintenance posts the job before it's an alarm (%s)" % why)
+	_check(not load("res://game/supervisor.gd").request_maintenance("filter_2").is_empty(), "but not twice")
+	_check(load("res://game/supervisor.gd").use_part("filter_2").contains("No "), "no spare in stock, no shortcut")
+	_check(Requisitions.pack_size(req.item("filter_cartridges")) == 6, "a pack of six cartridges counts as six")
+	req.inventory["filter_cartridges"] = 1
+	var work_before := float(job.work)
+	why = load("res://game/supervisor.gd").use_part("filter_2")
+	_check(why.is_empty() and float(job.work) < work_before * 0.75 and int(req.inventory["filter_cartridges"]) == 0,
+		"a spare part shrinks the job (%.0f -> %.0f s of work) and leaves stock" % [work_before, float(job.work)])
+	# Replying to the liaison, in the corkHQ panel.
+	var panel = desk.hq_panel
+	t0 = sim().time()
+	panel.open_reply()
+	await process_frame
+	_check(panel.reply_runner != null and panel._reply_scroll.visible and sim().time() > t0, "Reply opens a conversation with Pell in the panel")
+	var n: int = panel.reply_runner.choices.size()
+	var door := -1
+	for i in n:
+		if str(panel.reply_runner.choices[i].text).contains("door"):
+			door = i
+	_check(door >= 0, "one of the replies asks where the door is")
+	panel.choose_reply(door)
+	await process_frame
+	var said: bool = panel._reply_box.find_children("*", "Label", true, false).any(func(l): return l.text.contains("won't need one"))
+	_check(said, "Pell answers")
+	panel.choose_reply(panel.reply_runner.choices.size() - 1)
+	await process_frame
+	_check(panel.reply_runner == null and panel._scroll.visible, "closing the reply shows the messages again")
 
 
 func _test_nightrun() -> void:

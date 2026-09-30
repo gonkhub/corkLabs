@@ -1,13 +1,15 @@
 # The requisitions catalogue. Edit freely.
 #   id | category | name | price (credits) | delivery (facility hours) | approval | effect | description
 # approval: yes = corporate must approve it first (can be denied if your rating is poor)
-# effect:   what happens on delivery. inventory = goes into stock (placeholder),
+# effect:   what happens on delivery. inventory = goes into stock (spare parts: the Plant app
+#           uses them on a device, see FacilityPlant.PARTS),
 #           coolant:0.4 = tops up the coolant reservoir by 40%, robot:<model> = a crated unit (placeholder)
 
 coolant_canister | Resources | Coolant canister | 120 | 1 | no | coolant:0.4 | Tops up the coolant reservoir by 40%.
 filter_cartridges | Resources | Filter cartridges (x6) | 90 | 2 | no | inventory | Spare cartridges for the bay filters.
 lubricant_drum | Resources | Rail lubricant drum | 60 | 2 | no | inventory | Keeps the rail carriages running smooth.
 fuse_pack | Parts | Relay fuse pack (x4) | 150 | 2 | no | inventory | Replacement fuses for the power relay.
+pipe_clamps | Parts | Pipe clamp set (x3) | 110 | 2 | no | inventory | Quick clamps for coolant leaks.
 pod_calibration_kit | Parts | Pod calibration kit | 260 | 4 | no | inventory | Precision tools for pod recalibration.
 gate_actuator | Parts | Freight gate actuator | 480 | 6 | yes | inventory | A new drive for the freight gate. Fewer jams.
 servo_bundle | Parts | Servo bundle | 200 | 3 | no | inventory | General-purpose robot servos.

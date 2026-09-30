@@ -1,5 +1,9 @@
 # Plant: the facility's vital signs. Throughput (the pods' average sync),
 # coolant, heat, dock power, and every device's state with its open job.
+# Pick a device to act on it:
+#   Inspect (10 min)        how fast it's wearing, when it needs work, who's on it
+#   Request maintenance     post the job before it becomes an alarm (2 min)
+#   Use spare part          from Requisitions stock: speeds the repair (2 min)
 class_name PlantApp
 extends OSApp
 
@@ -9,7 +13,13 @@ var coolant_txt: Label
 var heat: Label
 var docks: Label
 var tree: Tree
+var detail: Label
+var inspect_button: Button
+var service_button: Button
+var part_button: Button
+var selected := ""
 var _signature := ""
+var _rebuilding := false
 
 
 func _init() -> void:
@@ -70,7 +80,50 @@ func build() -> void:
 		tree.set_column_title_alignment(i, HORIZONTAL_ALIGNMENT_LEFT)
 	tree.set_column_expand(2, false)
 	tree.set_column_custom_minimum_width(2, 80)
+	tree.item_selected.connect(func():
+		if _rebuilding:
+			return
+		selected = str(tree.get_selected().get_metadata(0))
+		detail.text = ""
+		_update_buttons())
 	add_child(tree)
+	detail = OSTheme.label("Select a device.", 13, OSTheme.TEXT_DIM)
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(detail)
+	var row := HBoxContainer.new()
+	add_child(row)
+	inspect_button = _button(row, "Inspect (10 min)", func(): detail.text = Supervisor.inspect_device(selected))
+	service_button = _button(row, "Request maintenance", func(): _result(Supervisor.request_maintenance(selected), "Maintenance requested."))
+	part_button = _button(row, "Use spare part", func(): _result(Supervisor.use_part(selected), "Spare part used."))
+	_update_buttons()
+
+
+func _button(row: HBoxContainer, text: String, action: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(func():
+		action.call()
+		_signature = ""
+		refresh())
+	row.add_child(b)
+	return b
+
+
+func _result(why: String, ok_text: String) -> void:
+	detail.text = ok_text if why.is_empty() else why
+
+
+func _update_buttons() -> void:
+	var none := selected.is_empty()
+	for b in [inspect_button, service_button, part_button]:
+		b.disabled = none
+	if none or sim() == null:
+		return
+	var plant := sim().get_system("plant") as FacilityPlant
+	var d := plant.device(selected)
+	service_button.visible = FacilityPlant.KINDS.get(d.get("kind", ""), {}).has("drift")
+	part_button.visible = FacilityPlant.PARTS.has(d.get("kind", ""))
 
 
 func refresh() -> void:
@@ -96,11 +149,12 @@ func refresh() -> void:
 			continue   # empty bays: nothing to show
 		var text := plant.device_text(id)
 		rows.append([d.name, text.substr(20).split("  job")[0].strip_edges(),
-			("#%d" % int(d.job)) if int(d.job) >= 0 else "", _device_color(d)])
+			("#%d" % int(d.job)) if int(d.job) >= 0 else "", _device_color(d), id])
 	var sig := str(rows)
 	if sig == _signature:
 		return
 	_signature = sig
+	_rebuilding = true
 	tree.clear()
 	var root := tree.create_item()
 	for r in rows:
@@ -108,6 +162,11 @@ func refresh() -> void:
 		for c in 3:
 			it.set_text(c, r[c])
 		it.set_custom_color(1, r[3])
+		it.set_metadata(0, r[4])
+		if r[4] == selected:
+			it.select(0)
+	_rebuilding = false
+	_update_buttons()
 
 
 static func _color(v: float, warn: float, bad: float) -> Color:

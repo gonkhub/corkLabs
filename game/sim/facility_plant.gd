@@ -46,6 +46,13 @@ const KINDS := {
 		"blocks": "freight_gate"},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1},
 }
+## The spare part (a Requisitions stock item) that speeds up each kind's
+## repair. The supervisor authorises it from the Plant app: the open job
+## shrinks to PART_WORK of what's left, or a worn device gets PART_BOOST back.
+const PARTS := {"filter": "filter_cartridges", "pipe": "pipe_clamps", "relay": "fuse_pack",
+	"pod": "pod_calibration_kit", "gate": "gate_actuator"}
+const PART_WORK := 0.4
+const PART_BOOST := 0.3
 ## Kinds that don't break: a "fault" is new work arriving (debris, freight).
 const ARRIVALS := ["bay", "freight"]
 ## Chance that cleared debris turns up a damaged part. The part goes to the
@@ -356,6 +363,59 @@ func sim_load(data: Dictionary) -> void:
 	shift_stats = {"output_sum": float(st.get("output_sum", 0.0)), "samples": int(st.get("samples", 0)),
 		"faults": int(st.get("faults", 0)), "jobs": int(st.get("jobs", 0))}
 	_acc = float(data.get("acc", 0.0))
+
+
+## Uses a spare part on a device. Returns "" or why not.
+func use_part(sim: FacilitySim, id: String) -> String:
+	var d := device(id)
+	if d.is_empty() or not PARTS.has(d.kind):
+		return "No spare part fits that."
+	var req := sim.get_system("requisitions") as Requisitions
+	var part: String = PARTS[d.kind]
+	if req == null or int(req.inventory.get(part, 0)) <= 0:
+		return "No %s in stock (Requisitions)." % (req.item(part).get("name", part) if req else part)
+	var board := sim.get_system("work") as WorkBoard
+	var job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
+	if not job.is_empty() and (job.status == "open" or job.status == "claimed"):
+		var left: float = float(job.work) - float(job.progress)
+		job.work = float(job.progress) + maxf(left * PART_WORK, 1.0)
+	elif KINDS[d.kind].has("drift") and float(d.value) < 1.0:
+		d.value = minf(float(d.value) + PART_BOOST, 1.0)
+	else:
+		return "%s doesn't need it right now." % d.name
+	req.inventory[part] = int(req.inventory[part]) - 1
+	sim.note("plant", "Spare %s used on %s" % [req.item(part).get("name", part), d.name])
+	return ""
+
+
+## A proper look at one device (the Plant app's Inspect): its state, how
+## fast it's wearing, when it'll need work, and who's on it.
+func inspect_text(sim: FacilitySim, id: String) -> String:
+	var d := device(id)
+	if d.is_empty():
+		return ""
+	var k: Dictionary = KINDS[d.kind]
+	var lines := PackedStringArray([device_text(id).strip_edges()])
+	if k.has("drift"):
+		var rate: float = k.drift * (heat() if d.kind == "pod" else 1.0)
+		lines.append("Wearing %.0f%% an hour at this heat." % (rate * 100.0))
+		var levels: Array = k.get("levels", [])
+		for lv in levels:
+			if float(d.value) >= float(lv):
+				lines.append("Needs work in about %.1f h (below %d%%)." % [(float(d.value) - float(lv)) / maxf(rate, 0.0001), _pct(lv)])
+				break
+	elif k.has("rate"):
+		lines.append("Fails about %.1f times a day, on average." % (float(k.rate) * 24.0))
+	var board := sim.get_system("work") as WorkBoard
+	var job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
+	if not job.is_empty() and (job.status == "open" or job.status == "claimed"):
+		lines.append("Job #%d %s: %d%% done, %s." % [job.id, job.title, roundi(board.fraction_done(job) * 100.0),
+			("%s is on it" % str(job.claimed_by).trim_prefix("robot_").capitalize()) if job.status == "claimed" else "nobody on it yet"])
+	if PARTS.has(d.kind):
+		var req := sim.get_system("requisitions") as Requisitions
+		lines.append("Spare part: %s (%d in stock)." % [req.item(PARTS[d.kind]).get("name", PARTS[d.kind]) if req else PARTS[d.kind],
+			int(req.inventory.get(PARTS[d.kind], 0)) if req else 0])
+	return "\n".join(lines)
 
 
 ## One line per device, for panels.

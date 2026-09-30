@@ -144,9 +144,19 @@ func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 			plant.coolant = minf(plant.coolant + float(effect.trim_prefix("coolant:")) * int(o.qty), 1.0)
 			sim.note("plant", "Coolant topped up to %d%%" % roundi(plant.coolant * 100.0))
 		return
-	inventory[o.item] = int(inventory.get(o.item, 0)) + int(o.qty)
+	inventory[o.item] = int(inventory.get(o.item, 0)) + int(o.qty) * pack_size(it)
 	if effect.begins_with("robot:"):
 		sim.note("requisitions", "%s crated in maintenance, awaiting activation (not implemented yet)" % it.name)
+
+
+## How many a catalogue item holds: "Fuse pack (x4)" -> 4.
+static func pack_size(it: Dictionary) -> int:
+	var name := str(it.get("name", ""))
+	var i := name.find("(x")
+	if i < 0:
+		return 1
+	var n := name.substr(i + 2).get_slice(")", 0)
+	return maxi(int(n), 1) if n.is_valid_int() else 1
 
 
 func sim_tick(_sim: FacilitySim, _dt: float) -> void:
