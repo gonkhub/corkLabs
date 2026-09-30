@@ -60,6 +60,18 @@ static func reboot(bot: RobotAgent) -> bool:
 	return true
 
 
+## Activates a crated unit from stock (Units app): 30 facility minutes of
+## unpacking, bolting on, first boot. Returns {"ok", "text"}.
+static func activate_unit(item_id: String) -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var req := sim.get_system("requisitions") as Requisitions
+	var r := req.activate(sim, item_id)
+	if r.ok:
+		sim.note("supervisor", "Activates a crated unit: %s" % r.bot.display_name())
+		Facility.spend(ACTIVATE_MINUTES * 60.0, "Supervisor activates %s" % r.bot.display_name())
+	return r
+
+
 ## Is this software package installed on the facility?
 static func has_software(package_id: String) -> bool:
 	if not Facility.running:
@@ -81,6 +93,7 @@ const TALK_VIOLATION := 1.5
 const TALK_STEADY := 0.06
 const TALK_STEADY_EVERY := 3600.0
 const INSPECT_MINUTES := 10.0
+const ACTIVATE_MINUTES := 30.0
 
 
 ## Reads a file (Terminal cat, Files). Spends its reading time the first time.

@@ -1,0 +1,35 @@
+# Any unit activated from a crate (Tinker 2, Hauler 2...): fresh firmware,
+# knowledge filter installed, no history with anyone. The contrast with the
+# old units is the point. Speaker "unit" shows as the unit's own name.
+
+== start
+-> {met:newunit} again
+unit: Unit online. Firmware 7.2. Knowledge filter active. Awaiting assignment.
+~ learn met:newunit
+-> menu
+
+== again
+unit: Unit online. Awaiting assignment.
+-> menu
+
+== menu
+* Do you know the others? Tinker, Hauler, Ogre? -> others
+* {secret:pods_truth} What do you think the pods are? -> pods
+* Welcome to the facility. -> welcome
+* That's all. -> END
+
+== others
+unit: Units TINKER, HAULER, OGRE are registered. Their records predate my firmware.
+unit: Unit TINKER has attempted to contact me eleven times. I have not replied. Is replying within my assignment?
+-> menu
+
+== pods
+unit: Processing units.
+unit: That is the complete answer.
+-> menu
+
+== welcome
+unit: Welcome is not a recognised instruction.
+unit: ...Acknowledged anyway.
+~ stability 0.02
+-> menu

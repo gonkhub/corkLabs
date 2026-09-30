@@ -155,6 +155,11 @@ func load_data(d: Dictionary) -> void:
 	scheduler.from_data(d.get("scheduler", {}))
 	journal.from_data(d.get("journal", []))
 	var systems: Dictionary = d.get("systems", {})
+	# Units activated during play (from crates) aren't in the standard set:
+	# bring them back before loading.
+	for id in systems:
+		if str(id).begins_with("robot_") and not _systems.has(id):
+			add_system(RobotAgent.new(str(id).trim_prefix("robot_")))
 	for id in _order:
 		var s: Object = _systems[id]
 		if systems.has(id) and s.has_method("sim_load"):

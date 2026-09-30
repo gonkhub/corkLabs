@@ -154,6 +154,42 @@ func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 		unpacked(sim, int(o.id))
 
 
+## Crated units in stock that can be activated: [{"item", "name", "model", "count"}].
+func crated_units() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for it in catalog:
+		if str(it.effect).begins_with("robot:") and int(inventory.get(it.id, 0)) > 0:
+			out.append({"item": it.id, "name": it.name, "model": str(it.effect).trim_prefix("robot:"), "count": int(inventory[it.id])})
+	return out
+
+
+## Activates a crated unit from stock: a new unit on the workbench's rail,
+## on fresh firmware (fully stable, half charged). Returns {"ok", "text", "bot"}.
+## Only models the facility has firmware for (a robots/<model> folder) boot.
+func activate(sim: FacilitySim, item_id: String) -> Dictionary:
+	var it := item(item_id)
+	if it.is_empty() or not str(it.effect).begins_with("robot:") or int(inventory.get(item_id, 0)) <= 0:
+		return {"ok": false, "text": "No crated unit like that in stock."}
+	var model := str(it.effect).trim_prefix("robot:")
+	if not ResourceLoader.exists("res://robots/%s/%s_traits.tres" % [model, model]):
+		return {"ok": false, "text": "No firmware for %s on this facility. The crate stays shut." % it.name}
+	var n := 2
+	while sim.get_system("robot_%s%d" % [model, n]) != null:
+		n += 1
+	var layout := sim.get_system("layout") as FacilityLayout
+	var st: Dictionary = layout.station("bench") if layout else {}
+	var bot := RobotAgent.new("%s%d" % [model, n], null, str(st.get("segment", "")), float(st.get("offset", 0.0)))
+	bot.stability = 1.0
+	bot.power = 0.5
+	inventory[item_id] = int(inventory[item_id]) - 1
+	sim.add_system(bot)
+	bot.sim_start(sim)
+	var hq := _hq(sim)
+	if hq:
+		hq.post(sim, "Unit Oversight", "notice", "New unit %s registered to your facility. Units are corporate property." % bot.display_name().to_upper())
+	return {"ok": true, "text": "%s is online." % bot.display_name(), "bot": bot}
+
+
 ## The crate's been unpacked in the workshop: it's in stock.
 func unpacked(sim: FacilitySim, order_id: int) -> void:
 	var o := get_order(order_id)

@@ -116,7 +116,7 @@ func context(sim: FacilitySim, robot: RobotAgent) -> Dictionary:
 
 
 func _pick(what: String, robot: RobotAgent, ctx: Dictionary) -> String:
-	var options := library.candidates(what, robot.robot_id, ctx)
+	var options := library.candidates(what, RobotTraits.model_of(robot.robot_id), ctx)
 	var last: Array = _last_lines.get(robot.robot_id, [])
 	var fresh := options.filter(func(o): return not last.has(BarkLibrary.fill(o.text, ctx)))
 	if not fresh.is_empty():

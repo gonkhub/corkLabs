@@ -10,6 +10,9 @@
 class_name UnitsApp
 extends OSApp
 
+var row: HBoxContainer
+var crate_row: HBoxContainer
+var _crate_key := ""
 var cards := {}   # robot_id -> {"name", "doing", "power", "power_txt", "stability", "stability_txt", "order", "think", "why", "reply", "reboot", "talk"}
 
 ## Facility minutes a diagnostic takes, and how much it steadies the unit.
@@ -26,14 +29,42 @@ func _init() -> void:
 
 
 func build() -> void:
-	var row := HBoxContainer.new()
+	row = HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 10)
 	add_child(row)
+	crate_row = HBoxContainer.new()
+	add_child(crate_row)
 	if sim() == null:
 		return
 	for bot in FacilitySetup.robots(sim()):
 		row.add_child(_card(bot))
+
+
+# Crated units in stock (Requisitions), with an Activate button each.
+func _refresh_crates() -> void:
+	var req := sim().get_system("requisitions") as Requisitions
+	var crated: Array = req.crated_units() if req else []
+	var key := str(crated)
+	if key == _crate_key:
+		return
+	_crate_key = key
+	for c in crate_row.get_children():
+		c.queue_free()
+	crate_row.visible = not crated.is_empty()
+	if crated.is_empty():
+		return
+	crate_row.add_child(OSTheme.label("Crated in the workshop:", 13, OSTheme.TEXT_DIM))
+	for c in crated:
+		var b := Button.new()
+		b.text = "Activate %s (%d in stock, 30 min)" % [c.name, c.count]
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(func():
+			var r: Dictionary = Supervisor.activate_unit(c.item)
+			if not r.ok:
+				b.text = r.text
+			_crate_key = "")
+		crate_row.add_child(b)
 
 
 func _card(bot: RobotAgent) -> Control:
@@ -142,6 +173,11 @@ func _reboot(robot_id: String) -> void:
 func refresh() -> void:
 	if sim() == null:
 		return
+	_refresh_crates()
+	# A unit activated from a crate gets its card.
+	for bot in FacilitySetup.robots(sim()):
+		if not cards.has(bot.robot_id):
+			row.add_child(_card(bot))
 	for bot in FacilitySetup.robots(sim()):
 		var c: Dictionary = cards.get(bot.robot_id, {})
 		if c.is_empty():

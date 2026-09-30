@@ -644,8 +644,11 @@ func _show_lines(lines: Array) -> void:
 		if l.speaker == "sys":
 			_print("  [color=#%s][i]%s[/i][/color]" % [_hex(OSTheme.TEXT_DIM), _esc(l.text)])
 		else:
-			var who: String = "YOU" if l.speaker == "you" else str(l.speaker).to_upper()
-			_print("  [color=#%s]%s:[/color] %s" % [_hex(OSTheme.category_color(l.speaker)), who, _esc(l.text)])
+			var speaker := str(l.speaker)
+			if speaker == "unit" and talk_bot:
+				speaker = talk_bot.robot_id   # a fresh unit's script speaks as whoever it is
+			var who: String = "YOU" if speaker == "you" else (talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper())
+			_print("  [color=#%s]%s:[/color] %s" % [_hex(OSTheme.category_color(speaker)), who, _esc(l.text)])
 
 
 func _after_lines() -> void:

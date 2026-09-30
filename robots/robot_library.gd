@@ -20,7 +20,9 @@ static func ids() -> PackedStringArray:
 	return out
 
 
+## (A numbered unit, "tinker2", uses its model's scene and clips.)
 static func scene_path(id: String) -> String:
+	id = RobotTraits.model_of(id)
 	return "%s/%s/%s.tscn" % [ROBOTS_DIR, id, id]
 
 
@@ -39,12 +41,12 @@ static func instantiate(id: String) -> RobotRig:
 
 # Where a robot's baked clips live.
 static func animation_dir(id: String) -> String:
-	return "%s/%s" % [animations_dir, id]
+	return "%s/%s" % [animations_dir, RobotTraits.model_of(id)]
 
 
 # The AnimationLibrary that collects all of a robot's clips.
 static func library_path(id: String) -> String:
-	return "%s/%s_library.tres" % [animation_dir(id), id]
+	return "%s/%s_library.tres" % [animation_dir(id), RobotTraits.model_of(id)]
 
 
 static func display_name(id: String) -> String:

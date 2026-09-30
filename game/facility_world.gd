@@ -48,15 +48,28 @@ func _ready() -> void:
 		_build_room(id)
 	_build_rails()
 	for id in FacilitySetup.START_STATIONS:
-		var view := RobotView.new()
-		view.setup(id, layout)
-		add_child(view)
-		views[id] = view
+		_add_view(id)
+	if Facility.running:
+		sync_views()
 	props = FacilityProps.new()
 	props.name = "Props"
 	add_child(props)
 	props.build(layout)
 	_build_cameras()
+
+
+func _add_view(id: String) -> void:
+	var view := RobotView.new()
+	view.setup(id, layout)
+	add_child(view)
+	views[id] = view
+
+
+## Units activated during play get a 3D robot too.
+func sync_views() -> void:
+	for bot in FacilitySetup.robots(Facility.sim):
+		if not views.has(bot.robot_id):
+			_add_view(bot.robot_id)
 
 
 func _process(_delta: float) -> void:
@@ -65,6 +78,8 @@ func _process(_delta: float) -> void:
 	var live := Facility.sim.get_system("layout") as FacilityLayout
 	if live == null:
 		return
+	if views.size() != FacilitySetup.robots(Facility.sim).size():
+		sync_views()
 	for sid in _shutters:
 		(_shutters[sid] as Node3D).visible = live.segment(sid).get("blocked", false)
 	for i in _trackers:

@@ -33,6 +33,8 @@ var nodes := {}
 static func for_robot(robot_id: String) -> Dialogue:
 	if not _cache.has(robot_id):
 		var path := DIR + robot_id + ".txt"
+		if not FileAccess.file_exists(path) and RobotTraits.model_of(robot_id) != robot_id:
+			path = DIR + "new_unit.txt"   # a unit fresh out of its crate has no history with anyone
 		_cache[robot_id] = parse(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	return _cache[robot_id]
 

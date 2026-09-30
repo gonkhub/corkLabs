@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_test_dialogue()
 	_test_campaign()
 	_test_oversight()
+	_test_crated_units()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -214,6 +215,38 @@ func _test_oversight() -> void:
 	_check(Story.knows(sim4, "secret:nightrun") and is_equal_approx(Story.oversight(sim4).suspicion, 12.0)
 		and Story.campaign(sim4).state == "pre" and Story.campaign(sim4).duties.size() == Story.campaign(sim3).duties.size(),
 		"knowledge, oversight and the campaign survive save/load")
+
+
+func _test_crated_units() -> void:
+	var sim := _new_sim(21)
+	var req := sim.get_system("requisitions") as Requisitions
+	_check(RobotTraits.model_of("tinker2") == "tinker" and RobotTraits.model_of("hauler") == "hauler" and RobotTraits.model_of("unit_12") == "unit",
+		"a numbered unit is its model")
+	_check(not req.activate(sim, "robot_tinker").ok, "no crate in stock, nothing to activate")
+	req.inventory["robot_tinker"] = 1
+	req.inventory["robot_sweeper"] = 1
+	_check(req.crated_units().size() == 2, "crated units in stock are listed")
+	var r := req.activate(sim, "robot_tinker")
+	var bot := sim.get_system("robot_tinker2") as RobotAgent
+	_check(r.ok and bot != null and bot.display_name() == "Tinker 2" and FacilitySetup.robots(sim).size() == 4,
+		"activating a crated Tinker adds Tinker 2 to the facility (%s)" % r.text)
+	_check(bot.stability == 1.0 and bot.traits.skill("precise") == (sim.get_system("robot_tinker") as RobotAgent).traits.skill("precise"),
+		"fresh firmware, same model")
+	_check(bot.room(sim) == "workshop" and int(req.inventory["robot_tinker"]) == 0, "it starts in the workshop, where it was unpacked")
+	_check(not req.activate(sim, "robot_sweeper").ok, "a model with no firmware here stays in its crate")
+	sim.advance(600.0)
+	_check(bot.activity.kind != "", "and it gets on with things (%s)" % bot.doing_text(sim))
+	var script := Dialogue.for_robot("tinker2")
+	var run := Dialogue.Runner.new(script, "tinker2")
+	var lines := run.begin(sim)
+	_check(not lines.is_empty() and str(lines[0].text).contains("Knowledge filter"), "a fresh unit has its own, blank conversation")
+	var data: Dictionary = JSON.parse_string(JSON.stringify(sim.save_data()))
+	var sim2 := FacilitySim.new()
+	for s in FacilitySetup.systems():
+		sim2.add_system(s)
+	sim2.load_data(data)
+	var again := sim2.get_system("robot_tinker2") as RobotAgent
+	_check(again != null and again.display_name() == "Tinker 2" and again.seg == bot.seg, "an activated unit survives save/load")
 
 
 func _test_checkpoint() -> void:
