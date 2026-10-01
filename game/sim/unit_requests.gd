@@ -93,6 +93,9 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 					return "No requisitions."
 				var res := req.place(sim, str(d.part), 1)
 				return str(res.text)
+			if i == 1:
+				var board := sim.get_system("work") as WorkBoard
+				return "Patching it. It won't hold long." if board and board.patch(sim, int(d.job)) else "Nothing to patch."
 			return "The job waits."
 		"service":
 			if yes and bot:
@@ -208,8 +211,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				return
 			var req := sim.get_system("requisitions") as Requisitions
 			var it := req.item(str(data.part)) if req else {}
-			ask(sim, robot, "part", "Job #%d stopped: I need a %s and stock is empty. Order one? (%d cr)" % [int(data.job), it.get("name", data.part), int(it.get("price", 0))],
-				["Order one", "Leave it"], 1, {"part": data.part, "job": data.job})
+			ask(sim, robot, "part", "Job #%d stopped: I need a %s and stock is empty. Order one (%d cr), or patch it without? A patch won't hold long." % [int(data.job), it.get("name", data.part), int(it.get("price", 0))],
+				["Order one", "Patch it", "Leave it"], 2, {"part": data.part, "job": data.job})
 		"alarm":
 			if data.has("robot"):
 				var seized := sim.get_system("robot_" + str(data.robot)) as RobotAgent

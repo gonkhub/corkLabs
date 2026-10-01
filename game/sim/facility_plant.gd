@@ -53,16 +53,21 @@ const KINDS := {
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.12, "priority": 1},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.06, "priority": 2,
 		"blocks": "freight_gate", "part": "actuator_kit"},
-	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 360.0, "rate": 0.045, "priority": 2, "part": "actuator_kit"},
+	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2},
 	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.03, "priority": 1, "part": "camera_module"},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1},
 }
-## Passage doors that can stick: device id -> [name, passage segment, control station].
-const DOORS := {"door_pod": ["Pod bay door", "pod_door", "pod_door_ctl"], "door_dock": ["Dock door", "dock_door", "dock_door_ctl"],
-	"door_hangar": ["Hangar door", "hangar_door", "hangar_door_ctl"]}
+## Passage doors that can stick: device id -> [name, passage segment, hall-side
+## controls, a station on the far side]. A stuck door can be freed from either
+## side: the job goes wherever a working unit can actually get to (units
+## charging behind a stuck dock door free it from inside).
+const DOORS := {"door_pod": ["Pod bay door", "pod_door", "pod_door_ctl", "pods_a"], "door_dock": ["Dock door", "dock_door", "dock_door_ctl", "t_dock"],
+	"door_hangar": ["Hangar door", "hangar_door", "hangar_door_ctl", "loading"]}
 ## Where a unit goes to fix a camera, by the camera's room.
 const CAMERA_STATIONS := {"hall": "bay_2", "pod_bay": "pods_a", "workshop": "bench", "maintenance": "t_dock", "hangar": "loading"}
+## How long a makeshift patch (no part) holds before the device fails again.
+const PATCH_HOLDS := Vector2(2400.0, 7200.0)
 const HAUL_WORK := 360.0
 const UNPACK_WORK := 300.0
 ## Kinds that don't break: a "fault" is new work arriving (debris, freight).
@@ -75,7 +80,7 @@ const SALVAGE_PARTS := ["servo", "valve actuator", "cable reel", "pressure senso
 const REPAIR_WORK := 480.0
 const REFIT_WORK := 300.0
 ## Coolant lost per hour per leaking pipe, and regained per hour with no leaks.
-const LEAK_RATE := 0.35
+const LEAK_RATE := 0.25
 const REFILL_RATE := 0.1
 ## Charge speed on docks while the relay is out.
 const RELAY_OUT_CHARGE := 0.4
@@ -189,6 +194,12 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			var id := str(data.get("source", ""))
 			if devices.has(id):
 				_repaired(sim, id, str(data.get("by", "")))
+				var board := sim.get_system("work") as WorkBoard
+				var job := board.get_job(int(data.get("job", -1))) if board else {}
+				if job.get("makeshift", false) and KINDS[devices[id].kind].has("rate"):
+					# A patch without the part: it won't hold for long.
+					sim.schedule_in(sim.rng.randf_range(PATCH_HOLDS.x, PATCH_HOLDS.y), "plant_fault", {"device": id})
+					sim.note("plant", "%s is patched, not fixed: it won't hold long" % devices[id].name)
 			elif id.begins_with("part:"):
 				_part_step(sim, id, str(data.get("by", "")))
 			elif id.begins_with("crate:"):
@@ -282,7 +293,8 @@ func _fault(sim: FacilitySim, id: String) -> void:
 				layout.set_blocked(sim, d.blocks, true, "stuck" if d.kind == "door" else "jammed")
 	var open_job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
 	if board and (open_job.is_empty() or not WorkBoard.active(open_job)):
-		d.job = board.post(sim, _job_title(d), k.skill, d.station, k.work, int(k.priority), id)
+		var where: String = _door_side(sim, id) if d.kind == "door" else str(d.station)
+		d.job = board.post(sim, _job_title(d), k.skill, where, k.work, int(k.priority), id)
 	if d.kind in ARRIVALS:
 		_book_fault(sim, id)   # debris keeps falling (and freight arriving) whether or not it's cleared
 	# Everyone reconsiders right away.
@@ -304,6 +316,17 @@ func sabotage(sim: FacilitySim, id: String, robot: RobotAgent) -> void:
 		d.value = maxf(float(d.value) - 0.45, 0.0)   # the job gets posted on the next update
 	else:
 		_fault(sim, id)
+
+
+# Which side of a stuck door its job goes on: the controls in the hall if a
+# working unit can get there, else the far side.
+func _door_side(sim: FacilitySim, id: String) -> String:
+	var sides: Array = [DOORS[id][2], DOORS[id][3]]
+	for st in sides:
+		for bot in FacilitySetup.robots(sim):
+			if not bot.offline() and not bot.traits.stationary and bot.why_cant_reach(sim, st).is_empty():
+				return st
+	return sides[0]
 
 
 ## A unit "accidentally" damages a device (it was asked to). To the facility

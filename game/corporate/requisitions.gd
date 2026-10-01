@@ -68,7 +68,8 @@ func get_order(id: int) -> Dictionary:
 
 
 ## Places an order. Returns {"ok", "text", "order"}; corkHQ confirms it.
-## Express costs this much more and arrives in this share of the time.
+## Express costs this much more, arrives in this share of the time, and is
+## couriered straight to the workshop (no crate for the units to bring in).
 const EXPRESS_COST := 1.75
 const EXPRESS_TIME := 0.35
 
@@ -156,10 +157,11 @@ func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 			plant.coolant = minf(plant.coolant + float(effect.trim_prefix("coolant:")) * int(o.qty), 1.0)
 			sim.note("plant", "Coolant topped up to %d%%" % roundi(plant.coolant * 100.0))
 		return
-	if plant:
+	if plant and not o.get("express", false):
 		o.status = "crated"
 		plant.receive_crate(sim, int(o.id), "%dx %s" % [int(o.qty), it.name])
 	else:
+		# Express is couriered straight to the workshop: no crate, no units needed.
 		unpacked(sim, int(o.id))
 
 
@@ -241,8 +243,53 @@ func sim_start(_sim: FacilitySim) -> void:
 	inventory = START_STOCK.duplicate()
 
 
-func sim_tick(_sim: FacilitySim, _dt: float) -> void:
-	pass
+## Night procurement: between shifts, corkHQ's automated buyer orders what
+## the facility is visibly short of (parts that stopped jobs, coolant when
+## it's low), express, and charges your budget. Neglect costs money.
+const NIGHT_BUY_EVERY := 3600.0
+const NIGHT_COOLANT := 0.25
+## The most night procurement spends in one night; past that, it patches.
+const NIGHT_CAP := 300
+var night_spent := 0
+var night_patched := 0
+var _night_acc := 0.0
+
+
+func sim_tick(sim: FacilitySim, dt: float) -> void:
+	var camp := sim.get_system("campaign") as Campaign
+	if camp == null or camp.on_duty():
+		_night_acc = 0.0
+		return
+	_night_acc += dt
+	if _night_acc < NIGHT_BUY_EVERY - 0.001:
+		return
+	_night_acc = 0.0
+	if camp.state != "off_duty":
+		return
+	var want: Array[String] = []
+	var board := sim.get_system("work") as WorkBoard
+	if board:
+		for j in board.waiting_jobs():
+			if not want.has(str(j.part)):
+				want.append(str(j.part))
+	var plant := sim.get_system("plant") as FacilityPlant
+	if plant and plant.coolant < NIGHT_COOLANT and not orders.any(func(o): return o.item == "coolant_canister" and o.placed > sim.time() - 12 * 3600.0):
+		want.append("coolant_canister")   # one a night at most
+	for item_id in want:
+		# Already on its way by courier? (A crate stuck in the hangar doesn't count.)
+		if orders.any(func(o): return o.item == item_id and o.status in ["pending", "in transit"]):
+			continue
+		var before := funds
+		var r := place(sim, item_id, 1, true) if night_spent + roundi(int(item(item_id).get("price", 0)) * EXPRESS_COST) <= NIGHT_CAP else {"ok": false}
+		if r.ok:
+			night_spent += before - funds
+			sim.note("requisitions", "Night procurement: %s (express, %d cr)" % [item(item_id).name, before - funds])
+		elif board:
+			# No budget: the night crew patches what's waiting for it instead.
+			for j in board.waiting_jobs():
+				if str(j.part) == item_id:
+					board.patch(sim, int(j.id))
+					night_patched += 1
 
 
 func _hq(sim: FacilitySim) -> CorkHQ:
@@ -250,12 +297,16 @@ func _hq(sim: FacilitySim) -> CorkHQ:
 
 
 func sim_save() -> Dictionary:
-	return {"funds": funds, "orders": orders.duplicate(true), "inventory": inventory.duplicate(), "next_id": next_id}
+	return {"funds": funds, "orders": orders.duplicate(true), "inventory": inventory.duplicate(), "next_id": next_id,
+		"night_spent": night_spent, "night_acc": _night_acc, "night_patched": night_patched}
 
 
 func sim_load(d: Dictionary) -> void:
 	funds = int(d.get("funds", START_FUNDS))
 	next_id = int(d.get("next_id", 1))
+	night_spent = int(d.get("night_spent", 0))
+	night_patched = int(d.get("night_patched", 0))
+	_night_acc = float(d.get("night_acc", 0.0))
 	inventory = {}
 	for k in d.get("inventory", {}):
 		inventory[k] = int(d.inventory[k])

@@ -96,6 +96,13 @@ func _build_brief(camp: Campaign) -> void:
 	var sim := Facility.sim
 	_heading(camp.title().to_upper(), FacilitySim.format_time(sim.time()))
 	_text(camp.brief())
+	var req := sim.get_system("requisitions") as Requisitions
+	if req and req.night_spent > 0:
+		_text("Night procurement ordered what you were short of, express: %d cr from your budget." % req.night_spent, OSTheme.WARN)
+		req.night_spent = 0
+	if req and req.night_patched > 0:
+		_text("With no budget left for parts, the night crew patched %d repair%s without them. Patches don't hold long." % [req.night_patched, "" if req.night_patched == 1 else "s"], OSTheme.WARN)
+		req.night_patched = 0
 	if not camp.overnight.is_empty():
 		_section("OVERNIGHT, WHILE YOU WERE AWAY")
 		for line in camp.overnight:

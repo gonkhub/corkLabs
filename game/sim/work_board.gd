@@ -163,6 +163,20 @@ func _take_part(sim: FacilitySim, j: Dictionary) -> bool:
 	return false
 
 
+## Finishes a waiting job without its part: a makeshift fix (the device it
+## repairs won't hold long, see FacilityPlant). Returns false if it isn't waiting.
+func patch(sim: FacilitySim, id: int) -> bool:
+	var j := get_job(id)
+	if j.is_empty() or j.status != "parts":
+		return false
+	j.part_used = true
+	j.makeshift = true
+	j.status = "open"
+	sim.note("work", "Job #%d: patching it without a %s (makeshift)" % [j.id, j.part])
+	sim.schedule(sim.time(), "alarm", {"patched": j.id})
+	return true
+
+
 ## A delivery's been unpacked: jobs waiting for it go back on the board.
 func parts_arrived(sim: FacilitySim, part: String) -> void:
 	for j in jobs:

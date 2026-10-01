@@ -60,7 +60,7 @@ func on_duty() -> bool:
 ## Share of the plant's random faults that actually happen right now: how
 ## hard the facility pushes. Orientation is gentler; nights are quiet.
 const PRESSURE := {1: 0.65, 2: 1.0, 3: 1.15}
-const NIGHT_PRESSURE := 0.4
+const NIGHT_PRESSURE := 0.15
 
 
 func pressure() -> float:

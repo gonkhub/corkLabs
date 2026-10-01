@@ -275,6 +275,18 @@ static func inspect_device(id: String) -> String:
 	return plant.inspect_text(sim, id)
 
 
+## Patches a job that's waiting for a part, without it (5 minutes). The
+## device won't hold long. Returns false if the job isn't waiting.
+static func patch_job(job_id: int) -> bool:
+	var sim: FacilitySim = Facility.sim
+	var board := sim.get_system("work") as WorkBoard
+	if board == null or not board.patch(sim, job_id):
+		return false
+	sim.note("supervisor", "Authorises a makeshift patch on job #%d" % job_id)
+	Facility.act(ORDER_COST, "Supervisor authorises a patch")
+	return true
+
+
 ## Posts a maintenance job for a worn device before it's an alarm (5 minutes).
 static func request_maintenance(id: String) -> String:
 	var sim: FacilitySim = Facility.sim

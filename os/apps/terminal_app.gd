@@ -41,6 +41,7 @@ const COMMANDS := {
 	"requests": ["requests", "what the units are asking you", "units"],
 	"answer": ["answer <request#> <option#>", "answer a unit's request (5 min)", "units"],
 	"service": ["service <unit>", "book a service at its dock (uses a servo bundle, 5 min)", "units"],
+	"patch": ["patch <job#>", "finish a job that's waiting for a part without it (it won't hold)", "plant"],
 	"reboot": ["reboot <unit>", "remote reboot (needs remote-reboot)", "units"],
 	"plant": ["plant", "every device and its state", "plant"],
 	"routes": ["routes", "passages between rooms: clearance, open or blocked", "plant"],
@@ -202,6 +203,7 @@ func _submit(line: String) -> void:
 		"requests": _requests()
 		"answer": _answer(args)
 		"service": _service(args)
+		"patch": _patch(args)
 		"reboot": _reboot(args)
 		"plant": _plant()
 		"routes": _routes()
@@ -411,6 +413,16 @@ func _answer(args: PackedStringArray) -> void:
 		_error("answer: no such request or option")
 	else:
 		_print("  " + _esc(out))
+
+
+func _patch(args: PackedStringArray) -> void:
+	if args.is_empty() or not args[0].trim_prefix("#").is_valid_int():
+		_error("Usage: patch <job#>")
+		return
+	if Supervisor.patch_job(int(args[0].trim_prefix("#"))):
+		_print("  Patching it. It won't hold long.")
+	else:
+		_error("patch: job %s isn't waiting for a part" % args[0])
 
 
 func _service(args: PackedStringArray) -> void:

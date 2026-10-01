@@ -222,10 +222,11 @@ func _test_oversight() -> void:
 	o = Story.oversight(sim)
 	var plant := sim.get_system("plant") as FacilityPlant
 	sim.advance(camp.shift_start_time() - sim.time() + 1.0)
-	for i in 50:
+	sim.advance(Oversight.CRISIS_GRACE)   # the first hour and a half of a shift is the night's mess
+	for i in 70:
 		plant.coolant = 0.0
 		sim.advance(60.0)
-	_check(o.fired_kind == "catastrophe" and camp.state == "fired", "the coolant loop running dry for 45 minutes on your watch is dismissal (%s)" % o.fired_kind)
+	_check(o.fired_kind == "catastrophe" and camp.state == "fired", "the coolant loop running dry for an hour on your watch is dismissal (%s)" % o.fired_kind)
 	# Low suspicion: audits find nothing.
 	sim = _new_sim(9)
 	o = Story.oversight(sim)

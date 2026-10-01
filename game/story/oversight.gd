@@ -11,8 +11,8 @@
 #                 it finds something. First find = a formal warning (a
 #                 strike), second = dismissal. Some violations can be caught
 #                 on the spot (catch_chance).
-#   catastrophe   the facility fails on your watch: coolant empty for 45
-#                 facility minutes, or throughput under 30% for an hour.
+#   catastrophe   the facility fails on your watch: coolant empty for 60
+#                 facility minutes, or throughput under 25% for an hour and a half.
 #
 # Every violation is written to the AUDIT TRAIL, which corporate reads. With
 # the maintenance account, "auditctl" can read and purge it (itself a risk).
@@ -43,9 +43,11 @@ const REVIEW_STANDING := {"A": 15.0, "B": 8.0, "C": 0.0, "D": -12.0, "F": -25.0}
 const STRIKES_TO_FIRE := 2
 const CRISIS_CHECK := 60.0
 const COOLANT_CRISIS := 0.02
-const COOLANT_LIMIT := 2700.0
-const OUTPUT_CRISIS := 0.3
-const OUTPUT_LIMIT := 3600.0
+const COOLANT_LIMIT := 3600.0
+const OUTPUT_CRISIS := 0.25
+const OUTPUT_LIMIT := 5400.0
+## No catastrophe in the first hour of a shift: that's the night's mess.
+const CRISIS_GRACE := 5400.0
 ## Violations of each kind (in one shift) at which Pell escalates to levels 1, 2, 3.
 const ESCALATE := {"files": [1, 3, 5], "games": [1, 2, 4], "talk": [3, 6, 10], "maint": [1, 2, 3]}
 const COMPLIANCE_STANDING := 6.0
@@ -224,12 +226,18 @@ func _check_crisis(sim: FacilitySim) -> void:
 	var plant := sim.get_system("plant") as FacilityPlant
 	if plant == null:
 		return
+	# What you inherit from the night isn't on your watch yet: an hour's grace.
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and sim.time() < camp.shift_start_time() + CRISIS_GRACE:
+		_coolant_since = -1.0
+		_output_since = -1.0
+		return
 	_coolant_since = _crisis_timer(sim, plant.coolant <= COOLANT_CRISIS, _coolant_since, COOLANT_LIMIT, "coolant",
 		"CRITICAL: the coolant loop is empty. The pod hall is overheating. Restore coolant immediately.",
 		"The coolant loop ran dry on your watch and the pod hall overheated.")
 	_output_since = _crisis_timer(sim, plant.throughput <= OUTPUT_CRISIS, _output_since, OUTPUT_LIMIT, "output",
-		"CRITICAL: facility throughput has collapsed. Restore output within the hour.",
-		"Facility output collapsed on your watch and stayed down for an hour.")
+		"CRITICAL: facility throughput has collapsed. Restore output, now.",
+		"Facility output collapsed on your watch and stayed down for an hour and a half.")
 
 
 func _crisis_timer(sim: FacilitySim, bad: bool, since: float, limit: float, id: String, warning: String, reason: String) -> float:

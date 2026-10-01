@@ -85,7 +85,7 @@ func build() -> void:
 	express = CheckBox.new()
 	express.text = "Express"
 	express.focus_mode = Control.FOCUS_NONE
-	express.tooltip_text = "Costs %d%% more, arrives in about a third of the time." % roundi((Requisitions.EXPRESS_COST - 1.0) * 100.0)
+	express.tooltip_text = "Costs %d%% more, arrives in about a third of the time, couriered straight to the workshop (no crate)." % roundi((Requisitions.EXPRESS_COST - 1.0) * 100.0)
 	express.toggled.connect(func(_on): _update_detail())
 	row.add_child(express)
 	order_button = Button.new()

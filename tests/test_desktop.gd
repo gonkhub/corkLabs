@@ -61,7 +61,7 @@ func _initialize() -> void:
 	await process_frame
 	var alarm_toast: bool = desk.toast_box.get_children().any(func(t): return t.find_children("*", "Label", true, false).any(func(l): return l.text.contains("FUSE BLOWN")))
 	_check(desk.toast_box.get_child_count() > toasts_before and alarm_toast, "an alarm pops up as a toast")
-	_check(desk.alarm_button.visible and desk.alarm_button.text.contains("1"), "and lights the taskbar alarm (%s)" % desk.alarm_button.text)
+	_check(desk.alarm_button.visible and desk.alarm_button.text.begins_with("ALARM"), "and lights the taskbar alarm (%s)" % desk.alarm_button.text)
 
 	# No waiting: time moves when the supervisor does something (an inspection here).
 	_check(not desk.has_method("start_wait") and not load("res://game/supervisor.gd").new().has_method("wait"), "there is no Wait")

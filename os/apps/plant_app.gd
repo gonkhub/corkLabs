@@ -17,6 +17,7 @@ var tree: Tree
 var detail: Label
 var inspect_button: Button
 var service_button: Button
+var patch_button: Button
 var selected := ""
 var _signature := ""
 var _rebuilding := false
@@ -94,6 +95,10 @@ func build() -> void:
 	add_child(row)
 	inspect_button = _button(row, "Inspect (30 min)", func(): detail.text = Supervisor.inspect_device(selected))
 	service_button = _button(row, "Request maintenance (5 min)", func(): _result(Supervisor.request_maintenance(selected), "Maintenance requested."))
+	patch_button = _button(row, "Patch without the part (5 min)", func():
+		var d := (sim().get_system("plant") as FacilityPlant).device(selected)
+		_result("" if Supervisor.patch_job(int(d.get("job", -1))) else "Nothing's waiting for a part there.", "Patching it. It won't hold long."))
+	patch_button.tooltip_text = "Finish a repair that's stopped for a part, without it. The device will fail again before long."
 	_update_buttons()
 
 
@@ -122,6 +127,9 @@ func _update_buttons() -> void:
 	var plant := sim().get_system("plant") as FacilityPlant
 	var d := plant.device(selected)
 	service_button.visible = FacilityPlant.KINDS.get(d.get("kind", ""), {}).has("drift")
+	var board := sim().get_system("work") as WorkBoard
+	var job := board.get_job(int(d.get("job", -1))) if board and int(d.get("job", -1)) >= 0 else {}
+	patch_button.visible = not job.is_empty() and job.status == "parts"
 
 
 func refresh() -> void:

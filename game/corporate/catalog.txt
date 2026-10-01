@@ -5,12 +5,12 @@
 #           use them up, see FacilityPlant.KINDS "part"),
 #           coolant:0.4 = tops up the coolant reservoir by 40%, robot:<model> = a crated unit (placeholder)
 
-coolant_canister | Resources | Coolant canister | 120 | 1 | no | coolant:0.4 | Tops up the coolant reservoir by 40%.
+coolant_canister | Resources | Coolant canister | 120 | 1 | no | coolant:0.5 | Tops up the coolant reservoir by 50%.
 filter_cartridges | Resources | Filter cartridges (x6) | 90 | 2 | no | inventory | Cartridges for the bay filters. Every filter sweep uses one.
 lubricant_drum | Resources | Rail lubricant drum | 60 | 2 | no | inventory | Keeps the rail carriages running smooth.
 fuse_pack | Parts | Relay fuse pack (x4) | 150 | 2 | no | inventory | Replacement fuses for the power relay. Every blown fuse uses one.
 pipe_clamps | Parts | Pipe clamp set (x3) | 110 | 2 | no | inventory | Clamps for coolant leaks. Every leak repair uses one.
-actuator_kit | Parts | Door actuator kit (x2) | 140 | 2 | no | inventory | Drives for the passage doors and the freight gate. Every stuck door uses one.
+actuator_kit | Parts | Gate actuator kit (x2) | 140 | 2 | no | inventory | Drives for the freight gate. Every gate jam uses one. (Passage doors are freed by hand.)
 camera_module | Parts | Camera module (x2) | 160 | 3 | no | inventory | Replacement CCTV modules. Every camera repair uses one.
 pod_calibration_kit | Parts | Pod calibration kit | 260 | 4 | no | inventory | Precision tools for pod recalibration.
 gate_actuator | Parts | Freight gate actuator | 480 | 6 | yes | inventory | A new drive for the freight gate. Fewer jams.
