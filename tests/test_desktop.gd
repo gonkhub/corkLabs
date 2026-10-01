@@ -84,10 +84,16 @@ func _initialize() -> void:
 
 	# No waiting: time moves when the supervisor does something (an inspection here).
 	_check(not desk.has_method("start_wait") and not load("res://game/supervisor.gd").new().has_method("wait"), "there is no Wait")
+	# Inspecting: a unit goes, looks, and reports back.
 	var t1: float = sim.time()
-	var text: String = load("res://game/supervisor.gd").inspect_device("filter_1")   # by path: classes that use the Facility autoload can't be named in --script tests
-	await process_frame
-	_check(not text.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "an inspection passes its facility time (30 min)")
+	var r: Dictionary = load("res://game/supervisor.gd").order_inspection("filter_1")   # by path: classes that use the Facility autoload can't be named in --script tests
+	var fac := desk.get_node("/root/Facility")
+	fac.finish_errands()
+	var plant2: FacilityPlant = sim.get_system("plant")
+	var rep: Dictionary = plant2.reports.get("filter_1", {})
+	_check(r.ok and not rep.is_empty() and str(rep.text).contains("Bay 1 filters") and sim.time() > t1,
+		"a unit inspects a device and reports back (%s, %s)" % [r.text, str(rep.get("by", ""))])
+	_check(sim.journal.tail(40).any(func(e): return e.cat == "report" and str(e.text).contains("report on Bay 1 filters")), "the report is in the Facility Log")
 	# A unit's request: it pings, and asks on camera when you watch its feed.
 	var reqs: UnitRequests = sim.get_system("requests")
 	reqs.requests.clear()

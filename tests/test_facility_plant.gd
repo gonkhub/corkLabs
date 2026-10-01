@@ -12,6 +12,8 @@ func _initialize() -> void:
 	_test_drift_posts_and_escalates()
 	_test_leak_heats_the_facility()
 	_test_relay_slows_charging()
+	_test_relay_takes_the_uplink()
+	_test_proper_repairs_hold()
 	_test_repair_and_salvage_chain()
 	_test_shift_report()
 	_test_save_load()
@@ -141,6 +143,34 @@ func _test_repair_and_salvage_chain() -> void:
 	finish.call(int(refit[0].id), "robot_hauler")
 	var said := sim.journal.entries.any(func(e): return str(e.text).contains("refitted") and str(e.text).contains("repaired by Tinker"))
 	_check(said, "the hand-off is journaled with both robots")
+
+
+# A blown fuse left alone takes corkHQ's uplink down with it (its battery runs
+# out); a new fuse brings it back.
+func _test_relay_takes_the_uplink() -> void:
+	var sim := _facility()
+	var plant := _plant(sim)
+	var o := sim.get_system("oversight") as Oversight
+	sim.schedule_in(0.0, "plant_fault", {"device": "relay"})
+	sim.advance(60.0)
+	_check(plant.device("relay").fault and not o.uplink_down(sim), "the fuse blows: the uplink runs on its battery")
+	sim.advance(FacilityPlant.UPLINK_BATTERY)
+	_check(o.uplink_down(sim) and plant.device_text("uplink").contains("NO POWER"), "twenty minutes on, the uplink is down (no power)")
+	plant._repaired(sim, "relay", "robot_tinker")
+	sim.advance(1.0)
+	_check(not o.uplink_down(sim), "a new fuse and it's back on mains")
+
+
+# A proper repair holds for hours; a patch doesn't.
+func _test_proper_repairs_hold() -> void:
+	var sim := _facility()
+	var plant := _plant(sim)
+
+	plant.devices["pipe_1"].fault = true
+	plant._repaired(sim, "pipe_1", "robot_hauler")
+	var next := sim.scheduler.peek(400).filter(func(e): return e.name == "plant_fault" and str(e.data.get("device", "")) == "pipe_1")
+	_check(not next.is_empty() and float(next.back().time) - sim.time() >= FacilityPlant.REPAIR_GRACE,
+		"after a proper repair the pipe holds at least %d hours" % int(FacilityPlant.REPAIR_GRACE / 3600.0))
 
 
 func _test_shift_report() -> void:

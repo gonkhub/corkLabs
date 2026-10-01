@@ -153,7 +153,6 @@ const TALK_STEADY_EVERY := 3600.0
 ## A conversation builds trust (Knowledge "trust:<unit>") if the last one that
 ## did was at least this long ago: trust takes days, not one long chat.
 const TRUST_GAP := 7200.0
-const INSPECT_MINUTES := 30.0
 ## Facility minutes a diagnostic takes, and how much it steadies the unit.
 const DIAGNOSE_MINUTES := 30.0
 const DIAGNOSE_STEADY := 0.02
@@ -278,17 +277,18 @@ static func _spend_lines(bot: RobotAgent, lines: Array[Dictionary], _cause: Stri
 		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Talking with %s" % bot.display_name())
 
 
-## Inspects a device properly (Plant app): 30 facility minutes. Returns the read-out.
-static func inspect_device(id: String) -> String:
+## Sends a unit to inspect a device (its menu in Cameras, or Plant): it goes,
+## looks, and reports (on camera, in the Facility Log, and in Plant). An
+## errand: the time passes while it does it. `unit_id` "" = the best free unit.
+static func order_inspection(device_id: String, unit_id := "") -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var plant := sim.get_system("plant") as FacilityPlant
-	sim.note("supervisor", "Inspects %s" % plant.device(id).get("name", id))
-	did("inspect")
-	var dirs := sim.get_system("directives") as Directives
-	if dirs:
-		dirs.notify(sim, "inspect", id)
-	Facility.spend(INSPECT_MINUTES * 60.0, "Supervisor inspects %s" % plant.device(id).get("name", id))
-	return plant.inspect_text(sim, id)
+	var d := plant.device(device_id) if plant else {}
+	if d.is_empty():
+		return {"ok": false, "text": "Nothing there."}
+	var id := plant.post_inspection(sim, device_id)
+	did("inspect_order")
+	return request_job(id, false, "inspect " + str(d.name), unit_id)
 
 
 ## Patches a repair without its part (5 minutes): a unit is sent, but the

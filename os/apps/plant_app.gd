@@ -1,6 +1,7 @@
 # Plant: the facility's vital signs. Throughput (the pods' average sync),
 # coolant, heat, dock power, and every device's state with its open job.
-# Pick a device to Inspect it (30 min: how fast it's wearing, when it needs
+# Pick a device to see its last inspection report, or send a unit to inspect
+# it (it goes, looks and reports back: how fast it's wearing, when it needs
 # work, who's on it, the part it needs). Ordering maintenance is done in
 # Cameras: click the thing.
 class_name PlantApp
@@ -81,7 +82,8 @@ func build() -> void:
 		if _rebuilding:
 			return
 		selected = str(tree.get_selected().get_metadata(0))
-		detail.text = ""
+		var rep: Dictionary = (sim().get_system("plant") as FacilityPlant).reports.get(selected, {}) if sim() else {}
+		detail.text = "" if rep.is_empty() else "%s's report (%s): %s" % [rep.by, FacilitySim.format_clock(float(rep.t)), str(rep.text).replace(char(10), " ")]
 		_update_buttons())
 	add_child(tree)
 	detail = OSTheme.label("Select a device.", 13, OSTheme.TEXT_DIM)
@@ -89,7 +91,7 @@ func build() -> void:
 	add_child(detail)
 	var row := HBoxContainer.new()
 	add_child(row)
-	inspect_button = _button(row, "Inspect (30 min)", func(): detail.text = Supervisor.inspect_device(selected))
+	inspect_button = _button(row, "Send a unit to inspect it", func(): detail.text = str(Supervisor.order_inspection(selected).text))
 	row.add_child(OSTheme.label("To fix something: Cameras, click it.", 12, OSTheme.TEXT_DIM))
 	_update_buttons()
 

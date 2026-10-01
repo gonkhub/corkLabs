@@ -290,8 +290,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				if hq:
 					hq.post(sim, "Compliance", "reprimand", "Targeted audit of your terminal: in progress.")
 				audit(sim, TARGETED_AUDIT)
-		"job_done":
-			if str(data.get("source", "")) == "uplink" and _uplink_since >= 0.0:
+		"job_done", "uplink_restored":
+			if (event_name == "uplink_restored" or str(data.get("source", "")) == "uplink") and _uplink_since >= 0.0:
 				var down := sim.time() - _uplink_since
 				_uplink_since = -1.0
 				var hq := sim.get_system("hq") as CorkHQ

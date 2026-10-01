@@ -9,7 +9,8 @@
 #                uplink...: order maintenance (Dispatch picks the unit), call
 #                it off, make it urgent; with no part in stock: order one,
 #                express one, or patch it without; inspect; pipes: pump in
-#                a coolant canister (hangar: the coolant feed, the compactor)
+#                a coolant canister (hangar: the coolant feed, the compactor);
+#                send a unit to inspect it (it reports back)
 #   bench        the workbench: crated units to activate
 #
 # Every entry: {"text", "disabled", "tip", "act": Callable -> String (what
@@ -197,8 +198,10 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 	if d.kind == "pipe" and plant:
 		out.append(_label("Coolant %d%%: top it up at the coolant feed in the hangar (Ogre)" % _pct(plant.coolant)))
 	out.append({"sep": true})
-	out.append(_item("Inspect (%d min)" % int(Supervisor.INSPECT_MINUTES), "", "Wear rate, when it needs work, who's on it, the part it needs.",
-		func(): return Supervisor.inspect_device(id)))
+	out.append({"text": "Send a unit to inspect it", "sub": _inspectors(sim, id)})
+	var rep: Dictionary = plant.reports.get(id, {})
+	if not rep.is_empty():
+		out.append(_label("Last report (%s, %s): %s" % [rep.by, FacilitySim.format_clock(float(rep.t)), str(rep.text).get_slice("\n", 0)]))
 	return out
 
 
@@ -221,6 +224,25 @@ static func _units_for(sim: FacilitySim, job: Dictionary, device_id: String, mak
 		var uid := bot.robot_id
 		out.append(_item("%s (%s)" % [bot.display_name(), note], "" if why.is_empty() or why == "busy" else why.capitalize() + ".",
 			"It goes now; the time passes while it works.", func(): return str(Supervisor.order_maintenance(device_id, makeshift, uid).text)))
+	return out
+
+
+# Who to send to look at something: anyone who can get there.
+static func _inspectors(sim: FacilitySim, device_id: String) -> Array[Dictionary]:
+	var plant := sim.get_system("plant") as FacilityPlant
+	var d := plant.device(device_id)
+	var out: Array[Dictionary] = []
+	for o in Dispatch.options(sim, {"skill": "general", "station": d.station, "id": -1}):
+		var bot: RobotAgent = o.bot
+		var why := str(o.why)
+		var note := "%d m" % roundi(float(o.dist)) if float(o.dist) >= 0.0 else ""
+		if why == "busy":
+			note += ", busy: drops what it's doing"
+		elif not why.is_empty():
+			note += (": " if not note.is_empty() else "") + why
+		var uid := bot.robot_id
+		out.append(_item("%s (%s)" % [bot.display_name(), note], "" if why.is_empty() or why == "busy" else why.capitalize() + ".",
+			"It goes and looks, and reports back.", func(): return str(Supervisor.order_inspection(device_id, uid).text)))
 	return out
 
 

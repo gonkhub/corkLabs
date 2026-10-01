@@ -60,13 +60,13 @@ const KINDS := {
 		"levels": [0.75, 0.5, 0.3], "units": ["tinker"]},
 	"filter": {"job": "Sweep filters", "skill": "general", "work": 400.0, "drift": 0.06,
 		"levels": [0.6, 0.35, 0.15], "start_priority": 0, "part": "filter_cartridges", "units": ["hauler"]},
-	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 2, "part": "pipe_clamps", "units": ["hauler"]},
+	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.05, "priority": 2, "part": "pipe_clamps", "units": ["hauler"]},
 	"relay": {"job": "Replace relay fuse", "skill": "precise", "work": 360.0, "rate": 0.08, "priority": 2, "part": "fuse_pack", "units": ["tinker"]},
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.12, "priority": 1, "units": ["hauler"]},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.06, "priority": 2,
 		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler"]},
 	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler"]},
-	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.03, "priority": 1, "part": "camera_module", "units": ["tinker"]},
+	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.015, "priority": 1, "part": "camera_module", "units": ["tinker"]},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3, "units": ["tinker"]},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1, "units": ["ogre"]},
 	"compactor": {"job": "Empty the waste compactor", "skill": "heavy", "work": 600.0, "drift": 0.02,
@@ -87,7 +87,15 @@ const DOORS := {"door_pod": ["Pod bay door", "pod_door", "pod_door_ctl", "pods_a
 ## Where a unit goes to fix a camera, by the camera's room.
 const CAMERA_STATIONS := {"hall": "bay_2", "pod_bay": "pods_a", "workshop": "bench", "maintenance": "t_dock", "hangar": "loading"}
 ## How long a makeshift patch (no part) holds before the device fails again.
-const PATCH_HOLDS := Vector2(2400.0, 7200.0)
+const PATCH_HOLDS := Vector2(7200.0, 18000.0)
+## After a proper repair (with its part) a device holds at least this long.
+const REPAIR_GRACE := 8.0 * 3600.0
+## A hot facility (heat 1 = normal) strains its pipes: leak rate x heat, up to this.
+const HEAT_STRAIN := 2.5
+## How long the corkHQ uplink runs on its battery once the relay's fuse blows.
+const UPLINK_BATTERY := 1200.0
+## Seconds of work in an inspection (a unit goes and looks).
+const INSPECT_WORK := 240.0
 const HAUL_WORK := 360.0
 const UNPACK_WORK := 300.0
 ## Kinds that don't break: a "fault" is new work arriving (debris, freight).
@@ -118,6 +126,9 @@ var shift_stats := {"output_sum": 0.0, "samples": 0, "faults": 0, "jobs": 0}
 var crates: Array[int] = []
 
 var _ids: Array[String] = []
+var _last_job := {}   # device id -> the job that last repaired it (not saved: read at once)
+## The last inspection report per device: id -> {"t", "by", "text"}.
+var reports := {}
 var _acc := 0.0
 
 
@@ -217,6 +228,7 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 		"job_done":
 			var id := str(data.get("source", ""))
 			if devices.has(id):
+				_last_job[id] = int(data.get("job", -1))
 				_repaired(sim, id, str(data.get("by", "")))
 				var board := sim.get_system("work") as WorkBoard
 				var job := board.get_job(int(data.get("job", -1))) if board else {}
@@ -224,6 +236,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 					# A patch without the part: it won't hold for long.
 					sim.schedule_in(sim.rng.randf_range(PATCH_HOLDS.x, PATCH_HOLDS.y), "plant_fault", {"device": id})
 					sim.note("plant", "%s is patched, not fixed: it won't hold long" % devices[id].name)
+			elif id.begins_with("inspect:"):
+				_inspected(sim, id.trim_prefix("inspect:"), str(data.get("by", "")))
 			elif id.begins_with("part:"):
 				_part_step(sim, id, str(data.get("by", "")))
 			elif id.begins_with("crate:"):
@@ -233,6 +247,13 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			var id := str(data.get("source", ""))
 			if devices.has(id) and int(devices[id].job) == int(data.job):
 				devices[id].job = -1
+		"uplink_battery":
+			# The relay's still out: the uplink's battery is flat.
+			if devices.relay.fault and not devices.uplink.fault:
+				devices.uplink.fault = true
+				devices.uplink.unpowered = true
+				sim.note("alarm", "corkHQ uplink DOWN: no power (the relay is out)")
+				sim.schedule(sim.time(), "alarm", {"device": "uplink"})
 		"shift_start":
 			shift_stats = {"output_sum": 0.0, "samples": 0, "faults": 0, "jobs": 0}
 		"shift_end":
@@ -315,6 +336,9 @@ func _fault(sim: FacilitySim, id: String) -> void:
 			var layout := sim.get_system("layout") as FacilityLayout
 			if layout:
 				layout.set_blocked(sim, d.blocks, true, "stuck" if d.kind == "door" else "jammed")
+		if d.kind == "relay":
+			sim.schedule_in(UPLINK_BATTERY, "uplink_battery", {})
+			sim.note("plant", "corkHQ uplink on battery (%d minutes)" % roundi(UPLINK_BATTERY / 60.0))
 	var open_job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
 	if board and (open_job.is_empty() or not WorkBoard.active(open_job)):
 		var where: String = _door_side(sim, id) if d.kind == "door" else str(d.station)
@@ -410,7 +434,15 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		if layout:
 			layout.set_blocked(sim, d.blocks, false)
 	if was_fault:
-		_book_fault(sim, id)
+		var board := sim.get_system("work") as WorkBoard
+		var job := board.get_job(int(_last_job.get(id, -1))) if board else {}
+		if not job.get("makeshift", false):
+			_book_fault(sim, id, REPAIR_GRACE)   # fixed properly: it holds a good while
+	if id == "relay" and bool(devices.uplink.get("unpowered", false)):
+		devices.uplink.unpowered = false
+		devices.uplink.fault = false
+		sim.note("plant", "corkHQ uplink back on mains power")
+		sim.schedule(sim.time(), "uplink_restored", {})
 
 
 # The salvage chain: "part:repair:<bay>:<part>:<finder>" -> refit job back at
@@ -492,10 +524,12 @@ func _crate_label(sim: FacilitySim, order_id: int) -> String:
 
 # Faults arrive at random (exponential gaps): the next one is booked when the
 # last is fixed.
-func _book_fault(sim: FacilitySim, id: String) -> void:
+func _book_fault(sim: FacilitySim, id: String, after := 0.0) -> void:
 	var rate: float = KINDS[devices[id].kind].rate
+	if devices[id].kind == "pipe":
+		rate *= clampf(heat(), 1.0, HEAT_STRAIN)   # neglect spirals: hot pipes leak
 	var hours := -log(1.0 - sim.rng.randf() * 0.999) / rate
-	sim.schedule_in(hours * 3600.0, "plant_fault", {"device": id, "random": true})
+	sim.schedule_in(after + hours * 3600.0, "plant_fault", {"device": id, "random": true})
 
 
 ## Why a job can't be requested right now ("" = it can): debris with the
@@ -515,6 +549,37 @@ static func units_for(source: String, kind := "") -> Array:
 		if source.begins_with(p):
 			return SOURCE_UNITS[p]
 	return []
+
+
+# A unit has looked at a device: its report.
+func _inspected(sim: FacilitySim, id: String, by: String) -> void:
+	if not devices.has(id):
+		return
+	var text := inspect_text(sim, id)
+	var who := by.trim_prefix("robot_").capitalize()
+	reports[id] = {"t": sim.time(), "by": who, "text": text}
+	sim.note("report", "%s's report on %s: %s" % [who, devices[id].name, text.replace("\n", " ")])
+	var bot := sim.get_system(by) as RobotAgent
+	var chatter := sim.get_system("chatter") as RobotChatter
+	if bot and chatter:
+		chatter.trigger(sim, bot, "order_reply", {"text": text.get_slice("\n", 0) + (" " + text.get_slice("\n", 1) if text.get_slice_count("\n") > 1 else "")})
+	var dirs := sim.get_system("directives") as Directives
+	if dirs:
+		dirs.notify(sim, "inspect", id)
+	var k := sim.get_system("knowledge") as Knowledge
+	if k:
+		k.learn(sim, "did:inspect")
+
+
+## Sends a unit to look at a device (a job anyone can do). Returns the job id.
+func post_inspection(sim: FacilitySim, id: String) -> int:
+	var board := sim.get_system("work") as WorkBoard
+	if board == null or not devices.has(id):
+		return -1
+	for j in board.open_jobs():
+		if str(j.source) == "inspect:" + id:
+			return int(j.id)
+	return board.post(sim, "Inspect %s" % devices[id].name, "general", str(devices[id].station), INSPECT_WORK, 1, "inspect:" + id)
 
 
 static func _job_title(d: Dictionary) -> String:
@@ -600,7 +665,7 @@ func device_text(id: String) -> String:
 		"gate": state = "JAMMED" if d.fault else "open"
 		"door": state = "STUCK" if d.fault else "working"
 		"camera": state = "NO SIGNAL" if d.fault else "ok"
-		"uplink": state = "DOWN" if d.fault else "linked"
+		"uplink": state = ("NO POWER" if d.get("unpowered", false) else "DOWN") if d.fault else "linked"
 		"bay": state = "debris" if int(d.job) >= 0 else "clear"
 		"freight": state = "crates" if int(d.job) >= 0 else "clear"
 		"compactor": state = "FULL" if float(d.value) <= 0.02 else "%d%% full" % _pct(1.0 - float(d.value))
