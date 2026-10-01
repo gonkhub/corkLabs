@@ -265,6 +265,23 @@ on its own mains coupling (a dock on its mount), and turns down anything else
 ("I can't get to Bay 2: it's out of my reach, and I don't leave the hangar.").
 In 3D it slowly turns on the spot to bring its crane round over its work.
 
+### Units' lives: props and habits
+
+- **Props** (`UnitProps`, `game/sim/unit_props.gd`): Hauler's **wrench**
+  (lives on the workshop tool rack; Hauler fetches it for leaks, the gate
+  and doors, and puts it back after), Tinker's **radio** (the bench), Ogre's
+  **crate** (it swings it from one spot to the other). Held props follow the
+  unit's hook or claw. If Hauler can't reach its wrench (a stuck door), it
+  asks you to **send Tinker** for it, or makes do (slower).
+- **Habits** (`game/sim/habits.txt`): after 15 idle minutes a stable unit
+  goes and does something it likes (Hauler tosses its wrench, watches the
+  dock door, listens to the pipes; Tinker fiddles with the radio, hums at pod
+  3, visits Ogre; Ogre swings its crate, sweeps its lamp). Each plays an
+  `idle_*` clip once it's recorded.
+- **On the link**, a unit stops and turns to face the nearest camera.
+- **A camera a unit repairs** comes back on with the unit right in front of
+  it, looking in; it backs off and waves (`act_wave_camera`, to record).
+
 ## Rooms and routes
 
 **The floor plan** (`game/sim/facility_setup.gd`) is data: rooms, a rail
@@ -362,10 +379,13 @@ framework: the lines and voices are placeholders to replace.
 - **When** (`RobotChatter`, `game/speech/robot_chatter.gd`, a facility
   system): robots report what happens to them (starting and finishing jobs,
   recharging, low power, stalling, moods, wandering, blocked routes, answers
-  to orders); an idle robot sometimes mutters; two robots close together in
-  the same room strike up a **conversation** (one speaks, the other answers a
-  few seconds later), sometimes passing on a job the other is better at;
-  alarms and closed routes get a comment. Urgent things are always said; the
+  to orders); an idle robot sometimes mutters; alarms and closed routes get
+  a comment. A robot doesn't repeat any of its last 12 lines.
+- **Exchanges** (`game/speech/exchanges.txt`, `exchanges.gd`): short
+  contextual conversations between units, picked from what's true right now
+  (`hauler.holding:wrench`, `ogre.broken`, `coolant_low`, `pkg:night-watch`,
+  anything the story knows...), each with its own repeat rule (`once`, or
+  every n hours). Many only happen after something you did. Urgent things are always said; the
   rest depends on each robot's cooldown and chattiness. Everything said goes
   in the journal (`speech`), and talk has its own random numbers, so it never
   changes what else happens.
@@ -486,7 +506,9 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined and named. **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off, make it urgent; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
+| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined, and a **card** shows what it is and how it's doing (a unit: its state, ON THE LINK / ASKING / HOLDING, what it's doing, power, stability, condition, trust; a machine: FAULT / IN HAND / NO PART..., its sync or room, the job's progress, coolant, the last inspection). **Pop out** (or P) opens the current camera in a window of its own (as many as you like; remembered with the layout; requests and the unit link stay in the main Cameras window). **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off, make it urgent; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
+| **Forms** | corkHQ's paperwork, once someone tells you which form to file (Form C-9: a replacement core for Ogre) | Fill in the fields (from what you've found: `/sys/units/ogre.cfg`, `diagnose`, your Notes) and **File it** (75 min). HQ reviews it 30-60 min later; a wrong field comes back saying which. Paperwork is how big things are paced |
+| **Notes** | Your notebook: kept on your desk (OS settings), across runs; HQ never reads it | **Pages** (+ adds, the first line names it), **Ctrl+F** finds across pages (F3 next), select text and pick a **colour**, a font and size per page |
 | **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
 | **Requisitions** | The catalogue with what's in stock, WAITING FOR PARTS (repairs that can't be ordered for want of a part), your budget, your orders | Order items (5 min), **Express** (+75%, about a third of the time); deliveries arrive as crates the units bring in |
 | **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs). Fixing things is done in Cameras |

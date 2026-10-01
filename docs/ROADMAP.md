@@ -37,6 +37,7 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Night Run** (hidden arcade game with two secrets), the **maintenance account** (auditctl, hqctl, unitctl, pkgctl, podctl), **pods** | **New, needs a play** | Automated tests + screenshots |
 | **Fourth pass + macro pass**: errands, roles, routine work and chores (pod waste, compactor, rails), inspections by units, relay -> uplink, hqctl disable, Terminal parity, ir-vision package, cameras as corporate's eyes, trust from treatment, night-watch + overclock, DevTools | **New, needs a play** | Automated tests (19 files) + simulated play (efficient supervisor: 7/8 seeds finish with 1.5-4 h spare a shift; a heavy snooper gets fired on day 3 in 2/4) |
 | **More actions**: Duties app, Plant inspect, object menus (order maintenance, patch, diagnose, service, answer requests, pump coolant), express shipping, Recycle Bin, Notes, cp/grep/find/who/ps | **New** | Automated tests |
+| **Unit behaviour pass**: Ogre starts broken (Pell, Form C-9, a free core, Hauler + Tinker); Forms app; dialogue checker; units face the camera on the link; a repaired camera's greeting; props (wrench, radio, crate), habits, contextual exchanges; dead Ogre looks dead; Notes pages/find/colours; camera hover cards + pop-out | **New, needs a play** | Automated tests (21 files) + screenshots (greeting, dead Ogre, props, Notes, hover card, pop-out) |
 | **Ogre hand-off chain** (deliveries arrive as crates), **crated robots** (activate a new unit), **GitHub Actions** CI | **New** | Automated tests; CI runs once pushed |
 
 ## Branches and pull requests
@@ -48,9 +49,9 @@ be deleted.
 
 | Branch | What | Needs from you |
 | --- | --- | --- |
-| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived. **Third (2026-10-01):** run the facility from the cameras (click menus, Dispatch, obedient stable units, night autopilot); reprimands that shake corkHQ hard; directives never missed overnight; starting stock. **Fourth (2026-10-01, from your play notes):** errands, pick the unit, talk and requests on camera, roles, Ogre's hangar machines, routine work and chores, pod waste and the compactor, inspections by units, the relay powering the uplink, hqctl disable, Terminal parity, night vision as a package, balance from simulated play. **Macro pass:** the cameras are corporate's eyes, trust from treatment, packages that all work (night-watch, overclock), remote reboot frees seized units, catalogue cuts, DevTools (`dev`) | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
+| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived. **Third (2026-10-01):** run the facility from the cameras (click menus, Dispatch, obedient stable units, night autopilot); reprimands that shake corkHQ hard; directives never missed overnight; starting stock. **Fourth (2026-10-01, from your play notes):** errands, pick the unit, talk and requests on camera, roles, Ogre's hangar machines, routine work and chores, pod waste and the compactor, inspections by units, the relay powering the uplink, hqctl disable, Terminal parity, night vision as a package, balance from simulated play. **Macro pass:** the cameras are corporate's eyes, trust from treatment, packages that all work (night-watch, overclock), remote reboot frees seized units, catalogue cuts, DevTools (`dev`). **Unit behaviour pass:** Ogre broken + Form C-9, dialogue sanity, facing the camera, the camera greeting, props/habits/exchanges, Notes upgrade, camera hover cards + pop-out | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
 
-All tests pass (`tools\run_tests.ps1`; 19 test files).
+All tests pass (`tools\run_tests.ps1`; 21 test files; the per-file timeout is 300 s).
 
 ## Things to try first (about 45 minutes)
 
@@ -152,7 +153,8 @@ Earlier:
    break things, set trust, run any scripted event.
 1. **Play shift 1** as a new supervisor, then a snooping run, and set the
    pressure/costs/thresholds above.
-2. **The acting pass**: the seven story clips, plus a seize, a manual
+2. **The acting pass**: the seven story clips, `act_wave_camera`, the
+   eight habit clips (`idle_*`, see STORY.md), plus a seize, a manual
    reboot, Hauler's "accident", unpacking a crate.
 3. **More shift 2/3 content**: events, files that appear later, conversation
    branches that use trust; what the overnight summary should say.

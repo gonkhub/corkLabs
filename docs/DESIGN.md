@@ -154,6 +154,12 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-10-01 | Packages: every one works (ir-vision, remote-reboot (also frees seized units), route-control, firmware-stabilizer, night-watch, overclock); the rest cut. Catalogue: rail lubricant, the pod calibration kit and the Sweeper cut | User |
 | 2026-10-01 | Units are picked on camera in screen space (a generous target), things by their own rotated boxes, rails last | User: small Tinker was hard to click; the rail got in the way |
 | 2026-10-01 | **DevTools** (secret `dev` command): full control of time, shifts, faults, units, corporate, stock and story, for testing | User |
+| 2026-10-01 | **Ogre starts broken**; the fix is a chain (Pell -> Form C-9 -> free express core -> Hauler hauls, Tinker installs); meanwhile Hauler feeds coolant (wear) and very heavy crates wait | User: a first goal that teaches the systems |
+| 2026-10-01 | **Paperwork paces; puzzles and prerequisites gate**. Clearance stays but isn't the lock of choice. Systems lean on facts the player can write in Notes (kept across runs, never read by HQ) | User |
+| 2026-10-01 | A script's "close the link" choice must end the link (checked by `test_dialogue.gd`); the UI's own close button only shows when the script has none | Ogre had two, only one worked |
+| 2026-10-01 | On the link a unit **stops and faces the nearest camera**; a repaired camera's first sight is the unit, close, looking in, then a wave | User |
+| 2026-10-01 | **Units' lives**: props (wrench, radio, crate), habits when idle, contextual exchanges with repeat rules; player-only interactions (Hauler cut off from its wrench asks for Tinker) | User: units need personality between jobs |
+| 2026-10-01 | Camera **hover cards** (state chips + bars) and **pop-out** feeds in their own windows | User: better information on camera; watch a room while working elsewhere |
 
 ## Gameplay directions (approved long-term, not started)
 

@@ -131,6 +131,16 @@ shift), `kill 45` (auditd restarts in 0.3 s, and that's noticed).
   `rescue`, `reboot`, `feed`, `requests`, `answer`, `talk` (in Cameras if a
   camera sees the unit, otherwise in the Terminal).
 - **Night vision** needs the `ir-vision` package.
+- **Ogre starts dead** (core fault E-417; its eye is dark). Until it's
+  fixed, Hauler loads the coolant feed (heavy wear, and it says so) and
+  very heavy crates (gate actuators, crated units) sit in the hangar.
+  The chain: tell **Pell** (Reply: "Unit OGRE is down") -> she names **Form
+  C-9** -> fill it in (Forms: designation OGRE, serial OGR-79-001 from
+  `/sys/units/ogre.cfg`, fault E-417 from Diagnose) -> 75 min to file, 30-60
+  min review -> a free express core (about 2 h) -> Hauler carries it to
+  Ogre's service spot -> Tinker installs it. Day 1 duty: "Get Ogre back online".
+- **Paperwork paces big things**: forms cost a lot of time, and need facts
+  you've found and (ideally) written in your Notes.
 
 ## The cast
 
@@ -230,6 +240,11 @@ nothing happens. Record them in the recorder like any `act_*` clip.
 | `act_lamp_to_camera` | Ogre | Swings the great eye slowly toward the camera |
 | `act_lamp_dim` | Ogre | The lamp lowers, like a bow ("...lantern.") |
 | `act_lamp_to_pods` | Ogre | The lamp sweeps toward the pod bay side and stops. Shift 3 13:45 |
+
+| `act_wave_camera` | any | A unit that just repaired a camera: backs off and gives it a little wave |
+| `idle_toss_wrench`, `idle_watch_door`, `idle_listen_pipes` | Hauler | Habits: tossing the wrench, watching the dock door, listening to the pipes |
+| `idle_fiddle_radio`, `idle_hum_pod3`, `idle_look_up` | Tinker | Habits: the radio, humming at pod 3, looking up at Ogre |
+| `idle_swing_crate`, `idle_sweep_lamp` | Ogre | Habits: swinging the crate across, sweeping the lamp around |
 
 Worth adding for the new systems (not yet cued): a seize (a joint locking
 mid-reach), a manual reboot (Tinker working at another unit's back panel),
