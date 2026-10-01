@@ -1,2 +1,2 @@
 #! owner: root
-#! requires: root
+#! access: root

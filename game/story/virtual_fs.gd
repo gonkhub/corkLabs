@@ -16,8 +16,11 @@
 #   #! requires: flag        only exists once this condition holds (Knowledge.check)
 #   #! gone_if: flag         disappears once this holds ("purged:dokafor")
 #   #! shift: 2              only exists from this shift on
-#   #! minutes: 5            facility minutes to read it (default: 1 per 15 lines)
+#   #! minutes: 5            reading time, x READ_SCALE (default: 1 facility minute per 5 lines, at least 5)
 #   #! exec: nightrun        an executable: "run <name>" / double-click starts this app
+#   #! access: dokafor       (folders) only these accounts may open it (the
+#                            maintenance account opens everything); others see
+#                            it's there and get "Permission denied"
 #
 # A folder can hold a _dir.txt with the same headers (requires, gone_if, shift,
 # restricted, owner): it applies to the folder itself (restricted: entering
@@ -166,11 +169,16 @@ func all_files(knowledge: Knowledge, shift: int) -> Array[Dictionary]:
 	return out
 
 
-## Facility minutes to read a file.
+## Facility minutes to read a file. Reading properly takes a while: you're
+## reading a dead colleague's notes on a terminal, not skimming.
+const READ_SCALE := 3.0
+const READ_MIN := 5.0
+
+
 static func read_minutes(e: Dictionary) -> float:
 	if e.meta.has("minutes"):
-		return float(e.meta.minutes)
-	return maxf(1.0, ceilf(str(e.body).count("\n") / 15.0))
+		return float(e.meta.minutes) * READ_SCALE
+	return maxf(READ_MIN, ceilf(str(e.body).count("\n") / 5.0))
 
 
 static func _join(vdir: String, name: String) -> String:

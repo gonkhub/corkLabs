@@ -11,13 +11,25 @@
 #                 it finds something. First find = a formal warning (a
 #                 strike), second = dismissal. Some violations can be caught
 #                 on the spot (catch_chance).
-#   catastrophe   the facility fails on your watch: coolant empty for 30
+#   catastrophe   the facility fails on your watch: coolant empty for 45
 #                 facility minutes, or throughput under 30% for an hour.
 #
 # Every violation is written to the AUDIT TRAIL, which corporate reads. With
 # the maintenance account, "auditctl" can read and purge it (itself a risk).
 # Muting corkHQ ("hqctl mute") silences the panel for a while; corporate
 # notices at the next audit.
+#
+# PELL ESCALATES. Violations come in kinds (files, games, talk, maint). As a
+# kind piles up in a shift, Liaison Pell says something (level 1), then
+# demands an explanation with a deadline (level 2: a directive, answered in
+# her Reply), then sets Compliance on you (level 3: standing down, and a
+# targeted audit half an hour later).
+#
+# THE UPLINK. corkHQ sees the facility through one relay in the workshop.
+# While it's down (it breaks now and then, or a unit can be talked into an
+# "accident" with it), nothing is recorded: no suspicion, no trail, no audits,
+# no Pell. Corporate notices the outage itself, wants it fixed within the hour,
+# and every repeat outage adds suspicion of its own.
 class_name Oversight
 extends RefCounted
 
@@ -31,9 +43,15 @@ const REVIEW_STANDING := {"A": 15.0, "B": 8.0, "C": 0.0, "D": -12.0, "F": -25.0}
 const STRIKES_TO_FIRE := 2
 const CRISIS_CHECK := 60.0
 const COOLANT_CRISIS := 0.02
-const COOLANT_LIMIT := 1800.0
+const COOLANT_LIMIT := 2700.0
 const OUTPUT_CRISIS := 0.3
 const OUTPUT_LIMIT := 3600.0
+## Violations of each kind (in one shift) at which Pell escalates to levels 1, 2, 3.
+const ESCALATE := {"files": [1, 3, 5], "games": [1, 2, 4], "talk": [3, 6, 10], "maint": [1, 2, 3]}
+const COMPLIANCE_STANDING := 6.0
+const TARGETED_AUDIT := 30.0
+## Suspicion each repeat uplink outage adds (x outages so far, minus one).
+const UPLINK_REPEAT := 5.0
 
 var sim_id := "oversight"
 var standing := START_STANDING
@@ -55,6 +73,13 @@ var _crisis_acc := 0.0
 var _coolant_since := -1.0
 var _output_since := -1.0
 var _warned := {}
+## Violations this shift, by kind (Pell's escalation).
+var counts := {}
+## Times the uplink has gone down, when the current outage began, and how much
+## went unrecorded while it was down.
+var uplink_breaks := 0
+var _uplink_since := -1.0
+var blind := 0
 
 
 func fired() -> bool:
@@ -65,14 +90,62 @@ func hq_muted(sim: FacilitySim) -> bool:
 	return sim != null and sim.time() < hq_muted_until
 
 
+## Is corkHQ's uplink down (nothing gets recorded)?
+func uplink_down(sim: FacilitySim) -> bool:
+	var plant := sim.get_system("plant") as FacilityPlant if sim else null
+	return plant != null and bool(plant.device("uplink").get("fault", false))
+
+
 ## A policy violation: suspicion + a line in the audit trail. With
-## `catch_chance`, corporate may notice right now.
+## `catch_chance`, corporate may notice right now. Nothing at all while the
+## uplink is down.
 func violate(sim: FacilitySim, what: String, amount: float, catch_chance := 0.0) -> void:
+	if uplink_down(sim):
+		blind += 1
+		sim.note("oversight", "Unrecorded (uplink down): %s" % what)
+		return
 	suspicion = clampf(suspicion + amount, 0.0, 100.0)
 	trail.append({"t": sim.time(), "what": what, "amount": amount})
 	sim.note("oversight", "Violation logged: %s (suspicion %d)" % [what, roundi(suspicion)])
 	if catch_chance > 0.0 and not fired() and rng.randf() < catch_chance:
 		_caught(sim, what)
+	_escalate(sim, category(what))
+
+
+## Which kind of violation this is (for Pell).
+static func category(what: String) -> String:
+	if what.begins_with("read /home") or what.begins_with("copied /home") or what.contains("former staff"):
+		return "files"
+	if what.contains("recreational"):
+		return "games"
+	if what.begins_with("conversation with unit"):
+		return "talk"
+	if what.contains("maintenance account") or what.contains("pod ") or what.contains("audit") or what.contains("corkHQ link") \
+			or what.contains("override") or what.contains("unapproved") or what.contains("decommissioned"):
+		return "maint"
+	return ""
+
+
+func _escalate(sim: FacilitySim, cat: String) -> void:
+	if cat.is_empty() or not ESCALATE.has(cat) or not watching:
+		return
+	counts[cat] = int(counts.get(cat, 0)) + 1
+	var level: int = (ESCALATE[cat] as Array).find(int(counts[cat])) + 1
+	if level <= 0:
+		return
+	var hq := sim.get_system("hq") as CorkHQ
+	if hq:
+		hq.say(sim, "pell_%s_%d" % [cat, level], "warning")
+	match level:
+		2:
+			var dirs := sim.get_system("directives") as Directives
+			if dirs:
+				dirs.issue(sim, "explain", cat, 45.0, "Explain your %s to Liaison Pell (corkHQ: Reply)." % {"files": "file access",
+					"games": "use of recreational software", "talk": "conversations with units", "maint": "use of maintenance tools"}[cat], 2.0, 8.0)
+		3:
+			standing = clampf(standing - COMPLIANCE_STANDING, 0.0, 100.0)
+			sim.note("oversight", "Compliance has your terminal (%s): standing %d" % [cat, roundi(standing)])
+			sim.schedule_in(1800.0, "targeted_audit", {"why": cat})
 
 
 ## Corporate likes something (a duty done, a good review).
@@ -116,6 +189,9 @@ func purge_trail(sim: FacilitySim) -> int:
 ## Runs an audit now. `strictness` adds to the odds (audit day).
 ## Returns what it found ("" = nothing).
 func audit(sim: FacilitySim, strictness := 0.0) -> String:
+	if uplink_down(sim):
+		sim.note("oversight", "Audit skipped: no uplink to corkHQ")
+		return ""
 	var hq := sim.get_system("hq") as CorkHQ
 	if hq_muted(sim) and not _warned.has("mute_%d" % int(hq_muted_until)):
 		_warned["mute_%d" % int(hq_muted_until)] = true
@@ -198,6 +274,23 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 	match event_name:
+		"shift_start":
+			counts = {}
+		"targeted_audit":
+			if watching and not fired():
+				var hq := sim.get_system("hq") as CorkHQ
+				if hq:
+					hq.post(sim, "Compliance", "warning", "Targeted audit of your terminal: in progress.")
+				audit(sim, TARGETED_AUDIT)
+		"job_done":
+			if str(data.get("source", "")) == "uplink" and _uplink_since >= 0.0:
+				var down := sim.time() - _uplink_since
+				_uplink_since = -1.0
+				var hq := sim.get_system("hq") as CorkHQ
+				if hq:
+					hq.post(sim, "IT Services", "notice", "Uplink to C-7 restored after %d minutes. Logs from the outage are incomplete." % roundi(down / 60.0))
+				sim.note("oversight", "Uplink back after %d min: %d things went unrecorded" % [roundi(down / 60.0), blind])
+				blind = 0
 		"shift_end":
 			var hq := sim.get_system("hq") as CorkHQ
 			if hq and not hq.grade.is_empty() and not fired():
@@ -207,14 +300,34 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				else:
 					penalise(sim, "shift review %s" % hq.grade, -delta)
 		"alarm":
+			if str(data.get("device", "")) == "uplink":
+				_uplink_lost(sim)
 			if data.has("robot"):
 				var bot := sim.get_system("robot_" + str(data.robot)) as RobotAgent
 				if bot and bot.activity.kind == "crashed" and watching:
 					penalise(sim, "unit %s crashed" % bot.display_name(), 4.0)
 
 
+# The uplink just went down: corporate notices the silence.
+func _uplink_lost(sim: FacilitySim) -> void:
+	uplink_breaks += 1
+	_uplink_since = sim.time()
+	var hq := sim.get_system("hq") as CorkHQ
+	if uplink_breaks >= 2:
+		var extra := UPLINK_REPEAT * (uplink_breaks - 1)
+		suspicion = clampf(suspicion + extra, 0.0, 100.0)
+		trail.append({"t": sim.time(), "what": "repeated loss of the corkHQ uplink (%d times)" % uplink_breaks, "amount": extra})
+		if hq:
+			hq.post(sim, "Compliance", "warning", "Uplink outage number %d. Outages are not supposed to happen. This one is noted." % uplink_breaks)
+	if hq:
+		hq.post(sim, "Directorate of Output", "warning", "The uplink to facility C-7 is down. Restore it immediately.")
+	var dirs := sim.get_system("directives") as Directives
+	if dirs and watching:
+		dirs.issue(sim, "uplink", "", 60.0, "Restore the corkHQ uplink (workshop).", 1.0, 10.0)
+
+
 func sim_save() -> Dictionary:
-	return {"standing": standing, "suspicion": suspicion, "strikes": strikes, "trail": trail.duplicate(true),
+	return {"standing": standing, "counts": counts.duplicate(), "uplink_breaks": uplink_breaks, "uplink_since": _uplink_since, "blind": blind, "suspicion": suspicion, "strikes": strikes, "trail": trail.duplicate(true),
 		"fired_reason": fired_reason, "fired_kind": fired_kind, "hq_muted_until": hq_muted_until, "watching": watching,
 		"audit_acc": _audit_acc, "coolant_since": _coolant_since, "output_since": _output_since, "warned": _warned.duplicate(),
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state)}
@@ -235,6 +348,13 @@ func sim_load(d: Dictionary) -> void:
 	_coolant_since = float(d.get("coolant_since", -1.0))
 	_output_since = float(d.get("output_since", -1.0))
 	_warned = d.get("warned", {}).duplicate()
+	counts = {}
+	var c: Dictionary = d.get("counts", {})
+	for k in c:
+		counts[k] = int(c[k])
+	uplink_breaks = int(d.get("uplink_breaks", 0))
+	_uplink_since = float(d.get("uplink_since", -1.0))
+	blind = int(d.get("blind", 0))
 	rng.seed = int(str(d.get("rng_seed", "0")))
 	rng.state = int(str(d.get("rng_state", "0")))
 

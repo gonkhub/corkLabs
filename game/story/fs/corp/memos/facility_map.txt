@@ -1,6 +1,6 @@
 #! date: 1998-11-30
 #! owner: corp
-#! learn: cmd:routes
+#! learn: cmd:routes hint:uplink
 FACILITY C-7: ROOMS AND PASSAGES (for supervisors)
 --------------------------------------------------
 
@@ -13,6 +13,10 @@ FACILITY C-7: ROOMS AND PASSAGES (for supervisors)
 Passages (the terminal lists them with: routes)
   The pod bay duct and the workshop hatch are narrow; only TINKER fits.
   The freight gate jams. When it does, HAULER cannot reach the workshop.
+
+UPLINK RELAY (workshop): corkHQ's line into the facility. Every report,
+every audit, every word from your liaison comes through it. If it goes
+down, report it at once. Do not touch it.
 
 Units ride rails. They cannot go where the rails do not go.
 Neither can you. You don't go anywhere. You stay at the terminal.

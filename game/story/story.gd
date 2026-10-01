@@ -53,6 +53,34 @@ static func learn(sim: FacilitySim, key: String) -> bool:
 	return k != null and k.learn(sim, key)
 
 
+# --- Accounts and permissions -----------------------------------------------------
+
+## Which account the terminal is logged in as: "supervisor", "dokafor" (Okafor's
+## old account), or "maint" (the maintenance account, which opens everything).
+static func user(sim: FacilitySim) -> String:
+	if knows(sim, "root"):
+		return "maint"
+	if knows(sim, "as:dokafor"):
+		return "dokafor"
+	return "supervisor"
+
+
+## Can the current account open this path? (Every folder above it must let it in.)
+static func can_access(sim: FacilitySim, vpath: String) -> bool:
+	var who := user(sim)
+	if who == "maint":
+		return true
+	var e := entry(sim, vpath)
+	while not e.is_empty():
+		var acc := str(e.meta.get("access", ""))
+		if not acc.is_empty() and not acc.split(" ", false).has(who):
+			return false
+		if str(e.parent).is_empty():
+			return true
+		e = fs().get_entry(str(e.parent))
+	return true
+
+
 ## An entry by path: the file system's, or one of the supervisor's copies.
 static func entry(sim: FacilitySim, vpath: String) -> Dictionary:
 	if vpath.begins_with(VirtualFS.HOME + "/"):
@@ -107,6 +135,8 @@ static func copy_file(sim: FacilitySim, src: String) -> Dictionary:
 		return {"ok": false, "text": "cp: %s: No such file" % src}
 	if e.dir:
 		return {"ok": false, "text": "cp: %s: Is a directory" % src}
+	if not can_access(sim, src):
+		return {"ok": false, "text": "cp: %s: Permission denied" % src}
 	if e.meta.has("copy_of") or str(e.parent) == VirtualFS.HOME:
 		return {"ok": false, "text": "cp: %s is already in your home folder" % e.name}
 	if e.meta.has("password") or e.meta.has("exec"):
@@ -149,6 +179,8 @@ static func read_file(sim: FacilitySim, vpath: String) -> Dictionary:
 		return {"ok": false, "error": "%s: No such file or directory" % vpath}
 	if e.dir:
 		return {"ok": false, "error": "%s: Is a directory" % vpath}
+	if not can_access(sim, vpath):
+		return {"ok": false, "error": "%s: Permission denied" % vpath, "denied": true}
 	if is_encrypted(sim, e):
 		learn(sim, "cmd:decrypt")
 		return {"ok": false, "error": "%s: encrypted. (decrypt %s <password>)" % [vpath, e.name], "encrypted": true, "entry": e,

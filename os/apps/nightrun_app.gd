@@ -15,7 +15,7 @@
 class_name NightRunApp
 extends OSApp
 
-const RUN_MINUTES := 10.0
+const RUN_MINUTES := 30.0
 const VIOLATION := 3.0
 const LANES := 3
 const START_SPEED := 240.0

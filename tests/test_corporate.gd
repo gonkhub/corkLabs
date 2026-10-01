@@ -65,26 +65,28 @@ func _test_requisitions() -> void:
 	var funds0 := req.funds
 	var too_much := req.place(sim, "robot_hauler")
 	_check(not too_much.ok and req.funds == funds0, "you can't order beyond your budget (%s)" % too_much.text)
-	plant.coolant = 0.3
 	var r := req.place(sim, "coolant_canister", 1)
 	_check(r.ok and req.funds == funds0 - 120 and r.order.status == "in transit", "an order is paid for and shipped")
 	_check(hq.messages.back().kind == "order" and str(hq.messages.back().text).contains("shipped"), "corkHQ confirms it")
-	sim.advance(3700.0)
+	sim.advance(3599.0)
+	plant.coolant = 0.3
+	sim.advance(101.0)
 	_check(r.order.status == "delivered" and plant.coolant > 0.65, "it's delivered, and coolant tops up the reservoir (%d%%)" % roundi(plant.coolant * 100))
+	var fuses_before := int(req.inventory.get("fuse_pack", 0))
 	var parts := req.place(sim, "fuse_pack", 2)
 	sim.advance(2.1 * 3600.0)
 	_check(parts.order.status == "crated" and plant.crates.size() + int(plant.device("freight_stacks").job >= 0) >= 1,
 		"parts arrive as a crate in the deep stacks (%s)" % parts.order.status)
 	# The hand-off chain: Ogre lifts it to the loading bay, a rail unit hauls it, Tinker unpacks it.
 	var hours := 0.0
-	while int(req.inventory.get("fuse_pack", 0)) == 0 and hours < 12.0:
+	while parts.order.status != "unpacked" and hours < 12.0:
 		sim.advance(600.0)
 		hours += 600.0 / 3600.0
 	var texts := sim.journal.entries.map(func(e): return str(e.text))
 	_check(texts.any(func(t): return t.contains("Ogre lowered the crate")), "Ogre lifts the crate to the loading bay")
 	_check(texts.any(func(t): return t.contains("hauled the crate") and not t.contains("Ogre hauled")), "a rail unit hauls it to the workshop")
 	_check(texts.any(func(t): return t.contains("unpacked the crate")), "and it's unpacked at the workbench")
-	_check(int(req.inventory.get("fuse_pack", 0)) == 8 and parts.order.status == "unpacked",
+	_check(int(req.inventory.get("fuse_pack", 0)) >= fuses_before - 1 + 8 and parts.order.status == "unpacked",
 		"then the parts are in stock: two packs of four fuses (%d, after %.1f h)" % [int(req.inventory.get("fuse_pack", 0)), hours])
 	# Needs approval: approved with a decent rating, denied (and refunded) with a poor one.
 	req.funds = 10000

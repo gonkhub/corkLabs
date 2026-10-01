@@ -1,4 +1,5 @@
-# Duties: corporate's checklist for this shift (the Campaign's duties).
+# Duties: corporate's checklist for this shift (the Campaign's duties), and on
+# top of it the DIRECTIVES: corporate's demands with deadlines (Directives).
 # Each duty takes facility time and pleases the Directorate; each one left
 # undone when the shift ends costs standing. The good-supervisor path, and
 # a steady way to spend a shift's hours.
@@ -49,7 +50,11 @@ func refresh() -> void:
 	if o:
 		standing.text += "   Standing %d/100" % roundi(o.standing)
 	# Rebuild the rows only when something about them changed.
+	var dirs := sim().get_system("directives") as Directives
 	var key := ""
+	if dirs:
+		for x in dirs.active:
+			key += "D%d|" % int(x.id)
 	for d in camp.duties:
 		key += "%s:%s:%s|" % [d.id, d.done, camp.duty_blocker(sim(), d)]
 	if key == _key:
@@ -57,8 +62,37 @@ func refresh() -> void:
 	_key = key
 	for c in rows.get_children():
 		c.queue_free()
+	if dirs:
+		for x in dirs.active:
+			rows.add_child(_directive_row(x))
 	for d in camp.duties:
 		rows.add_child(_row(camp, d))
+
+
+func _directive_row(x: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	var style := OSTheme.box(OSTheme.ALARM.darkened(0.8), OSTheme.ALARM, 4, 10, 6)
+	style.border_width_left = 4
+	panel.add_theme_stylebox_override("panel", style)
+	var row := HBoxContainer.new()
+	panel.add_child(row)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(col)
+	col.add_child(OSTheme.label("DIRECTIVE  due %s" % FacilitySim.format_clock(float(x.due)), 12, OSTheme.ALARM))
+	var t := OSTheme.label(str(x.text), 14)
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(t)
+	if x.kind == "report":
+		var b := Button.new()
+		b.text = "File it (%d min)" % int(Directives.REPORT_MINUTES)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(func():
+			Supervisor.file_report()
+			_key = ""
+			refresh())
+		row.add_child(b)
+	return panel
 
 
 func _row(camp: Campaign, d: Dictionary) -> Control:

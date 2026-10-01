@@ -1,8 +1,9 @@
-# Plays through the corkLabs OS like a rascal would: the Terminal (help only
-# lists what you know, typing a real command teaches it), the file system,
-# a conversation with Tinker, Files, Duties, Night Run and its wrong-way
-# secret, the maintenance account (su maint, podctl, hqctl, auditctl), the
-# end of a shift, dismissal and retrying the shift, and an ending.
+# Plays through the corkLabs OS: the Terminal (help only lists what you know,
+# typing a real command teaches it), the file system and its locked folders
+# (Okafor's account, the maintenance account), conversations, Files, Duties
+# and directives, units' requests, parts and wear, the corkHQ uplink and
+# Hauler's "accident", Pell escalating, Night Run, dismissal and retrying the
+# shift, and the end of the build.
 extends SceneTree
 
 const SAVE := "user://test_secrets_save.json"
@@ -11,10 +12,12 @@ const OS_SETTINGS := "user://test_secrets_os_settings.json"
 var failures := 0
 var facility: Node
 var desk: Control
+var sup   # Supervisor, by path: classes that use the Facility autoload can't be named in --script tests
 
 
 func _initialize() -> void:
 	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
+	sup = load("res://game/supervisor.gd")
 	get_root().size = Vector2i(1600, 900)
 	facility = get_root().get_node("Facility")
 	facility.wipe_save(SAVE)
@@ -30,21 +33,30 @@ func _initialize() -> void:
 	desk.log_on()
 	await process_frame
 	await process_frame
-	_check(desk.shift_screen.visible and _screen_says("SHIFT 1"),
-		"log on shows shift 1's brief")
+	_check(desk.shift_screen.visible and _screen_says("SHIFT 1"), "log on shows shift 1's brief")
 	_check(facility.has_checkpoint(SAVE), "the brief saves the shift's checkpoint")
 	desk.clock_in()
 	await process_frame
 	await process_frame
 
 	await _test_terminal()
+	_keep_employed()
 	await _test_apps()
+	_keep_employed()
 	await _test_bin_and_notes()
-	await _test_plant_and_liaison()
+	_keep_employed()
+	await _test_parts_and_wear()
+	_keep_employed()
+	await _test_corporate()
+	_keep_employed()
+	await _test_uplink()
+	_keep_employed()
 	await _test_nightrun()
+	_keep_employed()
 	await _test_maint()
+	_keep_employed()
 	await _test_fired_and_retry()
-	await _test_ending()
+	await _test_end()
 
 	desk.log_off()
 	desk.free()
@@ -58,6 +70,23 @@ func sim() -> FacilitySim:
 	return facility.sim
 
 
+# Every section spends hours of facility time and breaks rules on purpose:
+# keep the supervisor employed (and the facility alive) between them.
+func _keep_employed() -> void:
+	var o := Story.oversight(sim())
+	o.standing = 100.0
+	o.suspicion = 0.0
+	o.strikes = 0
+	o.fired_reason = ""
+	o.fired_kind = ""
+	var camp := Story.campaign(sim())
+	if camp.state == "fired":
+		camp.state = "on_duty"
+	(sim().get_system("plant") as FacilityPlant).coolant = 1.0
+	var dirs := sim().get_system("directives") as Directives
+	dirs.active.clear()
+
+
 func _test_terminal() -> void:
 	var term = desk.open_app("terminal")
 	await process_frame
@@ -66,7 +95,7 @@ func _test_terminal() -> void:
 	_check(term.run("ls").contains("welcome.txt"), "ls in the home folder shows the onboarding file")
 	var t0 := sim().time()
 	var out: String = term.run("cat welcome.txt")
-	_check(out.contains("WELCOME TO corkLabs") and sim().time() - t0 >= 179.0, "cat reads it, and reading takes facility time")
+	_check(out.contains("WELCOME TO corkLabs") and sim().time() - t0 >= 539.0, "cat reads it, and reading takes a while (%d min)" % roundi((sim().time() - t0) / 60.0))
 	_check(out.contains("new commands noted") and term.run("help").contains("order"), "what it mentions is learned (help lists 'order' now)")
 	t0 = sim().time()
 	term.run("cat welcome.txt")
@@ -75,86 +104,98 @@ func _test_terminal() -> void:
 	_check(out.contains("new command noted") and out.contains("probationary"), "typing a real, unlisted command works and teaches it")
 	_check(term.run("xyzzy").contains("command not found"), "made-up commands don't")
 	t0 = sim().time()
-	out = term.run("grep lantern")
-	_check(out.contains("No matches") and sim().time() - t0 >= 299.0, "grep searches what you can open (the diary's still encrypted), 5 min")
 	out = term.run("grep transferred")
-	_check(out.contains("/corp/memos/") and out.contains(":"), "grep finds lines across files (%d chars)" % out.length())
-	_check(term.run("find memo").is_empty() == false and term.run("find transfer").contains("/corp/memos/1994-transfer-hollis.txt"), "find lists files by name")
-	_check(term.run("who").contains("pell") and term.run("ps").contains("auditd"), "who and ps show who's watching")
+	_check(out.contains("/corp/memos/") and sim().time() - t0 >= 899.0, "grep searches what you can open (15 min)")
+	_check(not out.contains("/home/dokafor"), "but not folders you can't open")
+	_check(term.run("find transfer").contains("/corp/memos/1994-transfer-hollis.txt"), "find lists files by name")
+	_check(term.run("who").contains("pell") and term.run("ps").contains("auditd") and Story.knows(sim(), "hint:uplink"),
+		"who and ps show who's watching (and how: the uplink)")
 	_check(term.run("kill 45").contains("permission denied"), "kill is for maint")
 	_check(term.run("history").contains("whoami"), "history lists what you typed")
 	term.run("cd /home")
 	out = term.run("ls")
 	_check(out.contains("dokafor/") and out.contains("rmarrow/"), "/home has the former supervisors' folders")
-	term.run("cd dokafor")
+	_check(term.run("ls dokafor").contains("Permission denied") and term.run("cat dokafor/todo.txt").contains("Permission denied"),
+		"which are locked")
+	_check(term.run("cat jkim/notes.txt").contains("the panel won't close"), "(the short-timers' aren't)")
+	# Okafor's account: Tinker, backwards.
+	term.run("su dokafor")
+	out = term.run("tinker")
+	_check(out.contains("Authentication failure"), "su dokafor: not that")
+	term.run("su dokafor")
+	out = term.run("reknit")
+	_check(out.contains("2,511 sessions") and term.prompt_label.text.begins_with("dokafor@") and Story.knows(sim(), "secret:okafor_account"),
+		"su dokafor with Tinker backwards opens Okafor's account")
+	_check(term.run("pwd").contains("/home/dokafor"), "and drops you in their home")
 	_check(not term.run("ls").contains(".pod3") and term.run("ls -a").contains(".pod3"), "ls -a shows hidden files")
 	out = term.run("cat todo.txt")
 	_check(out.contains("talk tinker") and Story.knows(sim(), "cmd:talk"), "Okafor's todo list teaches 'talk'")
 	_check(Story.oversight(sim()).suspicion > 0.0, "and reading it was logged")
-	# cp: keep a copy before the purge.
 	out = term.run("cp todo.txt")
 	_check(out.contains("Copied to ~/todo.txt") and Story.knows(sim(), "secret:kept"), "cp copies Okafor's todo into your home (%s)" % out.strip_edges())
-	_check(term.run("ls ~").contains("todo.txt") and term.run("cp todo.txt").contains("already"), "it's in your home folder, once")
+	_check(term.run("cat /home/rmarrow/README_IF_YOU_REPLACED_ME.txt").contains("Permission denied"), "Marrow's home is still shut to dokafor")
+	term.run("exit")
+	_check(term.prompt_label.text.begins_with("supervisor@") and term.run("ls /home/dokafor").contains("Permission denied"), "exit: back to yourself")
 	Story.learn(sim(), "purged:dokafor")
-	_check(not Story.exists(sim(), "/home/dokafor/todo.txt") and term.run("cat ~/todo.txt").contains("talk tinker"),
-		"after the purge the original's gone, the copy isn't")
+	_check(term.run("cat ~/todo.txt").contains("talk tinker") and term.run("su dokafor").contains("does not exist"),
+		"after the purge the account's gone, the copy isn't")
 	Story.knowledge(sim()).forget("purged:dokafor")
-	term.run("cd /home/dokafor")
-	out = term.run("cat /home/ehollis/diary.enc")
-	_check(out.contains("encrypted"), "the diary is encrypted")
-	_check(term.run("decrypt /home/ehollis/diary.enc wrong").contains("wrong password"), "decrypt with a wrong password")
-	# Talk to Tinker.
+	# Talk to Tinker: it takes trust, built over separate conversations.
 	var tinker := sim().get_system("robot_tinker") as RobotAgent
 	tinker.stability = 0.5
-	var stab := tinker.stability
 	t0 = sim().time()
 	out = term.run("talk tinker")
-	_check(out.contains("TINKER:") and term.mode == "talk" and sim().time() - t0 >= 59.0, "talk opens the unit link; lines cost time")
-	_check(tinker.stability > stab, "a conversation steadies the unit")
+	_check(out.contains("TINKER:") and term.mode == "talk" and sim().time() - t0 >= 179.0, "talk opens the unit link; lines cost time")
+	_check(tinker.stability > 0.5, "a conversation steadies the unit")
+	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "and counts toward its trust")
 	out = term.run("2")   # "Who was here before me?"
-	_check(out.contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on (%s)" % out.strip_edges().left(60))
+	_check(out.contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
+	_check(not term.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "(nothing private yet: trust 1)")
 	out = term.run("0")
 	_check(term.mode == "" and out.contains("link closed"), "0 closes the link")
-	_check(term.run("pwd").contains("/home/dokafor"), "and the shell is back")
+	term.run("talk tinker")
+	term.run("0")
+	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "talking again straight away doesn't build trust")
+	Story.knowledge(sim()).values["trust:tinker"] = 3.0
+	out = term.run("talk tinker")
+	_check(out.contains("private"), "with trust, Tinker can be asked something private")
+	term.run("0")
 
 
 func _test_apps() -> void:
-	# Files: the same file system.
 	var files = desk.open_app("files")
 	await process_frame
-	files.dir = "/home/rmarrow"
+	files.dir = "/corp/memos"
 	files._fill_list()
 	var names: Array = []
 	for i in files.list.item_count:
 		names.append(files.list.get_item_text(i))
-	_check(names.any(func(n): return str(n).begins_with("README_IF_YOU_REPLACED_ME")), "Files lists a folder (%s)" % ", ".join(names))
-	_check(not names.any(func(n): return str(n).begins_with(".plan")) , "without hidden files...")
-	files.refresh()
-	files.hidden_box.button_pressed = true
+	_check(names.any(func(n): return str(n).begins_with("facility_map")), "Files lists a folder (%s)" % ", ".join(names))
+	files.dir = "/home/rmarrow"
 	files._fill_list()
-	names.clear()
-	for i in files.list.item_count:
-		names.append(files.list.get_item_text(i))
-	_check(files.hidden_box.visible and names.any(func(n): return str(n).begins_with(".plan")), "...until ls -a showed you they exist")
-	files.open_file("/home/rmarrow/README_IF_YOU_REPLACED_ME.txt")
-	_check(files.view.get_parsed_text().contains("su maint") and Story.knows(sim(), "cmd:su"), "opening a file reads it (and teaches)")
-	# Duties.
+	_check(files.list.item_count == 0 and files.view.get_parsed_text().contains("Permission denied"), "and won't open a locked one")
+	files.refresh()
+	_check(files.hidden_box.visible, "Show hidden appears once ls -a showed you hidden files exist")
+	files.open_file("/corp/memos/facility_map.txt")
+	_check(files.view.get_parsed_text().contains("UPLINK RELAY") and Story.knows(sim(), "cmd:routes"), "opening a file reads it (and teaches)")
+	# Duties: shift 1 walks you through the OS.
 	var duties = desk.open_app("duties")
+	desk.open_app("cameras")
 	await process_frame
-	duties.refresh()
+	facility.spend(20.0, "test")
 	var camp := Story.campaign(sim())
-	_check(duties.rows.get_child_count() == camp.duties.size(), "Duties lists the shift's duties")
-	var t0 := sim().time()
-	duties._do("coolant_walk")
-	_check(camp.duty("coolant_walk").done and sim().time() - t0 >= 1799.0, "doing one from the app takes its time")
-	# Units: Talk shows once you know you can.
+	_check(camp.duty("tut_cameras").done and camp.duty("onboarding").done and camp.duty("tut_order").done == false,
+		"tutorial duties tick themselves off as you do things (cameras, onboarding)")
+	duties.refresh()
+	_check(duties.rows.get_child_count() >= camp.duties.size(), "Duties lists the shift's duties")
+	# Units: Talk shows once you know you can; diagnose takes half an hour.
 	var units = desk.open_app("units")
 	await process_frame
 	units.refresh()
-	_check(units.cards["tinker"].talk.visible, "Units shows Talk now that 'talk' is known")
-	t0 = sim().time()
+	_check(units.cards["tinker"].talk.visible and units.cards["tinker"].wear_txt.text.contains("worn"), "Units shows Talk and each unit's wear")
+	var t0 := sim().time()
 	units._diagnose("hauler")
-	_check(sim().time() - t0 >= 599.0 and units.cards["hauler"].reply.text.contains("DIAG"), "Diagnose takes 10 minutes and reads the unit out")
+	_check(sim().time() - t0 >= 1799.0 and units.cards["hauler"].reply.text.contains("DIAG"), "Diagnose takes 30 minutes and reads the unit out")
 
 
 func _test_bin_and_notes() -> void:
@@ -168,10 +209,12 @@ func _test_bin_and_notes() -> void:
 	bin.open_file("/trash/untitled.txt")
 	_check(bin.view.get_parsed_text().contains("the light stays on"), "which can still be read")
 	var standing := Story.oversight(sim()).standing
+	Story.oversight(sim()).standing = 50.0
 	bin.empty_button.pressed.emit()
 	bin._fill_list()
-	_check(bin.list.item_count == 0 and Story.oversight(sim()).standing > standing and bin.empty_button.disabled,
+	_check(bin.list.item_count == 0 and Story.oversight(sim()).standing > 50.0 and bin.empty_button.disabled,
 		"emptying it deletes them for good (corporate likes a tidy terminal)")
+	Story.oversight(sim()).standing = standing
 	var notes = desk.open_app("notes")
 	await process_frame
 	_check(notes.edit.text.contains("already on the notepad"), "the Notes app came with someone else's notes")
@@ -181,49 +224,160 @@ func _test_bin_and_notes() -> void:
 	_check(str(OSSettings.get_value("notes")).contains("maint: top score"), "and keeps yours on the desk")
 
 
-func _test_plant_and_liaison() -> void:
-	# Plant: inspect, request maintenance, spare parts from Requisitions stock.
-	var plant_app = desk.open_app("plant")
-	await process_frame
+func _test_parts_and_wear() -> void:
 	var plant := sim().get_system("plant") as FacilityPlant
 	var board := sim().get_system("work") as WorkBoard
 	var req := sim().get_system("requisitions") as Requisitions
-	plant.device("filter_2").value = 0.8
-	plant_app.selected = "filter_2"
+	var reqs := sim().get_system("requests") as UnitRequests
+	# A leak with no clamps in stock: the repair stops halfway and the unit asks.
+	req.inventory["pipe_clamps"] = 0
+	reqs.requests.clear()
+	reqs._last.clear()
+	if int(plant.device("pipe_2").job) >= 0:
+		board.cancel(sim(), int(plant.device("pipe_2").job), "test")
+	plant.devices["pipe_2"].job = -1
+	plant.devices["pipe_2"].fault = false
+	sim().schedule_in(0.0, "plant_fault", {"device": "pipe_2"})
+	facility.spend(1.0, "test")
+	var job := board.get_job(int(plant.device("pipe_2").job))
+	_check(not job.is_empty() and str(job.get("part", "")) == "pipe_clamps", "a leak repair needs a pipe clamp")
+	var hauler := sim().get_system("robot_hauler") as RobotAgent
+	hauler.activity = {"kind": "idle"}
+	job.status = "open"
+	job.claimed_by = ""
+	board.claim(int(job.id), hauler.sim_id)
+	board.add_progress(sim(), int(job.id), hauler.sim_id, float(job.work) * 0.6)
+	_check(job.status == "parts" and board.waiting_jobs().has(job), "no clamp in stock: the job stops halfway, waiting for one")
+	facility.spend(1.0, "test")
+	var ask := reqs.requests.filter(func(r): return r.kind == "part")
+	_check(not ask.is_empty(), "and the unit asks for one")
+	if ask.is_empty():
+		return
+	var plant_app = desk.open_app("plant")
+	plant_app.selected = "pipe_2"
+	_check(plant.inspect_text(sim(), "pipe_2").contains("STOPPED"), "Plant's inspect says it's stopped for a part")
+	var funds := req.funds
 	var t0 := sim().time()
-	var text: String = load("res://game/supervisor.gd").inspect_device("filter_2")
-	_check(text.contains("Bay 2 filters") and text.contains("Needs work in about") and sim().time() - t0 >= 599.0,
-		"Inspect reads a device out in 10 minutes (%s)" % text.replace("\n", " / "))
-	var why: String = load("res://game/supervisor.gd").request_maintenance("filter_2")
-	var job := board.get_job(int(plant.device("filter_2").job))
-	_check(why.is_empty() and not job.is_empty() and job.status in ["open", "claimed"], "Request maintenance posts the job before it's an alarm (%s)" % why)
-	_check(not load("res://game/supervisor.gd").request_maintenance("filter_2").is_empty(), "but not twice")
-	_check(load("res://game/supervisor.gd").use_part("filter_2").contains("No "), "no spare in stock, no shortcut")
-	_check(Requisitions.pack_size(req.item("filter_cartridges")) == 6, "a pack of six cartridges counts as six")
-	req.inventory["filter_cartridges"] = 1
-	var work_before := float(job.work)
-	why = load("res://game/supervisor.gd").use_part("filter_2")
-	_check(why.is_empty() and float(job.work) < work_before * 0.75 and int(req.inventory["filter_cartridges"]) == 0,
-		"a spare part shrinks the job (%.0f -> %.0f s of work) and leaves stock" % [work_before, float(job.work)])
-	# Replying to the liaison, in the corkHQ panel.
+	var out: String = sup.answer_request(int(ask[0].id), 0)
+	_check(out.contains("Requisition") and req.funds < funds and sim().time() - t0 >= 299.0,
+		"answering 'Order one' places a requisition (5 min)")
+	facility.spend(30.0, "test")
+	_check(Story.campaign(sim()).duty("tut_answer").done and Story.campaign(sim()).duty("tut_requisition").done, "(and ticks two tutorial duties)")
+	req.unpacked(sim(), int(req.orders.back().id))
+	_check(job.status == "open", "when the clamps are unpacked, the job goes back on the board")
+	# Express shipping: dearer, faster.
+	var normal := req.place(sim(), "fuse_pack", 1)
+	var fast := req.place(sim(), "fuse_pack", 1, true)
+	_check(int(fast.order.cost) > int(normal.order.cost) and float(fast.order.eta) - sim().time() < float(normal.order.eta) - sim().time(), "express costs more and arrives sooner")
+	# Wear: a seized unit needs a manual reboot; services need servos.
+	hauler.seize(sim())
+	var reboot := board.jobs.filter(func(j): return str(j.source) == "unit:hauler" and WorkBoard.active(j))
+	_check(hauler.offline() and hauler.doing_text(sim()).contains("SEIZED") and reboot.size() == 1, "a seized unit is frozen, with a manual reboot job posted")
+	var tinker := sim().get_system("robot_tinker") as RobotAgent
+	board.claim(int(reboot[0].id), tinker.sim_id)
+	board.add_progress(sim(), int(reboot[0].id), tinker.sim_id, float(reboot[0].work))
+	facility.spend(1.0, "test")
+	_check(not hauler.offline(), "rebooting it by hand gets it moving")
+	req.inventory["servo_bundle"] = 1
+	hauler.wear = 0.7
+	var units = desk.open_app("units")
+	units.refresh()
+	units.cards["hauler"].service.pressed.emit()
+	var svc := board.jobs.filter(func(j): return str(j.source) == "service:hauler" and WorkBoard.active(j))
+	_check(svc.size() == 1 and str(svc[0].get("only", "")) == hauler.sim_id and str(svc[0].part) == "servo_bundle", "Book service posts a service only that unit takes")
+	board.claim(int(svc[0].id), hauler.sim_id)
+	board.add_progress(sim(), int(svc[0].id), hauler.sim_id, float(svc[0].work))
+	facility.spend(1.0, "test")
+	_check(hauler.wear < 0.1 and int(req.inventory["servo_bundle"]) == 0, "a service uses a servo and brings wear down")
+
+
+func _test_corporate() -> void:
+	var dirs := sim().get_system("directives") as Directives
+	var o := Story.oversight(sim())
+	# A directive: report, with a deadline.
+	dirs.issue(sim(), "report", "", 60.0, "File a report.")
+	var duties = desk.open_app("duties")
+	duties._key = ""
+	duties.refresh()
+	_check(duties.rows.get_children().any(func(r): return r.find_children("*", "Label", true, false).any(func(l): return l.text.begins_with("DIRECTIVE"))),
+		"directives sit at the top of Duties")
+	sup.file_report()
+	_check(not dirs.active.any(func(d): return d.kind == "report") and sim().journal.entries.any(func(e): return str(e.text).contains("directive met")),
+		"filing the report meets it")
+	dirs.issue(sim(), "diagnose", "tinker", 30.0, "Diagnose Tinker.")
+	o.standing = 50.0
+	facility.spend(31.0 * 60.0, "test")
+	_check(not dirs.active.any(func(d): return d.kind == "diagnose") and o.standing < 50.0, "a missed directive costs standing")
+	# Pell escalates as violations of a kind pile up.
+	var hq := sim().get_system("hq") as CorkHQ
+	o.counts.clear()
+	var before := hq.posted
+	o.violate(sim(), "read /home/x", 1.0)
+	_check(hq.posted > before and hq.messages.back().sender == "Liaison Pell", "Pell notices the first one")
+	o.violate(sim(), "read /home/y", 1.0)
+	o.violate(sim(), "read /home/z", 1.0)
+	_check(dirs.active.any(func(d): return d.kind == "explain"), "by the third she wants an explanation")
 	var panel = desk.hq_panel
-	t0 = sim().time()
 	panel.open_reply()
 	await process_frame
-	_check(panel.reply_runner != null and panel._reply_scroll.visible and sim().time() > t0, "Reply opens a conversation with Pell in the panel")
-	var n: int = panel.reply_runner.choices.size()
-	var door := -1
-	for i in n:
-		if str(panel.reply_runner.choices[i].text).contains("door"):
-			door = i
-	_check(door >= 0, "one of the replies asks where the door is")
-	panel.choose_reply(door)
-	await process_frame
-	var said: bool = panel._reply_box.find_children("*", "Label", true, false).any(func(l): return l.text.contains("won't need one"))
-	_check(said, "Pell answers")
+	var explain := -1
+	for i in panel.reply_runner.choices.size():
+		if str(panel.reply_runner.choices[i].text).contains("explain"):
+			explain = i
+	_check(explain >= 0, "Pell's Reply offers to explain")
+	panel.choose_reply(explain)
+	panel.choose_reply(0)   # "It won't happen again."
+	_check(not dirs.active.any(func(d): return d.kind == "explain"), "explaining meets the directive")
 	panel.choose_reply(panel.reply_runner.choices.size() - 1)
 	await process_frame
-	_check(panel.reply_runner == null and panel._scroll.visible, "closing the reply shows the messages again")
+	_check(panel.reply_runner == null, "and the reply closes")
+	o.violate(sim(), "read /home/a", 1.0)
+	var standing := o.standing
+	o.violate(sim(), "read /home/b", 1.0)
+	_check(o.standing < standing and sim().scheduler.peek(50).any(func(e): return e.name == "targeted_audit"),
+		"the fifth: Compliance takes your standing and books a targeted audit")
+
+
+func _test_uplink() -> void:
+	var o := Story.oversight(sim())
+	var plant := sim().get_system("plant") as FacilityPlant
+	var layout := sim().get_system("layout") as FacilityLayout
+	layout.set_blocked(sim(), "freight_gate", false)
+	plant.devices["gate"].fault = false
+	var k := Story.knowledge(sim())
+	k.values["trust:hauler"] = 2.0
+	var hauler := sim().get_system("robot_hauler") as RobotAgent
+	hauler.power = 1.0
+	hauler.stability = 0.9
+	var term = desk.open_app("terminal")
+	var out: String = term.run("talk hauler")
+	var choice := -1
+	for i in term.talk_runner.choices.size():
+		if str(term.talk_runner.choices[i].text).contains("uplink"):
+			choice = i
+	_check(choice >= 0, "with trust (and the uplink known), Hauler can be asked about the uplink")
+	term.run(str(choice + 1))
+	out = term.run("1")   # "Just for an hour."
+	_check(out.contains("Accidents happen"), "Hauler agrees, and goes")
+	for i in 40:
+		if plant.device("uplink").fault:
+			break
+		facility.spend(300.0, "test")
+	_check(plant.device("uplink").fault, "and the uplink relay goes down")
+	_check(not sim().journal.entries.any(func(e): return e.cat == "sabotage" and str(e.text).contains("uplink")), "as an accident: nothing says sabotage")
+	await process_frame
+	await process_frame
+	_check(desk.hq_panel._suspended.visible and desk.hq_panel._suspended.text.begins_with("UPLINK LOST"), "the corkHQ panel loses its link")
+	var sus := o.suspicion
+	o.violate(sim(), "read /home/anything", 5.0)
+	_check(is_equal_approx(o.suspicion, sus) and o.blind > 0, "while it's down, nothing gets recorded")
+	_check(o.audit(sim(), 100.0).is_empty(), "and audits can't run")
+	var dirs := sim().get_system("directives") as Directives
+	_check(dirs.active.any(func(d): return d.kind == "uplink"), "corporate wants it back within the hour")
+	plant._repaired(sim(), "uplink", "robot_tinker")
+	sim().schedule_in(0.0, "job_done", {"job": -1, "source": "uplink", "by": "robot_tinker"})
+	facility.spend(61.0, "test")
+	_check(not o.uplink_down(sim()) and o.blind == 0, "repaired: corkHQ is listening again")
 
 
 func _test_nightrun() -> void:
@@ -237,7 +391,6 @@ func _test_nightrun() -> void:
 	_check(desk.app_available("nightrun"), "and it's on the desktop from now on")
 	var game = desk._windows["nightrun"].app
 	_check(game.table()[0][1] == int(Story.MAINT_PASSWORD) and game.table()[0][0] == "RM", "Marrow's top score heads the table")
-	# A normal run, crashed into a crate: costs facility time, logged once.
 	var sus := Story.oversight(sim()).suspicion
 	var t0 := sim().time()
 	game.start_run()
@@ -246,9 +399,8 @@ func _test_nightrun() -> void:
 		game.step(1.0 / 60.0, false, false)
 		if game.state != "run":
 			break
-	_check(game.state == "crash" and sim().time() - t0 >= 599.0, "a run ends in a crash, and costs 10 facility minutes")
+	_check(game.state == "crash" and sim().time() - t0 >= 1799.0, "a run ends in a crash, and costs 30 facility minutes")
 	_check(Story.oversight(sim()).suspicion > sus, "playing is logged (recreational software)")
-	# The wrong way: push left into the NO ENTRY sign at the start.
 	game.start_run()
 	game.step(0.02, true, false)
 	game.step(0.02, false, false)
@@ -263,6 +415,7 @@ func _test_maint() -> void:
 	var term = desk.open_app("terminal")
 	var out: String = term.run("podctl list")
 	_check(out.contains("permission denied") and Story.knows(sim(), "cmd:podctl"), "maintenance commands are real, but denied")
+	_check(term.run("ls /sys/pods").contains("Permission denied"), "the pods folder is there, and shut")
 	term.run("su maint")
 	_check(term.mode == "password" and term.input.secret, "su asks for a password (hidden)")
 	out = term.run("letmein")
@@ -273,8 +426,8 @@ func _test_maint() -> void:
 	_check(term.root and out.contains("Welcome back") and Story.knows(sim(), "secret:maint_account"), "the top score logs in as maint")
 	_check(Story.oversight(sim()).suspicion >= sus + 9.0, "which corporate would very much like to know about")
 	_check(term.prompt_label.text.begins_with("maint@corklabs"), "the prompt changes")
-	out = term.run("cat /sys/pods/manifest.txt")
-	_check(out.contains("POD MANIFEST"), "maint can read the pod manifest")
+	_check(term.run("cat /sys/pods/manifest.txt").contains("POD MANIFEST"), "maint can read the pod manifest")
+	_check(term.run("cat /home/rmarrow/README_IF_YOU_REPLACED_ME.txt").contains("su maint"), "and Marrow's home")
 	out = term.run("podctl inspect 3")
 	_check(out.contains("OKAFOR") and Story.knows(sim(), "secret:pod3"), "pod 3 is Okafor")
 	out = term.run("auditctl list")
@@ -285,17 +438,14 @@ func _test_maint() -> void:
 	_check(term.run("auditctl purge").contains("already"), "once a shift")
 	term.run("hqctl mute 30")
 	await process_frame
-	var o := Story.oversight(sim())
-	_check(o.hq_muted(sim()) and desk.hq_panel._suspended.visible, "hqctl mute suspends the corkHQ panel")
+	_check(Story.oversight(sim()).hq_muted(sim()) and desk.hq_panel._suspended.visible, "hqctl mute suspends the corkHQ panel")
 	term.run("hqctl unmute")
 	await process_frame
 	_check(not desk.hq_panel._suspended.visible, "and unmute brings it back")
-	var sus2 := Story.oversight(sim()).suspicion
-	out = term.run("kill 45")
-	_check(out.contains("restarted") and (Story.oversight(sim()).suspicion > sus2 or Story.oversight(sim()).strikes > 0), "maint can kill auditd; it comes straight back, and it's noticed")
-	_unfire()   # whether that got caught is down to chance: keep the rest of the test on the same footing
-	out = term.run("podctl wake 3")
-	_check(out.contains("sequence unknown") and term.mode == "", "waking a pod needs Hollis's diary")
+	_check(term.run("podctl wake 3").contains("sequence unknown"), "waking a pod needs Hollis's diary")
+	_check(term.run("decrypt /home/ehollis/diary.enc lantern").contains("decrypted"), "Hollis's diary opens with Ogre's word")
+	term.run("cat /home/ehollis/diary.enc")
+	_check(term.run("podctl wake 3").contains("refused"), "and even then, the pods stay shut (for now)")
 	term.run("exit")
 	_check(not term.root and not Story.knows(sim(), "root") and term.run("podctl list").contains("permission denied"), "exit leaves maint")
 
@@ -310,14 +460,12 @@ func _test_fired_and_retry() -> void:
 	await process_frame
 	_check(camp.state == "fired" and desk.shift_screen.visible, "dismissal covers the desktop (%s)" % camp.state)
 	_check(_screen_says("Test dismissal"), "and says why")
-	var term_open: bool = desk.is_open("terminal")
 	desk.retry_shift()
 	await process_frame
 	await process_frame
 	camp = Story.campaign(sim())
 	_check(camp.state == "pre" and camp.shift == 1 and FacilitySim.format_clock(sim().time()) == "05:55", "retry goes back to the shift's brief")
 	_check(learned_before and not Story.knows(sim(), "secret:pod3") and not Story.knows(sim(), "cmd:talk"), "forgetting what was found since")
-	_check(term_open, "(the terminal was open before)")
 	desk.clock_in()
 	await process_frame
 	var term = desk.open_app("terminal")
@@ -327,13 +475,12 @@ func _test_fired_and_retry() -> void:
 	term.run("0")
 
 
-func _test_ending() -> void:
+func _test_end() -> void:
 	var camp := Story.campaign(sim())
-	camp.finish(sim(), "renewed")
+	camp.finish(sim())
 	await process_frame
 	await process_frame
-	_check(desk.shift_screen.visible and _screen_says("CONTRACT RENEWED"),
-		"an ending gets its screen")
+	_check(desk.shift_screen.visible and _screen_says("END OF THIS BUILD"), "the end of the run gets its screen")
 	_check(_screen_says("FOUND THIS RUN"), "with what you found")
 	desk.start_over()
 	await process_frame
@@ -341,16 +488,6 @@ func _test_ending() -> void:
 	camp = Story.campaign(sim())
 	_check(camp.state == "pre" and camp.shift == 1 and not Story.knows(sim(), "cmd:talk"), "start over: a new facility, a new supervisor")
 	_check(not SupervisorArchive.summary().is_empty(), "the personnel file carries on (%s)" % SupervisorArchive.summary())
-
-
-func _unfire() -> void:
-	var o := Story.oversight(sim())
-	o.strikes = 0
-	o.fired_reason = ""
-	o.fired_kind = ""
-	var camp := Story.campaign(sim())
-	if camp.state == "fired":
-		camp.state = "on_duty"
 
 
 func _screen_says(text: String) -> bool:

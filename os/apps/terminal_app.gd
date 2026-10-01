@@ -37,7 +37,10 @@ const COMMANDS := {
 	"jobs": ["jobs", "open jobs on the work board", "units"],
 	"order": ["order <unit> <job#|recharge|standby|cancel>", "give an order (2 min)", "units"],
 	"priority": ["priority <job#> <low|normal|high|critical|+|->", "change a job's priority (2 min)", "units"],
-	"talk": ["talk <unit>", "open the unit link and talk (1 min a line)", "units"],
+	"talk": ["talk <unit>", "open the unit link and talk (3 min a line)", "units"],
+	"requests": ["requests", "what the units are asking you", "units"],
+	"answer": ["answer <request#> <option#>", "answer a unit's request (5 min)", "units"],
+	"service": ["service <unit>", "book a service at its dock (uses a servo bundle, 5 min)", "units"],
 	"reboot": ["reboot <unit>", "remote reboot (needs remote-reboot)", "units"],
 	"plant": ["plant", "every device and its state", "plant"],
 	"routes": ["routes", "passages between rooms: clearance, open or blocked", "plant"],
@@ -49,7 +52,7 @@ const COMMANDS := {
 	"cat": ["cat <file>", "read a file (takes time the first time)", "files"],
 	"decrypt": ["decrypt <file> <password>", "unlock an encrypted file", "files"],
 	"cp": ["cp <file>", "copy a file into your home folder (copies survive a purge)", "files"],
-	"grep": ["grep <word>", "search every file you can open for a word (5 min)", "files"],
+	"grep": ["grep <word>", "search every file you can open for a word (15 min)", "files"],
 	"find": ["find <name>", "list files whose names contain it", "files"],
 	"run": ["run <program>", "run a program", "files"],
 	"connect": ["connect <address>", "open a session with a corporate server", "network"],
@@ -61,7 +64,7 @@ const COMMANDS := {
 	"hqctl": ["hqctl status | mute <minutes> | unmute", "the corkHQ link", "maintenance"],
 	"unitctl": ["unitctl <unit> reset", "reset a unit's software stability", "maintenance"],
 	"pkgctl": ["pkgctl force <package>", "install a package without approval", "maintenance"],
-	"podctl": ["podctl list | inspect <pod> | wake <pod>", "the pods", "maintenance"],
+	"podctl": ["podctl list | inspect <pod>", "the pods", "maintenance"],
 	"sound": ["sound [play|loop|stop|mute|unmute] ...", "audition a sound through the camera you're listening to", "dev"],
 }
 const GROUPS := ["basics", "system", "shift", "units", "plant", "files", "network", "maintenance"]
@@ -69,7 +72,7 @@ const ROOT_ONLY := ["auditctl", "hqctl", "unitctl", "pkgctl", "podctl", "kill"]
 ## What ps shows: [pid, user, command, note].
 const PROCESSES := [
 	[1, "root", "corkos-init", ""],
-	[44, "corp", "corkhq-linkd", "the corkHQ panel"],
+	[44, "corp", "corkhq-linkd", "the corkHQ panel, via the uplink relay (workshop)"],
 	[45, "corp", "auditd", "writes the audit trail"],
 	[112, "root", "podsync --pods 4", ""],
 	[113, "root", "knowledge_filter --unit tinker", ""],
@@ -82,6 +85,8 @@ const FACILITY_EPOCH := "1979-06-30"
 const ALIASES := {"?": "help", "robots": "units", "devices": "plant", "passages": "routes", "prio": "priority",
 	"cls": "clear", "dir": "ls", "type": "cat", "logout": "exit", "chat": "talk"}
 const ROOT_ACCOUNT := "maint"
+## Accounts su knows, and their passwords. (Okafor's: Tinker, backwards.)
+const ACCOUNTS := {"maint": Story.MAINT_PASSWORD, "dokafor": "reknit"}
 ## Suspicion added by a root action (on top of logging in).
 const ROOT_VIOLATION := 6.0
 const SU_VIOLATION := 10.0
@@ -95,7 +100,7 @@ var connected := false
 ## Logged in as the maintenance account (this terminal session only).
 var root := false
 var cwd := VirtualFS.HOME
-## "", "password" (su), "talk" (a conversation), "wake" (confirming podctl wake)
+## "", "password" (su), "talk" (a conversation)
 var mode := ""
 var talk_runner: Dialogue.Runner
 var talk_bot: RobotAgent
@@ -159,9 +164,6 @@ func _submit(line: String) -> void:
 	if mode == "talk":
 		_talk_input(line)
 		return
-	if mode == "wake":
-		_finish_wake(line)
-		return
 	if line.is_empty():
 		return
 	history.append(line)
@@ -197,6 +199,9 @@ func _submit(line: String) -> void:
 		"order": _order(args)
 		"priority": _priority(args)
 		"talk": _talk(args)
+		"requests": _requests()
+		"answer": _answer(args)
+		"service": _service(args)
 		"reboot": _reboot(args)
 		"plant": _plant()
 		"routes": _routes()
@@ -264,11 +269,10 @@ func _prompt_text() -> String:
 	match mode:
 		"password": return "Password:"
 		"talk": return "reply [1-%d, 0 closes] >" % (talk_runner.choices.size() if talk_runner else 0)
-		"wake": return "confirm pod >"
 	var where := cwd
 	if where == VirtualFS.HOME or where.begins_with(VirtualFS.HOME + "/"):
 		where = "~" + where.substr(VirtualFS.HOME.length())
-	return "%s@corklabs:%s%s" % [ROOT_ACCOUNT if root else "supervisor", where, "#" if root else "$"]
+	return "%s@corklabs:%s%s" % [Story.user(sim()) if sim() else "supervisor", where, "#" if root else "$"]
 
 
 func _prompt_color() -> Color:
@@ -369,8 +373,8 @@ func _duty(args: PackedStringArray) -> void:
 func _units() -> void:
 	for bot in FacilitySetup.robots(sim()):
 		var order := "" if bot.order.is_empty() else "   order: " + Supervisor.describe_order(sim(), bot.order.kind, int(bot.order.get("job", -1)))
-		_print("  [color=#%s]%-7s[/color] %-46s power %3d%%  stability %3d%% %s%s" % [_hex(OSTheme.category_color(bot.robot_id)),
-			bot.display_name().to_upper(), _esc(bot.doing_text(sim())), _pct(bot.power), _pct(bot.stability), bot.stability_state, order])
+		_print("  [color=#%s]%-8s[/color] %-46s power %3d%%  stability %3d%% %-8s wear %3d%%%s" % [_hex(OSTheme.category_color(bot.robot_id)),
+			bot.display_name().to_upper(), _esc(bot.doing_text(sim())), _pct(bot.power), _pct(bot.stability), bot.stability_state, _pct(bot.wear), order])
 
 
 func _jobs() -> void:
@@ -383,6 +387,39 @@ func _jobs() -> void:
 		var who := str(j.claimed_by).trim_prefix("robot_") if j.status == "claimed" else "waiting"
 		_print("  #%-3d %-32s %-12s %-8s %-8s %3d%%  %s" % [j.id, _esc(j.title), layout.station(j.station).get("name", "?"),
 			j.skill, WorkBoard.PRIORITY_NAMES[int(j.priority)], int(board.fraction_done(j) * 100.0), who])
+
+
+func _requests() -> void:
+	var reqs := sim().get_system("requests") as UnitRequests
+	if reqs == null or reqs.requests.is_empty():
+		_print("  Nobody's asking for anything.")
+		return
+	for r in reqs.requests:
+		_print("  [color=#%s]#%d %s[/color] (until %s): %s" % [_hex(OSTheme.WARN), r.id, str(r.robot).to_upper(),
+			FacilitySim.format_clock(float(r.expires)), _esc(str(r.text))])
+		for i in (r.options as Array).size():
+			_print("      %d) %s" % [i + 1, r.options[i]])
+	_print("  [color=#%s]answer <request#> <option#>[/color]" % _hex(OSTheme.TEXT_DIM))
+
+
+func _answer(args: PackedStringArray) -> void:
+	if args.size() < 2 or not args[0].trim_prefix("#").is_valid_int() or not args[1].is_valid_int():
+		_error("Usage: answer <request#> <option#>   (see: requests)")
+		return
+	var out: String = Supervisor.answer_request(int(args[0].trim_prefix("#")), int(args[1]) - 1)
+	if out.is_empty():
+		_error("answer: no such request or option")
+	else:
+		_print("  " + _esc(out))
+
+
+func _service(args: PackedStringArray) -> void:
+	var bot := _bot(args[0]) if not args.is_empty() else null
+	if bot == null:
+		_error("Usage: service <unit>")
+		return
+	var id: int = Supervisor.book_service(bot)
+	_print("  " + (("Service booked for %s: job #%d." % [bot.display_name(), id]) if id >= 0 else "A service is already booked."))
 
 
 func _plant() -> void:
@@ -449,7 +486,7 @@ func _priority(args: PackedStringArray) -> void:
 	var id := int(args[0].trim_prefix("#"))
 	var board := sim().get_system("work") as WorkBoard
 	var j := board.get_job(id)
-	if j.is_empty() or not (j.status == "open" or j.status == "claimed"):
+	if j.is_empty() or not WorkBoard.active(j):
 		_error("No open job #%d." % id)
 		return
 	var p := WorkBoard.PRIORITY_NAMES.find(args[1].to_lower())
@@ -519,6 +556,9 @@ func _ls(args: PackedStringArray) -> void:
 	if not e.dir:
 		_print("  " + _file_line(e, long))
 		return
+	if not Story.can_access(sim(), target):
+		_error("ls: %s: Permission denied" % target)
+		return
 	var items := Story.list(sim(), target, show_all)
 	if items.is_empty():
 		_print("  [color=#%s](empty)[/color]" % _hex(OSTheme.TEXT_DIM))
@@ -559,6 +599,9 @@ func _cd(args: PackedStringArray) -> void:
 	if not e.dir:
 		_error("cd: %s: Not a directory" % target)
 		return
+	if not Story.can_access(sim(), target):
+		_error("cd: %s: Permission denied" % target)
+		return
 	cwd = target
 	_update_prompt()
 
@@ -592,7 +635,7 @@ func _cat(args: PackedStringArray) -> void:
 func _searchable() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for e in Story.fs().all_files(Story.knowledge(sim()), Story.shift(sim())):
-		if not e.meta.has("exec") and not Story.is_encrypted(sim(), e):
+		if not e.meta.has("exec") and not Story.is_encrypted(sim(), e) and Story.can_access(sim(), str(e.path)):
 			out.append(e)
 	out.append_array(Story.copies(sim()))
 	return out
@@ -646,6 +689,7 @@ func _who() -> void:
 
 
 func _ps() -> void:
+	Story.learn(sim(), "hint:uplink")
 	_print("  %5s  %-11s %s" % ["PID", "USER", "COMMAND"])
 	for p in PROCESSES:
 		_print("  %5d  %-11s %s%s" % [p[0], p[1], p[2], ("   [color=#%s](%s)[/color]" % [_hex(OSTheme.TEXT_DIM), p[3]]) if not str(p[3]).is_empty() else ""])
@@ -810,11 +854,14 @@ func _end_talk() -> void:
 
 func _su(args: PackedStringArray) -> void:
 	var account := args[0].to_lower() if not args.is_empty() else "root"
-	if account != ROOT_ACCOUNT:
+	if account == "dokafor" and Story.knows(sim(), "purged:dokafor"):
+		_error("su: user dokafor does not exist")
+		return
+	if not ACCOUNTS.has(account):
 		_error("su: user %s does not exist or is not permitted" % account)
 		return
-	if root:
-		_print("  Already %s." % ROOT_ACCOUNT)
+	if Story.user(sim()) == account:
+		_print("  Already %s." % account)
 		return
 	_pending = account
 	_set_mode("password")
@@ -823,10 +870,24 @@ func _su(args: PackedStringArray) -> void:
 func _finish_su(password: String) -> void:
 	_set_mode("")
 	var o := Story.oversight(sim())
-	if password.strip_edges() != Story.MAINT_PASSWORD:
+	var account := _pending
+	if password.strip_edges().to_lower() != str(ACCOUNTS.get(account, "")).to_lower():
 		_error("su: Authentication failure")
 		if o:
-			o.violate(sim(), "failed login to the decommissioned maintenance account", 3.0)
+			o.violate(sim(), "failed login to %s" % ("the decommissioned maintenance account" if account == ROOT_ACCOUNT else "former staff account " + account), 3.0)
+		return
+	leave_root()
+	if account == "dokafor":
+		Story.learn(sim(), "as:dokafor")
+		Story.learn(sim(), "secret:okafor_account")
+		cwd = "/home/dokafor"
+		if o:
+			o.violate(sim(), "login to former staff account dokafor", 6.0)
+		Facility.act("dialogue_line", "Supervisor logs in as dokafor")
+		_print("[color=#%s]  Last login: two days ago 13:41. 2,511 sessions.[/color]" % _hex(OSTheme.WARN))
+		_print("[color=#%s]  Mail: 0 unread. (Everything was read.)   (exit to leave)[/color]" % _hex(OSTheme.WARN))
+		Story.learn(sim(), "cmd:exit")
+		_update_prompt()
 		return
 	root = true
 	cwd = "/"
@@ -844,20 +905,21 @@ func _finish_su(password: String) -> void:
 
 
 func _exit() -> void:
-	if not root:
+	if Story.user(sim()) == "supervisor":
 		_error("logout: not permitted. (There is no door.)")
 		return
 	leave_root()
 	_print("  logout")
 
 
-## Drops the maintenance account (exit, log off).
+## Back to the supervisor's own account (exit, su, log off).
 func leave_root() -> void:
 	root = false
 	var k := Story.knowledge(sim())
 	if k:
 		k.forget("root")
-	if cwd.begins_with("/sys/pods"):
+		k.forget("as:dokafor")
+	if not Story.can_access(sim(), cwd):
 		cwd = VirtualFS.HOME
 	_update_prompt()
 
@@ -973,10 +1035,8 @@ func _podctl(args: PackedStringArray) -> void:
 			if not Story.knows(sim(), "secret:pods_truth"):
 				_error("podctl: wake: sequence unknown. (Somebody must have written it down.)")
 				return
-			_pending = str(p.pod)
-			_print("  [color=#%s]This will open pod %s. It cannot be undone, and corkHQ will know at once.[/color]" % [_hex(OSTheme.ALARM), p.pod])
-			_print("  Type the pod number again to confirm, anything else to stop.")
-			_set_mode("wake")
+			# (The wake ending is archived for now: docs/archive/endings.txt.)
+			_error("podctl: wake: refused. The sequence needs a Directorate key this account doesn't hold.")
 		_:
 			_error("Usage: podctl list | inspect <pod> | wake <pod>")
 
@@ -988,21 +1048,6 @@ func _pod(args: PackedStringArray) -> Dictionary:
 		if str(p.pod) == args[1]:
 			return p
 	return {}
-
-
-func _finish_wake(line: String) -> void:
-	_set_mode("")
-	if line != _pending:
-		_print("  Stopped. Pod %s stays closed." % _pending)
-		return
-	Story.learn(sim(), "woke")
-	Story.learn(sim(), "secret:woke")
-	sim().note("story", "Pod %s opened from the maintenance console" % _pending)
-	Facility.act("task", "Supervisor opens pod %s" % _pending)
-	var camp := Story.campaign(sim())
-	if camp:
-		camp.finish(sim(), "wake")
-	_print("  [color=#%s]Pod %s: wake sequence started.[/color]" % [_hex(OSTheme.ALARM), _pending])
 
 
 # --- Cork package server ------------------------------------------------------

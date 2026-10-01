@@ -14,6 +14,7 @@ pell: I'm here to help you succeed. Success here is simple: numbers up, question
 -> menu
 
 == menu
+* {directive:explain} About my activity: I can explain. -> explain
 * How am I doing? -> perf
 * {!seen:pell.okafor} What happened to the last supervisor? -> okafor
 * {transfer:okafor & !seen:pell.transfer} What is Long-Term Processing? -> transfer
@@ -23,6 +24,29 @@ pell: I'm here to help you succeed. Success here is simple: numbers up, question
 * {secret:pod3 & !seen:pell.pod3} I know who's in pod 3. -> pod3
 * {secret:hq_silence & !seen:pell.silence} Did you notice the link went quiet? -> silence
 * Nothing. (Close the reply.) -> END
+
+== explain
+pell: Go on.
+* It won't happen again. -> explain_sorry
+* I was doing my job. -> explain_job
+* With respect, that's my business. -> explain_no
+
+== explain_sorry
+pell: Good. I'll pass that on.
+~ directive explain
+~ standing 1 | apologised to the liaison
+-> menu
+
+== explain_job
+pell: Your job is the numbers, Supervisor. I'll pass that on too.
+~ directive explain
+~ suspicion 3 | justified the activity to the liaison
+-> menu
+
+== explain_no
+pell: It isn't. Noted.
+~ standing -4 | refused to explain to the liaison
+-> menu
 
 == perf
 -> {standing>=70} perf_good

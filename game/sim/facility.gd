@@ -23,12 +23,14 @@ signal time_spent(from_time: float, to_time: float, cause: String)
 
 const SAVE_PATH := "user://facility_save.json"
 
-## Facility seconds each kind of player action costs. Tune freely.
+## Facility seconds each kind of player action costs. Tune freely. (A shift
+## is 480 minutes: these are set so a shift holds a couple of dozen real
+## actions, and nobody sees everything in one day.)
 const COST := {
-	"dialogue_line": 60.0,     # reading a new line: 1 minute
-	"choice": 120.0,           # picking a reply or giving an order: 2 minutes
-	"interaction": 300.0,      # opening a feed, inspecting something: 5 minutes
-	"task": 900.0,             # an action that takes a while: 15 minutes
+	"dialogue_line": 180.0,    # reading a new line: 3 minutes
+	"choice": 300.0,           # picking a reply or giving an order: 5 minutes
+	"interaction": 900.0,      # searching, inspecting something: 15 minutes
+	"task": 2700.0,            # an action that takes a while: 45 minutes
 }
 
 var sim: FacilitySim

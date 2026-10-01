@@ -126,6 +126,9 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 		"shift_end":
 			_review(sim)
 		"alarm":
+			var camp := sim.get_system("campaign") as Campaign
+			if camp and not camp.on_duty():
+				return   # nobody at the desk to tell
 			if data.has("robot"):
 				var bot := sim.get_system("robot_" + str(data.robot)) as RobotAgent
 				if bot and bot.activity.kind == "crashed":
@@ -152,6 +155,9 @@ func _review(sim: FacilitySim) -> void:
 
 ## Something suspicious (sabotage) was logged: corporate may notice.
 func noticed_damage(sim: FacilitySim, robot: RobotAgent) -> void:
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		return
 	if rng.randf() < 0.5:
 		say(sim, "sabotage", "warning", {"robot": robot.display_name()})
 

@@ -199,7 +199,7 @@ func _start_over() -> void:
 
 func _build_ending(camp: Campaign) -> void:
 	var info := camp.ending_info()
-	_heading("ENDING: %s" % str(info.title).to_upper(), FacilitySim.format_time(Facility.sim.time()), OSTheme.WARN)
+	_heading(str(info.title).to_upper(), FacilitySim.format_time(Facility.sim.time()), OSTheme.WARN)
 	_text(str(info.text))
 	var k := Story.knowledge(Facility.sim)
 	var secrets := Knowledge.secrets()

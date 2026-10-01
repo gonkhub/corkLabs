@@ -1,3 +1,4 @@
 #! owner: rmarrow
+#! access: rmarrow
 #! restricted: 3
 #! learn: secret:former_staff

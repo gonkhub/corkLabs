@@ -29,7 +29,8 @@ tinker: You're back! I was hoping. I don't hope often. It uses a lot of power.
 == menu
 * {!seen:tinker.before} Who was here before me? -> before
 * {!seen:tinker.pods} What do you think the pods are? -> pods
-* {asked:okafor & !seen:tinker.song} Did Okafor ever mention pod 3? -> song
+* {asked:okafor & trust:tinker>=2 & !seen:tinker.song} Did Okafor ever mention pod 3? -> song
+* {asked:okafor & trust:tinker>=3 & !seen:tinker.password} Did Okafor ever tell you anything... private? -> password
 * {secret:pods_truth & !seen:tinker.truth} Tinker... I know what's in the pods. -> truth
 * How are you holding up? -> holding
 * That's all for now. -> bye
@@ -45,6 +46,13 @@ tinker: Pod 3! It hums. Four beats, a pause, three beats. Like this: dum dum dum
 tinker: Okafor hummed it too, the last few weeks. And then pod 3 started humming it. After they left. Isn't that funny?
 tinker: ...Isn't that funny?
 ~ learn secret:tinker_song hint:pod3
+-> menu
+
+== password
+tinker: Private? They said everything out loud. Into the link. To me.
+tinker: Every morning they said their password out loud when they logged on. It was my name, backwards.
+tinker: They thought that was funny. I thought it was the nicest thing anyone ever did with my name.
+~ learn secret:okafor_password
 -> menu
 
 == truth

@@ -11,7 +11,11 @@
 #   work       work units needed (a robot with skill 1 and work_speed 1 does 1 per second)
 #   progress   work units done so far (kept if a robot walks away)
 #   priority   0 low, 1 normal, 2 high, 3 critical
-#   status     "open", "claimed", "done", "cancelled"
+#   status     "open", "claimed", "parts" (stopped halfway: waiting for a
+#              spare part from stock), "done", "cancelled"
+#   part       a Requisitions stock item the repair uses up, or absent.
+#              Halfway through, the robot takes one from stock; if there's
+#              none, the job stops ("parts") until a delivery is unpacked.
 #   claimed_by robot sim_id working on it, or ""
 #   source     who posted it (a device id, "dev", "supervisor"...)
 #   posted     facility time it was posted
@@ -24,6 +28,8 @@ extends RefCounted
 const PRIORITY_NAMES := ["low", "normal", "high", "critical"]
 ## Finished and cancelled jobs kept for the record.
 const HISTORY := 60
+## How far into a job the robot needs its part.
+const PART_AT := 0.5
 
 ## Everyday work a dev key (or a quiet facility) can post: [title, skill, work units].
 const ROUTINE := [
@@ -48,6 +54,12 @@ func post(sim: FacilitySim, title: String, skill: String, station: String, work:
 		"work": work, "progress": 0.0, "priority": clampi(priority, 0, 3), "status": "open",
 		"claimed_by": "", "source": source, "posted": sim.time()}
 	next_id += 1
+	# Repairs to plant devices use up a spare part (FacilityPlant.KINDS "part").
+	var plant := sim.get_system("plant") as FacilityPlant
+	if plant and plant.devices.has(source):
+		var part: String = FacilityPlant.KINDS[plant.device(source).kind].get("part", "")
+		if not part.is_empty():
+			job.part = part
 	jobs.append(job)
 	var st: Dictionary = _layout(sim).station(station)
 	sim.note("work", "Job #%d posted: %s at %s (%s, %s priority)" % [job.id, title,
@@ -62,7 +74,21 @@ func get_job(id: int) -> Dictionary:
 	return {}
 
 
-## Jobs not finished or cancelled, in id order.
+## Still to be done: open, claimed, or waiting for a part.
+static func active(j: Dictionary) -> bool:
+	return not j.is_empty() and j.get("status", "") in ["open", "claimed", "parts"]
+
+
+## Jobs waiting for a spare part, in id order.
+func waiting_jobs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for j in jobs:
+		if j.status == "parts":
+			out.append(j)
+	return out
+
+
+## Jobs a robot can work on now (not finished, cancelled or waiting for a part), in id order.
 func open_jobs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for j in jobs:
@@ -103,6 +129,9 @@ func add_progress(sim: FacilitySim, id: int, robot: String, amount: float) -> bo
 	if j.is_empty() or j.status != "claimed" or j.claimed_by != robot:
 		return false
 	j.progress = minf(j.progress + amount, j.work)
+	if j.has("part") and not j.get("part_used", false) and j.progress >= j.work * PART_AT:
+		if not _take_part(sim, j):
+			return false
 	if j.progress < j.work:
 		return false
 	j.status = "done"
@@ -112,6 +141,35 @@ func add_progress(sim: FacilitySim, id: int, robot: String, amount: float) -> bo
 	sim.schedule(sim.time(), "job_done", {"job": j.id, "source": j.source, "by": robot})
 	_trim_history()
 	return true
+
+
+# Takes the job's part from stock. No part: the job stops and waits.
+func _take_part(sim: FacilitySim, j: Dictionary) -> bool:
+	var req := sim.get_system("requisitions") as Requisitions
+	if req == null:
+		j.part_used = true
+		return true
+	var part := str(j.part)
+	if int(req.inventory.get(part, 0)) > 0:
+		req.inventory[part] = int(req.inventory[part]) - 1
+		j.part_used = true
+		return true
+	var robot := str(j.claimed_by)
+	j.status = "parts"
+	j.claimed_by = ""
+	j.progress = j.work * PART_AT
+	sim.note("alarm", "Job #%d stopped: %s needs %s, and stock is empty" % [j.id, j.title, req.item(part).get("name", part)])
+	sim.schedule(sim.time(), "job_parts", {"job": j.id, "part": part, "robot": robot, "source": j.source})
+	return false
+
+
+## A delivery's been unpacked: jobs waiting for it go back on the board.
+func parts_arrived(sim: FacilitySim, part: String) -> void:
+	for j in jobs:
+		if j.status == "parts" and str(j.get("part", "")) == part:
+			j.status = "open"
+			sim.note("work", "Job #%d can go on: %s in stock" % [j.id, part])
+			sim.schedule(sim.time(), "alarm", {"parts": part})
 
 
 func cancel(sim: FacilitySim, id: int, reason: String) -> void:

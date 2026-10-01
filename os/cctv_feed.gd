@@ -57,6 +57,7 @@ var night_vision := false
 var listening := false
 var _material: ShaderMaterial
 var _dragging := false
+var no_signal: Label
 var _frame_clock := 0.0     # time since the last rendered frame
 var _feed_time := 0.0       # the feed's own clock, in whole frames
 static var _ir_env: Environment
@@ -114,6 +115,21 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	ptz_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	ptz_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ptz_label)
+	no_signal = OSTheme.mono_label("NO SIGNAL", 28 if interactive else 16, Color(0.9, 0.95, 0.92, 0.85))
+	no_signal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	no_signal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	no_signal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	no_signal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	no_signal.visible = false
+	add_child(no_signal)
+
+
+## Is this camera broken (a "camera" fault in the plant)?
+func signal_lost() -> bool:
+	if not Facility.running:
+		return false
+	var plant := Facility.sim.get_system("plant") as FacilityPlant
+	return plant != null and bool(plant.device("cam_%d" % (cam + 1)).get("fault", false))
 
 
 ## The CCTV artefacts (scanlines, grain, wash); night vision keeps its own look without them.
@@ -164,6 +180,14 @@ func _process(delta: float) -> void:
 		return
 	_frame_clock = fmod(_frame_clock, 1.0 / FEED_FPS)
 	_feed_time += 1.0 / FEED_FPS
+	var lost := signal_lost()
+	no_signal.visible = lost
+	screen.visible = not lost
+	_speech_layer.visible = not lost
+	if lost:
+		caption.text = "CAM %02d  %s\n%s  NO SIGNAL" % [cam + 1, src.display_name.to_upper(),
+			FacilitySim.format_time(Facility.sim.time()) if Facility.running else ""]
+		return
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	_material.set_shader_parameter("feed_time", _feed_time)
 	eye.global_transform = src.global_transform

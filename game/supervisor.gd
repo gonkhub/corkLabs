@@ -8,8 +8,8 @@ class_name Supervisor
 extends RefCounted
 
 ## Facility time each supervisor action costs (a key into Facility.COST).
-const ORDER_COST := "choice"         # an order: 2 minutes
-const PRIORITY_COST := "choice"      # re-prioritising a job: 2 minutes
+const ORDER_COST := "choice"         # an order: 5 minutes
+const PRIORITY_COST := "choice"      # re-prioritising a job: 5 minutes
 
 
 ## Orders a robot. kind: "job" (with job_id), "recharge", "standby", "cancel".
@@ -19,8 +19,52 @@ static func order(bot: RobotAgent, kind: String, job_id := -1) -> Dictionary:
 	var what := describe_order(sim, kind, job_id)
 	sim.note("supervisor", "To %s: %s" % [bot.display_name(), what])
 	var r := bot.give_order(sim, kind, job_id)
+	did("order")
 	Facility.act(ORDER_COST, "Supervisor orders %s: %s" % [bot.display_name(), what])
 	return r
+
+
+## Marks that the supervisor has done something (shift 1's tutorial duties
+## tick themselves off on these: "did:order", "did:inspect"...).
+static func did(what: String) -> void:
+	if Facility.running:
+		Story.learn(Facility.sim, "did:" + what)
+
+
+## Answers a unit's request (option index). A choice: 5 minutes.
+static func answer_request(id: int, i: int) -> String:
+	var sim: FacilitySim = Facility.sim
+	var reqs := sim.get_system("requests") as UnitRequests
+	if reqs == null:
+		return ""
+	var r := reqs.get_request(id)
+	var out := reqs.answer(sim, id, i)
+	if not out.is_empty():
+		did("answer")
+		if r.get("kind", "") == "part" and i == 0:
+			did("requisition")
+		Facility.act(ORDER_COST, "Supervisor answers a unit's request")
+	return out
+
+
+## Books a unit's service at its dock (uses a servo bundle). 5 minutes.
+static func book_service(bot: RobotAgent) -> int:
+	var sim: FacilitySim = Facility.sim
+	var id := bot.book_service(sim)
+	if id >= 0:
+		sim.note("supervisor", "Books a service for %s" % bot.display_name())
+		Facility.act(ORDER_COST, "Supervisor books a service")
+	return id
+
+
+## Files an interim output report for a directive (Duties). 20 minutes.
+static func file_report() -> void:
+	var sim: FacilitySim = Facility.sim
+	var dirs := sim.get_system("directives") as Directives
+	sim.note("supervisor", "Files an output report")
+	if dirs:
+		dirs.notify(sim, "report")
+	Facility.spend(Directives.REPORT_MINUTES * 60.0, "Supervisor files an output report")
 
 
 static func set_priority(job_id: int, priority: int) -> void:
@@ -36,15 +80,16 @@ static func set_priority(job_id: int, priority: int) -> void:
 
 ## Places a requisition (Requisitions app, Terminal). A choice: costs facility
 ## time. Returns {"ok", "text"}; corkHQ reports what happens next.
-static func requisition(item_id: String, qty := 1) -> Dictionary:
+static func requisition(item_id: String, qty := 1, express := false) -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var req := sim.get_system("requisitions") as Requisitions
 	if req == null:
 		return {"ok": false, "text": "Requisitions unavailable."}
 	var it := req.item(item_id)
-	var r := req.place(sim, item_id, qty)
+	var r := req.place(sim, item_id, qty, express)
 	if r.ok:
-		sim.note("supervisor", "Requisition: %dx %s" % [qty, it.get("name", item_id)])
+		sim.note("supervisor", "Requisition: %dx %s%s" % [qty, it.get("name", item_id), " (express)" if express else ""])
+		did("requisition")
 		Facility.act(ORDER_COST, "Supervisor files a requisition")
 	return r
 
@@ -92,8 +137,11 @@ const TALK_CHOICE := "choice"
 const TALK_VIOLATION := 1.5
 const TALK_STEADY := 0.06
 const TALK_STEADY_EVERY := 3600.0
-const INSPECT_MINUTES := 10.0
-const ACTIVATE_MINUTES := 30.0
+## A conversation builds trust (Knowledge "trust:<unit>") if the last one that
+## did was at least this long ago: trust takes days, not one long chat.
+const TRUST_GAP := 7200.0
+const INSPECT_MINUTES := 30.0
+const ACTIVATE_MINUTES := 90.0
 
 
 ## Reads a file (Terminal cat, Files). Spends its reading time the first time.
@@ -155,6 +203,12 @@ static func talk_begin(bot: RobotAgent) -> Dictionary:
 		o.violate(sim, "conversation with unit %s" % bot.display_name(), TALK_VIOLATION)
 	var runner := Dialogue.Runner.new(d, bot.robot_id)
 	var lines := runner.begin(sim)
+	if k and not runner.done:
+		var tkey := "trusted:" + bot.robot_id
+		if sim.time() - float(k.flags.get(tkey, -INF)) >= TRUST_GAP:
+			k.forget(tkey)
+			k.learn(sim, tkey)
+			k.add_value("trust:" + bot.robot_id)
 	_spend_lines(bot, lines, "")
 	return {"runner": runner, "lines": lines, "error": ""}
 
@@ -208,25 +262,20 @@ static func _spend_lines(bot: RobotAgent, lines: Array[Dictionary], _cause: Stri
 		Facility.spend(float(Facility.COST[TALK_LINE]) * lines.size(), "Talking with %s" % bot.display_name())
 
 
-## Inspects a device properly (Plant app): 10 facility minutes. Returns the read-out.
+## Inspects a device properly (Plant app): 30 facility minutes. Returns the read-out.
 static func inspect_device(id: String) -> String:
 	var sim: FacilitySim = Facility.sim
 	var plant := sim.get_system("plant") as FacilityPlant
 	sim.note("supervisor", "Inspects %s" % plant.device(id).get("name", id))
+	did("inspect")
+	var dirs := sim.get_system("directives") as Directives
+	if dirs:
+		dirs.notify(sim, "inspect", id)
 	Facility.spend(INSPECT_MINUTES * 60.0, "Supervisor inspects %s" % plant.device(id).get("name", id))
 	return plant.inspect_text(sim, id)
 
 
-## Authorises a spare part from stock on a device (a choice: 2 minutes).
-static func use_part(id: String) -> String:
-	var sim: FacilitySim = Facility.sim
-	var why := (sim.get_system("plant") as FacilityPlant).use_part(sim, id)
-	if why.is_empty():
-		Facility.act("choice", "Supervisor authorises a spare part")
-	return why
-
-
-## Posts a maintenance job for a worn device before it's an alarm (2 minutes).
+## Posts a maintenance job for a worn device before it's an alarm (5 minutes).
 static func request_maintenance(id: String) -> String:
 	var sim: FacilitySim = Facility.sim
 	var plant := sim.get_system("plant") as FacilityPlant
@@ -235,7 +284,7 @@ static func request_maintenance(id: String) -> String:
 	if d.is_empty() or not FacilityPlant.KINDS[d.kind].has("drift"):
 		return "That isn't something you service; it breaks, and then it's fixed."
 	var job: Dictionary = board.get_job(int(d.job)) if int(d.job) >= 0 else {}
-	if not job.is_empty() and (job.status == "open" or job.status == "claimed"):
+	if not job.is_empty() and WorkBoard.active(job):
 		return "There's already job #%d for it." % int(d.job)
 	if float(d.value) >= 0.95:
 		return "%s doesn't need it." % d.name

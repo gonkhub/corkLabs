@@ -12,6 +12,9 @@
 #                   in the SupervisorArchive)
 #   anything else   a story flag ("met:tinker", "purged:dokafor"...)
 #
+# Plus a few numbers (`values`): "trust:tinker" (conversations that counted),
+# which conditions compare: "trust:tinker>=3".
+#
 # The PLAYER keeps what they know between runs: a hidden command typed on a
 # brand-new save still works (and is learned then). Only the list in "help"
 # and the desktop icons reset.
@@ -25,6 +28,8 @@ const SECRETS_PATH := "res://game/story/secrets.txt"
 var sim_id := "knowledge"
 ## key -> facility time it was learned
 var flags := {}
+## Numbers: "trust:<unit>" ...
+var values := {}
 ## Learned keys, in order (the Terminal and toasts watch `learned_count`).
 var recent: Array[String] = []
 var learned_count := 0
@@ -54,6 +59,15 @@ func learn(sim: FacilitySim, key: String) -> bool:
 
 func forget(key: String) -> void:
 	flags.erase(key)
+
+
+func value(key: String) -> float:
+	return float(values.get(key, 0.0))
+
+
+func add_value(key: String, amount := 1.0) -> float:
+	values[key] = value(key) + amount
+	return float(values[key])
 
 
 ## Keys with this prefix, without it, sorted: with_prefix("cmd:") -> ["cat", "cd"...]
@@ -120,7 +134,7 @@ func sim_tick(_sim: FacilitySim, _dt: float) -> void:
 
 
 func sim_save() -> Dictionary:
-	return {"flags": flags.duplicate(), "learned": learned_count}
+	return {"flags": flags.duplicate(), "learned": learned_count, "values": values.duplicate()}
 
 
 func sim_load(d: Dictionary) -> void:
@@ -129,6 +143,10 @@ func sim_load(d: Dictionary) -> void:
 	for k in f:
 		flags[str(k)] = float(f[k])
 	learned_count = int(d.get("learned", flags.size()))
+	values = {}
+	var v: Dictionary = d.get("values", {})
+	for k in v:
+		values[str(k)] = float(v[k])
 
 
 func sim_describe(_sim: FacilitySim) -> PackedStringArray:

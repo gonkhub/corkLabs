@@ -16,6 +16,10 @@ extends RefCounted
 
 const CATALOG_PATH := "res://game/corporate/catalog.txt"
 const START_FUNDS := 1000
+## Spare parts on the shelf when a new supervisor arrives: enough for the
+## first morning, not for the week.
+const START_STOCK := {"pipe_clamps": 3, "fuse_pack": 2, "filter_cartridges": 4, "actuator_kit": 1,
+	"camera_module": 1, "servo_bundle": 1}
 ## Budget allocated per shift for each grade.
 const ALLOCATION := {"A": 900, "B": 700, "C": 500, "D": 300, "F": 100}
 ## Lowest grade at which corporate approves items that need approval.
@@ -64,17 +68,22 @@ func get_order(id: int) -> Dictionary:
 
 
 ## Places an order. Returns {"ok", "text", "order"}; corkHQ confirms it.
-func place(sim: FacilitySim, item_id: String, qty := 1) -> Dictionary:
+## Express costs this much more and arrives in this share of the time.
+const EXPRESS_COST := 1.75
+const EXPRESS_TIME := 0.35
+
+
+func place(sim: FacilitySim, item_id: String, qty := 1, express := false) -> Dictionary:
 	var it := item(item_id)
 	if it.is_empty():
 		return {"ok": false, "text": "No such item."}
 	qty = maxi(qty, 1)
-	var cost: int = it.price * qty
+	var cost: int = roundi(it.price * qty * (EXPRESS_COST if express else 1.0))
 	if cost > funds:
 		return {"ok": false, "text": "Insufficient funds: %d cr needed, %d cr available." % [cost, funds]}
 	funds -= cost
 	var o := {"id": next_id, "item": item_id, "qty": qty, "cost": cost, "placed": sim.time(), "eta": -1.0,
-		"status": "pending" if it.approval else "in transit"}
+		"status": "pending" if it.approval else "in transit", "express": express}
 	next_id += 1
 	orders.append(o)
 	var hq := _hq(sim)
@@ -97,7 +106,7 @@ func allocate(_sim: FacilitySim, grade: String) -> int:
 func _ship(sim: FacilitySim, o: Dictionary) -> void:
 	var it := item(o.item)
 	o.status = "in transit"
-	o.eta = sim.time() + float(it.hours) * 3600.0
+	o.eta = sim.time() + float(it.hours) * 3600.0 * (EXPRESS_TIME if o.get("express", false) else 1.0)
 	sim.schedule(o.eta, "requisition_delivery", {"order": o.id})
 	var hq := _hq(sim)
 	if hq:
@@ -198,6 +207,9 @@ func unpacked(sim: FacilitySim, order_id: int) -> void:
 	var it := item(o.item)
 	o.status = "unpacked"
 	inventory[o.item] = int(inventory.get(o.item, 0)) + int(o.qty) * pack_size(it)
+	var board := sim.get_system("work") as WorkBoard
+	if board:
+		board.parts_arrived(sim, o.item)
 	var hq := _hq(sim)
 	if hq:
 		hq.post(sim, "Logistics", "order", "Requisition #%d unpacked in the workshop: %dx %s in stock." % [o.id, o.qty, it.name])
@@ -213,6 +225,10 @@ static func pack_size(it: Dictionary) -> int:
 		return 1
 	var n := name.substr(i + 2).get_slice(")", 0)
 	return maxi(int(n), 1) if n.is_valid_int() else 1
+
+
+func sim_start(_sim: FacilitySim) -> void:
+	inventory = START_STOCK.duplicate()
 
 
 func sim_tick(_sim: FacilitySim, _dt: float) -> void:

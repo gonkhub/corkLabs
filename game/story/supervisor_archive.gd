@@ -67,8 +67,8 @@ static func summary() -> String:
 	if int(_data.fired) > 0:
 		parts.append("dismissed %d time%s" % [int(_data.fired), "" if int(_data.fired) == 1 else "s"])
 	parts.append("%d of %d secrets" % [(_data.secrets as Array).size(), Knowledge.secrets().size()])
-	if not (_data.endings as Array).is_empty():
-		parts.append("%d ending%s seen" % [(_data.endings as Array).size(), "" if (_data.endings as Array).size() == 1 else "s"])
+	if int(_data.completed) > 0:
+		parts.append("reached the end %d time%s" % [int(_data.completed), "" if int(_data.completed) == 1 else "s"])
 	return "Personnel file: " + ", ".join(parts)
 
 

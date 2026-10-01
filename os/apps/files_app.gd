@@ -157,6 +157,10 @@ func _fill_list() -> void:
 	path_label.text = dir
 	list.clear()
 	_entries.clear()
+	if not Story.can_access(sim(), dir):
+		view.text = "[color=#%s]%s: Permission denied.[/color]" % [OSTheme.WARN.to_html(false), dir]
+		action_row.visible = false
+		return
 	for e in Story.list(sim(), dir, hidden_box.button_pressed and hidden_box.visible):
 		if e.dir:
 			continue
@@ -184,6 +188,8 @@ func _on_file(i: int) -> void:
 func open_file(vpath: String) -> void:
 	file = vpath
 	var e := Story.entry(sim(), vpath)
+	if not e.is_empty():
+		dir = str(e.parent)
 	password.visible = false
 	action_row.visible = false
 	if e.meta.has("exec"):

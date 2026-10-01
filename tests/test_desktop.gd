@@ -63,12 +63,12 @@ func _initialize() -> void:
 	_check(desk.toast_box.get_child_count() > toasts_before and alarm_toast, "an alarm pops up as a toast")
 	_check(desk.alarm_button.visible and desk.alarm_button.text.contains("1"), "and lights the taskbar alarm (%s)" % desk.alarm_button.text)
 
-	# No waiting: time moves when the supervisor does something (a duty here).
+	# No waiting: time moves when the supervisor does something (an inspection here).
 	_check(not desk.has_method("start_wait") and not load("res://game/supervisor.gd").new().has_method("wait"), "there is no Wait")
 	var t1: float = sim.time()
-	var why: String = load("res://game/supervisor.gd").do_duty("coolant_walk")   # by path: classes that use the Facility autoload can't be named in --script tests
+	var text: String = load("res://game/supervisor.gd").inspect_device("filter_1")   # by path: classes that use the Facility autoload can't be named in --script tests
 	await process_frame
-	_check(why.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "a duty passes its facility time (%s)" % why)
+	_check(not text.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "an inspection passes its facility time (30 min)")
 	var units = desk._windows["units"].app
 	_check(not str(units.cards["tinker"].think.text).is_empty(), "the Units app shows what each robot is weighing up")
 	var log_app = desk._windows["log"].app

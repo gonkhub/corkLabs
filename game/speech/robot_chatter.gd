@@ -39,7 +39,7 @@ const NO_REPEAT := 3
 const RECENT := 40
 ## Triggers that always speak, ignoring cooldown and chattiness.
 const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restarted", "peer_reply", "peer_info_reply",
-	"critical_error", "glitch", "rebooting", "rebooted", "stability_critical"]
+	"critical_error", "glitch", "rebooting", "rebooted", "stability_critical", "seized", "need_part", "unanswered"]
 ## Base chance (before chattiness) for the rest.
 const CHANCE := {"start_job": 0.5, "job_done": 0.6, "recharge": 0.5, "charged": 0.5, "wander": 0.6,
 	"stability_drifting": 0.8, "stability_unstable": 0.9, "stability_stable": 0.4, "idle": 0.15, "alarm": 0.8,

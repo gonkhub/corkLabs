@@ -107,6 +107,10 @@ static func layout() -> FacilityLayout:
 	l.add_station("gate", "hall_e2", 13.0, "work", "Freight gate controls")
 	l.add_station("o_mains", "ogre_mount", 0.5, "dock", "Ogre's mains coupling")
 	l.add_station("loading", "hangar_rail", 12.0, "work", "Hangar loading bay")
+	l.add_station("pod_door_ctl", "hall_n1", 27.0, "work", "Pod bay door controls")
+	l.add_station("dock_door_ctl", "hall_w1", 13.0, "work", "Dock door controls")
+	l.add_station("hangar_door_ctl", "hall_s", 57.0, "work", "Hangar door controls")
+	l.add_station("uplink", "ws_front", 3.0, "work", "corkHQ uplink relay")
 	l.add_station("stacks", "deep_stacks", 0.5, "work", "Deep stacks")
 	return l
 
@@ -138,7 +142,8 @@ static func systems() -> Array:
 	shifts.starts.assign([Campaign.SHIFT_START_HOUR])
 	shifts.names.assign(["Day"])
 	var out: Array = [l, shifts, WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
-		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new(), Knowledge.new(), Oversight.new(), Campaign.new()]
+		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new(), Knowledge.new(), Oversight.new(), Campaign.new(),
+		Directives.new(), UnitRequests.new()]
 	for id in START_STATIONS:
 		var st := l.station(START_STATIONS[id])
 		out.append(RobotAgent.new(id, null, st.segment, st.offset))

@@ -160,3 +160,17 @@ critical_error | ogre | | CORE FAULT. Dimming.
 glitch | ogre | | Lift. Hold. Lift. Hold. Lift.
 rebooting | ogre | | Spinning down.
 rebooted | ogre | | Awake. Still here.
+
+# --- Wear, parts, unanswered requests -----------------------------------------------
+seized | any | | Locked. Something's locked. Can't move.
+seized | tinker | | My arm! It won't, it won't... somebody come and reset me.
+seized | hauler | | Seized. Send Tinker.
+seized | ogre | | ...the... crane... will... not... turn...
+need_part | any | | Stopped. Need a {part}. Stock's empty.
+need_part | tinker | | Half done and no {part}! I can't finish it with my fingers.
+need_part | hauler | | No {part} in stock. Can't finish.
+unanswered | any | | Nobody answered.
+unanswered | tinker | | I asked. Nobody said anything. I'll just... decide, then.
+unanswered | hauler | | No answer. Fine.
+worn | any | | Joints are grinding.
+worn | hauler | | Everything aches. Is that the word? Aches.

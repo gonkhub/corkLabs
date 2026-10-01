@@ -41,6 +41,13 @@
 #   take work it's hopeless at or can't get to, and an unstable robot may just
 #   ignore you. Its answer is spoken (RobotChatter).
 #
+# WEAR  0-1. Joints wear with work (and a little with travel). Past WEAR_SLOW
+#   it moves and works slower; past WEAR_SEIZE it can SEIZE UP: frozen where
+#   it stands until another unit gets to it and reboots it by hand ("Manual
+#   reboot" job, precise: Tinker's work). A SERVICE at its dock (a job that
+#   uses a servo bundle from stock) brings wear back down. Worn units ask for
+#   one (UnitRequests).
+#
 # SPEAKING
 #   It tells RobotChatter what just happened ("start_job", "low_power",
 #   "critical_error"...); the chatter system decides whether and what it says.
@@ -70,9 +77,27 @@ const FIXATE_TIME := Vector2(120.0, 420.0)
 const GLITCH_TIME := Vector2(60.0, 240.0)
 ## Seconds spent at a device sabotaging it.
 const SABOTAGE_WORK := 25.0
+## Wear gained per second of work / travel (x the trait's wear_rate).
+const WEAR_WORK := 0.000018
+const WEAR_MOVE := 0.000006
+## Wear at which it slows down, and at which it can seize up.
+const WEAR_SLOW := 0.4
+const WEAR_SEIZE := 0.5
+## Seizures per facility hour at full wear (scaled from 0 at WEAR_SEIZE).
+const SEIZE_RATE := 1.2
+## A service brings wear back down to this.
+const WEAR_SERVICED := 0.08
+const MANUAL_REBOOT_WORK := 300.0
+## Wear between shifts, as a share of on-shift wear.
+const NIGHT_WEAR := 0.3
+## A seized unit nobody reboots works itself free after this long.
+const SELF_FREE := 7200.0
+const SERVICE_WORK := 480.0
 ## An independent robot's whims (its random bias for or against each option)
 ## hold this long before they change: erratic, but it follows through.
 const WHIM_TIME := 600.0
+## How much slower idle software drifts between shifts (standby).
+const NIGHT_DRIFT := 0.15
 ## Independence at which errant fixations start.
 const FIXATE_FROM := 0.35
 
@@ -102,6 +127,8 @@ var moving := false
 ## Not saved: it's a one-off cue.
 var perform := {"clip": "", "n": 0}
 var jobs_done := 0
+## Joint wear, 0-1 (see WEAR above).
+var wear := 0.2
 ## The route being ridden: [{"seg", "from", "to"}...] (see FacilityLayout.plan).
 var route: Array = []
 var _route_goal := ""     # what `route` leads to ("station:bay_2", "wander:...")
@@ -145,14 +172,20 @@ func independence() -> float:
 	return clampf((0.7 - stability) / 0.6, 0.0, 1.0) * traits.independence
 
 
-## Out of action (crashed, rebooting, stalled): it can't think or take orders.
+## Out of action (crashed, rebooting, stalled, seized): it can't think or take orders.
 func offline() -> bool:
-	return activity.kind in ["crashed", "rebooting", "stalled"]
+	return activity.kind in ["crashed", "rebooting", "stalled", "seized"]
+
+
+## How much wear slows it: 1 = not at all ... 0.5 = half speed at full wear.
+func wear_factor() -> float:
+	return 1.0 - 0.5 * clampf((wear - WEAR_SLOW) / (1.0 - WEAR_SLOW), 0.0, 1.0)
 
 
 # --- System ---------------------------------------------------------------------
 
 func sim_start(sim: FacilitySim) -> void:
+	wear = sim.rng.randf_range(0.15, 0.35) * traits.wear_rate
 	sim.note(robot_id, "%s online in %s (power %d%%, stability %d%%)" % [display_name(), _room_name(sim), _pct(power), _pct(stability)])
 	think(sim)   # decide straight away, so a new facility isn't all "standing by"
 
@@ -168,6 +201,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 		_update_state(sim)
 		_maybe_critical_error(sim)
 		think(sim)
+	_maybe_seize(sim, step)
 	_perform(sim, step)
 
 
@@ -179,7 +213,24 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			route = []           # re-plan on the next step
 			_route_goal = ""
 			_think_left = 0.0
+		"job_parts":
+			if activity.get("kind", "") == "work" and int(activity.get("job", -1)) == int(data.get("job", -1)):
+				activity = {"kind": "idle"}
+				route = []
+				_think_left = 0.0
+				var req := sim.get_system("requisitions") as Requisitions
+				_say(sim, "need_part", {"part": req.item(str(data.part)).get("name", data.part) if req else data.part})
 		"job_done", "job_cancelled":
+			var src := str(data.get("source", ""))
+			if event_name == "job_done" and src == "unit:" + robot_id and activity.kind == "seized":
+				wear = maxf(wear - 0.05, 0.0)
+				activity = {"kind": "idle"}
+				_think_left = 0.0
+				sim.note(robot_id, "%s is moving again (rebooted by hand by %s)" % [display_name(), str(data.get("by", "")).trim_prefix("robot_").capitalize()])
+				_say(sim, "restarted", {})
+			elif event_name == "job_done" and src == "service:" + robot_id:
+				wear = WEAR_SERVICED
+				sim.note(robot_id, "%s serviced: joints like new (wear %d%%)" % [display_name(), _pct(wear)])
 			var id := int(data.get("job", -1))
 			if order.get("kind", "") == "job" and int(order.get("job", -1)) == id:
 				order = {}
@@ -208,6 +259,10 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 		for j in board.open_jobs():
 			if j.status == "claimed" and j.claimed_by != sim_id:
 				continue
+			if not str(j.get("only", "")).is_empty() and str(j.only) != sim_id:
+				continue   # someone else's service
+			if str(j.get("not_by", "")) == sim_id:
+				continue   # it broke this one
 			if traits.stationary and j.get("rail_only", false):
 				continue   # something to carry somewhere: not a job for a crane bolted to the ceiling
 			var r := _reach_station(layout, f, j.station)
@@ -228,6 +283,16 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 					s += listen
 					why += ", ORDERED" + (" (half-listening)" if ind > 0.3 else "")
 			out.append({"key": "work:%d" % j.id, "label": "work #%d %s" % [j.id, j.title], "score": s, "why": why})
+
+	# Asked to have an "accident" with a device (a conversation, not the board).
+	if order.get("kind", "") == "accident":
+		var plant := _plant(sim)
+		var dev: Dictionary = plant.device(str(order.device)) if plant else {}
+		if not dev.is_empty() and not dev.fault and not _reach_station(layout, f, dev.station).is_empty():
+			out.append({"key": "accident:" + str(order.device), "label": "head for " + str(dev.name), "score": 0.5 + listen,
+				"why": "asked to, quietly"})
+		else:
+			order = {}
 
 	# Recharge at the nearest dock it can get to.
 	var dock := _nearest_dock(sim, f)
@@ -310,6 +375,7 @@ func activity_key() -> String:
 	match activity.get("kind", "idle"):
 		"work": return "work:%d" % int(activity.job)
 		"sabotage": return "sabotage:" + str(activity.device)
+		"accident": return "accident:" + str(activity.device)
 		"idle": return "idle"
 	return str(activity.kind)
 
@@ -340,6 +406,10 @@ func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
 		var st: String = ids[sim.rng.randi() % ids.size()]
 		activity = {"kind": "fixate", "station": st, "until": -1.0}
 		_say(sim, "fixate", {"station": _layout(sim).station(st).name})
+	elif key.begins_with("accident:"):
+		var plant := _plant(sim)
+		var dev: String = key.trim_prefix("accident:")
+		activity = {"kind": "accident", "device": dev, "station": plant.device(dev).station, "left": SABOTAGE_WORK}
 	elif key.begins_with("sabotage:"):
 		var plant := _plant(sim)
 		var dev: String = key.trim_prefix("sabotage:")
@@ -395,6 +465,80 @@ func _maybe_critical_error(sim: FacilitySim) -> void:
 		_say(sim, "glitch", {})
 
 
+# --- Wear -------------------------------------------------------------------------------
+
+# Between shifts the units work gently (standby, no pushing): less wear.
+func _wear_scale(sim: FacilitySim) -> float:
+	var camp := sim.get_system("campaign") as Campaign
+	return NIGHT_WEAR if camp and not camp.on_duty() else 1.0
+
+
+func _maybe_seize(sim: FacilitySim, dt: float) -> void:
+	if wear < WEAR_SEIZE or offline():
+		return
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		return   # overnight standby: nothing moves hard enough to seize
+	var rate := SEIZE_RATE * (wear - WEAR_SEIZE) / (1.0 - WEAR_SEIZE)
+	if sim.rng.randf() >= rate * dt / 3600.0:
+		return
+	seize(sim)
+
+
+## Freezes up: offline until another unit reboots it by hand.
+func seize(sim: FacilitySim) -> void:
+	var board := _board(sim)
+	if activity.kind == "work" and board:
+		board.release(int(activity.job), sim_id)
+	route = []
+	_route_goal = ""
+	activity = {"kind": "seized", "until": sim.time() + SELF_FREE}
+	var where := _nearest_station(sim)
+	sim.note("alarm", "%s SEIZED UP in %s (wear %d%%): needs a manual reboot" % [display_name(), _room_name(sim), _pct(wear)])
+	if board:
+		board.post(sim, "Manual reboot: %s" % display_name(), "precise", where, MANUAL_REBOOT_WORK, 3, "unit:" + robot_id)
+	sim.schedule(sim.time(), "alarm", {"robot": robot_id})
+	_say(sim, "seized", {})
+
+
+## Books a service at its dock (a job only it takes; uses a servo bundle).
+## Returns the job id, or -1 if one's already booked.
+func book_service(sim: FacilitySim) -> int:
+	var board := _board(sim)
+	if board == null:
+		return -1
+	for j in board.jobs:
+		if str(j.source) == "service:" + robot_id and WorkBoard.active(j):
+			return -1
+	var dock := _nearest_dock(sim)
+	var id := board.post(sim, "Service %s" % display_name(), "general", str(dock.get("id", "t_dock")), SERVICE_WORK, 1, "service:" + robot_id)
+	var j := board.get_job(id)
+	j.only = sim_id
+	j.part = "servo_bundle"
+	return id
+
+
+# The nearest station a rail unit can get to, in its room if possible (where a
+# seized unit gets rebooted from).
+func _nearest_station(sim: FacilitySim) -> String:
+	var layout := _layout(sim)
+	var me := world_pos(sim)
+	var room_id := room(sim)
+	var best := ""
+	var best_d := INF
+	for id in layout.stations_of():
+		var st := layout.station(id)
+		if layout.is_pad(st.segment):
+			continue
+		var d := layout.station_world_pos(id).distance_to(me)
+		if layout.room_at(st.segment, st.offset) != room_id:
+			d += 1000.0
+		if d < best_d:
+			best_d = d
+			best = id
+	return best
+
+
 ## Remote reboot (supervisor): offline for REBOOT_TIME, then stability up.
 func reboot(sim: FacilitySim) -> void:
 	var board := _board(sim)
@@ -421,12 +565,18 @@ func _finish_reboot(sim: FacilitySim) -> void:
 ## The supervisor tells this robot to do something. kind: "job" (with job_id),
 ## "recharge" or "standby"; "cancel" clears the standing order.
 ## Returns {"ok": bool, "reply": String}; the robot also says the reply.
-func give_order(sim: FacilitySim, kind: String, job_id := -1) -> Dictionary:
+func give_order(sim: FacilitySim, kind: String, job_id := -1, device := "") -> Dictionary:
 	if offline():
 		return {"ok": false, "reply": "(no response: %s is %s)" % [display_name(), activity.kind]}
 	if kind == "cancel":
 		order = {}
 		return _reply(sim, true, "Understood. Back to my own judgement.")
+	if kind == "accident":
+		# Not an order the board knows about: it just goes and has its accident.
+		order = {"kind": "accident", "device": device, "given": sim.time()}
+		_think_left = 0.0
+		think(sim)
+		return {"ok": activity.get("kind", "") == "accident", "reply": ""}
 	if kind == "job":
 		var board := _board(sim)
 		var j: Dictionary = board.get_job(job_id) if board else {}
@@ -522,9 +672,24 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 			if sim.time() >= float(activity.until):
 				_finish_reboot(sim)
 			return
+		"seized":
+			# Frozen until someone reboots it by hand, or (slowly) it works itself free.
+			if sim.time() >= float(activity.get("until", INF)):
+				var board := _board(sim)
+				if board:
+					for j in board.jobs:
+						if str(j.source) == "unit:" + robot_id and WorkBoard.active(j):
+							board.cancel(sim, int(j.id), "it worked itself free")
+				activity = {"kind": "idle"}
+				_think_left = 0.0
+				sim.note(robot_id, "%s worked itself free after %d minutes seized" % [display_name(), roundi(SELF_FREE / 60.0)])
+				_say(sim, "restarted", {})
+			return
 		"glitch":
 			stability = maxf(stability - _decay(sim) * 0.5 * dt, 0.0)
 			var arrived := _travel(sim, "glitch:%s:%.2f" % [activity.seg, float(activity.off)], str(activity.seg), float(activity.off), dt)
+			if activity.kind != "glitch":
+				return   # it gave up on the way (no route) or ran out of power
 			if sim.time() >= float(activity.until):
 				sim.note(robot_id, "%s stops glitching" % display_name())
 				activity = {"kind": "idle"}
@@ -552,6 +717,17 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				elif sim.time() >= float(activity.until):
 					activity = {"kind": "idle"}
 					_think_left = 0.0
+		"accident":
+			var st := layout.station(activity.station)
+			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
+				activity.left = float(activity.left) - dt
+				if float(activity.left) <= 0.0:
+					var plant := _plant(sim)
+					if plant:
+						plant.accident(sim, str(activity.device), self)
+					order = {}
+					activity = {"kind": "idle"}
+					_think_left = 0.0
 		"sabotage":
 			var st := layout.station(activity.station)
 			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
@@ -568,11 +744,19 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
 				var board := _board(sim)
 				_use_power(sim, traits.drain_work * dt)
+				if activity.kind != "work":
+					return   # ran out of power on the job
 				stability = minf(stability + traits.stability_from_work * dt, 1.0)
 				var j := board.get_job(int(activity.job))
-				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * dt
-				if board.add_progress(sim, int(activity.job), sim_id, amount):
+				wear = minf(wear + WEAR_WORK * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
+				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * wear_factor() * dt
+				if j.get("status", "") != "claimed" or j.get("claimed_by", "") != sim_id:
+					activity = {"kind": "idle"}   # stopped under it (waiting for a part, cancelled)
+					_think_left = 0.0
+				elif board.add_progress(sim, int(activity.job), sim_id, amount):
 					jobs_done += 1
+					if j.get("hot", false):
+						wear = minf(wear + 0.15, 1.0)   # clamped live: it cost its joints
 					stability = minf(stability + traits.stability_per_job, 1.0)
 					if _ordered_job() == int(activity.job):
 						order = {}
@@ -614,7 +798,8 @@ func _travel(sim: FacilitySim, goal: String, to_seg: String, to_off: float, dt: 
 			return false
 		route = r.legs.duplicate(true)
 		_route_goal = goal
-	var budget := traits.rail_speed * dt   # meters at speed 1
+	var budget := traits.rail_speed * wear_factor() * dt   # meters at speed 1
+	wear = minf(wear + WEAR_MOVE * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
 	while budget > 0.0001 and not route.is_empty():
 		var leg: Dictionary = route[0]
 		if leg.seg != seg:
@@ -700,7 +885,11 @@ static func _band_edge(a: String, b: String) -> float:
 # Stability lost per idle second: its trait, halved by the firmware-stabilizer package.
 func _decay(sim: FacilitySim) -> float:
 	var sw := sim.get_system("software") as SoftwareLibrary
-	return traits.stability_decay * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0)
+	var night := 1.0
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		night = NIGHT_DRIFT   # no supervisor: idle units sit in low-power standby
+	return traits.stability_decay * night * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0)
 
 
 # Travel costs from where it is to every node. Cached: a robot standing still
@@ -820,7 +1009,7 @@ static func _pct(x: float) -> int:
 # --- Save / describe -------------------------------------------------------------------
 
 func sim_save() -> Dictionary:
-	return {"seg": seg, "off": off, "power": power, "stability": stability, "stability_state": stability_state,
+	return {"seg": seg, "off": off, "power": power, "stability": stability, "stability_state": stability_state, "wear": wear,
 		"activity": activity.duplicate(), "order": order.duplicate(), "moving": moving, "jobs_done": jobs_done,
 		"route": route.duplicate(true), "route_goal": _route_goal,
 		"think_left": _think_left, "step_left": _step_left, "whim_seed": str(_whim_seed), "whim_until": _whim_until}
@@ -832,6 +1021,7 @@ func sim_load(d: Dictionary) -> void:
 	power = float(d.get("power", 1.0))
 	stability = float(d.get("stability", 0.8))
 	stability_state = str(d.get("stability_state", "stable"))
+	wear = float(d.get("wear", 0.2))
 	activity = d.get("activity", {"kind": "idle"}).duplicate()
 	if activity.has("job"):
 		activity.job = int(activity.job)
@@ -875,6 +1065,10 @@ func doing_text(sim: FacilitySim) -> String:
 			return "rebooting (back at %s)" % FacilitySim.format_clock(float(activity.until))
 		"stalled":
 			return "STALLED (no power)"
+		"seized":
+			return "SEIZED UP (needs a manual reboot)"
+		"accident":
+			return "heading to %s" % _layout(sim).station(activity.station).get("name", "?")
 	return "standing by (%s)" % _room_name(sim)
 
 

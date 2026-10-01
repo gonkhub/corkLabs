@@ -141,7 +141,9 @@ func _process(delta: float) -> void:
 	if hq == null:
 		return
 	var o := Facility.sim.get_system("oversight") as Oversight
-	var muted := o != null and o.hq_muted(Facility.sim)
+	var lost := o != null and o.uplink_down(Facility.sim)
+	var muted := o != null and (o.hq_muted(Facility.sim) or lost)
+	_suspended.text = "UPLINK LOST\n(no connection to corkHQ)" if lost else "LINK SUSPENDED\n(maintenance)"
 	_suspended.visible = muted
 	_scroll.visible = not muted and reply_runner == null
 	_reply_scroll.visible = not muted and reply_runner != null

@@ -85,6 +85,7 @@ var taskbar_buttons: HBoxContainer
 var clock_button: Button
 var output_label: Label
 var alarm_button: Button
+var requests_button: Button
 var login: Control
 var boot: Control
 var notice_panel: PanelContainer
@@ -108,6 +109,7 @@ var _time := 0.0
 var _cascade := 0
 var _boot_left := 0.0
 var _learned_mark := -1
+var _asked_mark := -1
 var _icon_key := ""
 
 
@@ -269,6 +271,7 @@ func log_on() -> void:
 	var k := Story.knowledge(Facility.sim)
 	if k:
 		k.forget("root")   # the maintenance account never survives a log off
+		k.forget("as:dokafor")
 		_learned_mark = k.learned_count
 	_rebuild_icons()
 	shift_screen = ShiftScreen.new()
@@ -367,6 +370,7 @@ func open_app(id: String) -> OSApp:
 			script = a[1]
 	if script == null or not app_available(id):
 		return null
+	Supervisor.did("open:" + id)
 	var app: OSApp = script.new()
 	app.desktop = self
 	var win := OSWindow.new()
@@ -825,6 +829,15 @@ func _build_taskbar() -> void:
 	alarm_button.visible = false
 	row.add_child(alarm_button)
 
+	requests_button = Button.new()
+	requests_button.focus_mode = Control.FOCUS_NONE
+	requests_button.add_theme_color_override("font_color", OSTheme.WARN)
+	requests_button.add_theme_stylebox_override("normal", OSTheme.box(OSTheme.WARN.darkened(0.75), OSTheme.WARN, 4, 8, 4))
+	requests_button.tooltip_text = "The units are asking you something (Units)"
+	requests_button.pressed.connect(func(): open_app("units"))
+	requests_button.visible = false
+	row.add_child(requests_button)
+
 	output_label = OSTheme.mono_label("", 13, OSTheme.TEXT_DIM)
 	output_label.tooltip_text = "Facility throughput: the pods' average sync"
 	output_label.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -880,6 +893,15 @@ func _refresh_taskbar() -> void:
 		var faults := PlantApp.active_faults(plant)
 		alarm_button.visible = faults > 0
 		alarm_button.text = "ALARM  %d" % faults
+	var reqs := sim.get_system("requests") as UnitRequests
+	if reqs:
+		requests_button.visible = not reqs.requests.is_empty()
+		requests_button.text = "REQUESTS  %d" % reqs.requests.size()
+		if _asked_mark >= 0 and reqs.asked > _asked_mark and not reqs.requests.is_empty():
+			var r: Dictionary = reqs.requests.back()
+			var bot := sim.get_system("robot_" + str(r.robot)) as RobotAgent
+			toast("%s asks" % (bot.display_name() if bot else str(r.robot)), str(r.text), OSTheme.WARN, "units")
+		_asked_mark = reqs.asked
 
 
 func _build_login() -> void:

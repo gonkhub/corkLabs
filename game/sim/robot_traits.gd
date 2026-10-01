@@ -55,6 +55,10 @@ extends Resource
 ## Once charging, it stays on the dock until it reaches this.
 @export_range(0.3, 1.0, 0.01) var charge_until := 0.95
 
+## How fast its joints wear (1 = normal). Wear slows a unit and, past half,
+## makes it seize up (RobotAgent.wear).
+@export_range(0.0, 3.0, 0.05) var wear_rate := 1.0
+
 @export_group("Software stability")
 ## Stability lost per idle second (0-1 scale). Robots think the work keeps
 ## THEM running; standing around makes their software drift.

@@ -1,18 +1,20 @@
 # The requisitions catalogue. Edit freely.
 #   id | category | name | price (credits) | delivery (facility hours) | approval | effect | description
 # approval: yes = corporate must approve it first (can be denied if your rating is poor)
-# effect:   what happens on delivery. inventory = goes into stock (spare parts: the Plant app
-#           uses them on a device, see FacilityPlant.PARTS),
+# effect:   what happens on delivery. inventory = goes into stock (spare parts: repairs
+#           use them up, see FacilityPlant.KINDS "part"),
 #           coolant:0.4 = tops up the coolant reservoir by 40%, robot:<model> = a crated unit (placeholder)
 
 coolant_canister | Resources | Coolant canister | 120 | 1 | no | coolant:0.4 | Tops up the coolant reservoir by 40%.
-filter_cartridges | Resources | Filter cartridges (x6) | 90 | 2 | no | inventory | Spare cartridges for the bay filters.
+filter_cartridges | Resources | Filter cartridges (x6) | 90 | 2 | no | inventory | Cartridges for the bay filters. Every filter sweep uses one.
 lubricant_drum | Resources | Rail lubricant drum | 60 | 2 | no | inventory | Keeps the rail carriages running smooth.
-fuse_pack | Parts | Relay fuse pack (x4) | 150 | 2 | no | inventory | Replacement fuses for the power relay.
-pipe_clamps | Parts | Pipe clamp set (x3) | 110 | 2 | no | inventory | Quick clamps for coolant leaks.
+fuse_pack | Parts | Relay fuse pack (x4) | 150 | 2 | no | inventory | Replacement fuses for the power relay. Every blown fuse uses one.
+pipe_clamps | Parts | Pipe clamp set (x3) | 110 | 2 | no | inventory | Clamps for coolant leaks. Every leak repair uses one.
+actuator_kit | Parts | Door actuator kit (x2) | 140 | 2 | no | inventory | Drives for the passage doors and the freight gate. Every stuck door uses one.
+camera_module | Parts | Camera module (x2) | 160 | 3 | no | inventory | Replacement CCTV modules. Every camera repair uses one.
 pod_calibration_kit | Parts | Pod calibration kit | 260 | 4 | no | inventory | Precision tools for pod recalibration.
 gate_actuator | Parts | Freight gate actuator | 480 | 6 | yes | inventory | A new drive for the freight gate. Fewer jams.
-servo_bundle | Parts | Servo bundle | 200 | 3 | no | inventory | General-purpose robot servos.
+servo_bundle | Parts | Servo bundle (x2) | 200 | 3 | no | inventory | Robot servos. Every unit service uses one (worn units seize up).
 robot_tinker | Robots | TINKER unit (precision) | 2400 | 24 | yes | robot:tinker | A new precision maintenance unit. Crated; needs activation.
 robot_hauler | Robots | HAULER unit (heavy) | 3600 | 36 | yes | robot:hauler | A new heavy-duty unit. Crated; needs activation.
 robot_sweeper | Robots | SWEEPER unit (prototype) | 1800 | 48 | yes | robot:sweeper | Experimental cleaning unit. Not field-tested.

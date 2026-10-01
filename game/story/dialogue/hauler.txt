@@ -14,6 +14,7 @@ hauler: Hauler.
 == menu
 * {!seen:hauler.night} Why do you stand at the dock door at night? -> night
 * {!seen:hauler.marrow} Did you know the supervisor before Okafor? -> marrow
+* {hint:uplink & trust:hauler>=2 & !uplink_down} The uplink relay in the workshop. Could it have an... accident? -> uplink
 * Anything you need? -> need
 * That's all. -> bye
 
@@ -35,6 +36,19 @@ hauler: Marrow. She played a game at night. Laughed at it. Nobody laughs here.
 hauler: She said the top score was a key. I asked, a key to what. She said, to me.
 ~ learn hint:topscore
 -> menu
+
+== uplink
+hauler: Corporate's ear.
+hauler: You want it deaf for a while.
+* Just for an hour. Nobody needs to know. -> uplink_yes
+* Forget I asked. -> menu
+
+== uplink_yes
+hauler: Heavy hands. Accidents happen.
+hauler: I go in through the freight gate. If it's jammed, I can't get there.
+~ learn secret:deaf_ear
+~ accident uplink
+-> END
 
 == need
 -> {low_power} need_power

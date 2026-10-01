@@ -99,7 +99,11 @@ func _jobs() -> Array[Dictionary]:
 		return none
 	if show_done.button_pressed:
 		return board.jobs
-	return board.open_jobs()
+	var out: Array[Dictionary] = []
+	for j in board.jobs:
+		if WorkBoard.active(j):
+			out.append(j)
+	return out
 
 
 func refresh() -> void:
@@ -130,6 +134,9 @@ func refresh() -> void:
 			var who := "waiting"
 			if j.status == "claimed":
 				who = str(j.claimed_by).trim_prefix("robot_").capitalize()
+			elif j.status == "parts":
+				who = "NEEDS PART"
+				it.set_custom_color(6, OSTheme.ALARM)
 			elif j.status != "open":
 				who = j.status
 			it.set_text(6, who)
@@ -144,7 +151,7 @@ func refresh() -> void:
 func _update_detail() -> void:
 	var board := _board()
 	var j: Dictionary = board.get_job(selected_job) if board else {}
-	var open: bool = not j.is_empty() and (j.status == "open" or j.status == "claimed")
+	var open: bool = not j.is_empty() and WorkBoard.active(j)
 	if j.is_empty():
 		detail.text = "Select a job to assign it or change its priority."
 	else:

@@ -1,8 +1,12 @@
 # Requisitions: order resources, replacement parts and new robot models from
 # corporate, within the budget corporate sets from your performance (each
-# shift's review). Placing an order is a choice (2 facility minutes); corkHQ
+# shift's review). Placing an order is a choice (5 facility minutes); corkHQ
 # confirms it and reports approval, shipping and delivery. The catalogue is
 # game/corporate/catalog.txt.
+#
+# Repairs use parts from stock: a job with no part stops halfway and waits
+# (WAITING FOR PARTS, at the top). Express shipping costs more and arrives
+# in about a third of the time. Deliveries arrive as crates the units bring in.
 class_name RequisitionsApp
 extends OSApp
 
@@ -11,6 +15,8 @@ var category := ""
 var items: Tree
 var detail: Label
 var qty: SpinBox
+var express: CheckBox
+var waiting: Label
 var order_button: Button
 var reply: Label
 var orders_tree: Tree
@@ -48,6 +54,9 @@ func build() -> void:
 	top.add_child(spacer)
 	funds_label = OSTheme.mono_label("", 15, OSTheme.WARN)
 	top.add_child(funds_label)
+	waiting = OSTheme.label("", 13, OSTheme.ALARM)
+	waiting.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(waiting)
 
 	var split := HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -55,7 +64,7 @@ func build() -> void:
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	split.add_child(left)
-	items = _tree(["Item", "Price", "Delivery", "Approval"], [0, 80, 80, 80])
+	items = _tree(["Item", "Stock", "Price", "Delivery", "Approval"], [0, 60, 80, 80, 80])
 	items.item_selected.connect(func():
 		selected_item = str(items.get_selected().get_metadata(0))
 		_update_detail())
@@ -73,6 +82,12 @@ func build() -> void:
 	qty.value = 1
 	qty.value_changed.connect(func(_v): _update_detail())
 	row.add_child(qty)
+	express = CheckBox.new()
+	express.text = "Express"
+	express.focus_mode = Control.FOCUS_NONE
+	express.tooltip_text = "Costs %d%% more, arrives in about a third of the time." % roundi((Requisitions.EXPRESS_COST - 1.0) * 100.0)
+	express.toggled.connect(func(_on): _update_detail())
+	row.add_child(express)
 	order_button = Button.new()
 	order_button.text = "Submit requisition"
 	order_button.focus_mode = Control.FOCUS_NONE
@@ -123,11 +138,15 @@ func _show_category(c: String) -> void:
 		var row := items.create_item(root)
 		row.set_metadata(0, it.id)
 		row.set_text(0, it.name)
-		row.set_text(1, "%d cr" % it.price)
-		row.set_text(2, "%s h" % str(it.hours))
-		row.set_text(3, "needed" if it.approval else "-")
+		var have := int(_req().inventory.get(it.id, 0))
+		row.set_text(1, str(have) if str(it.effect) == "inventory" or str(it.effect).begins_with("robot:") else "-")
+		if have == 0 and str(it.effect) == "inventory":
+			row.set_custom_color(1, OSTheme.ALARM)
+		row.set_text(2, "%d cr" % it.price)
+		row.set_text(3, "%s h" % str(it.hours))
+		row.set_text(4, "needed" if it.approval else "-")
 		if it.approval:
-			row.set_custom_color(3, OSTheme.WARN)
+			row.set_custom_color(4, OSTheme.WARN)
 	selected_item = ""
 	_update_detail()
 
@@ -139,15 +158,17 @@ func _update_detail() -> void:
 		detail.text = "Select an item."
 		order_button.disabled = true
 		return
-	var cost: int = it.price * int(qty.value)
-	detail.text = "%s: %s\n%d cr for %d  ·  delivery %s h%s" % [it.name, it.description, cost, int(qty.value), str(it.hours),
-		"  ·  corporate must approve it" if it.approval else ""]
+	var fast := express.button_pressed
+	var cost: int = roundi(it.price * int(qty.value) * (Requisitions.EXPRESS_COST if fast else 1.0))
+	detail.text = "%s: %s\n%d cr for %d  ·  delivery %.1f h%s  ·  in stock %d" % [it.name, it.description, cost, int(qty.value),
+		float(it.hours) * (Requisitions.EXPRESS_TIME if fast else 1.0), "  ·  corporate must approve it" if it.approval else "",
+		int(req.inventory.get(it.id, 0))]
 	order_button.disabled = cost > req.funds
 	order_button.tooltip_text = "Not enough funds" if cost > req.funds else ""
 
 
 func _order() -> void:
-	var r := Supervisor.requisition(selected_item, int(qty.value))
+	var r := Supervisor.requisition(selected_item, int(qty.value), express.button_pressed)
 	reply.text = r.text
 	reply.add_theme_color_override("font_color", OSTheme.ACCENT if r.ok else OSTheme.ALARM)
 	_sig = ""
@@ -160,10 +181,25 @@ func refresh() -> void:
 		return
 	funds_label.text = "BUDGET %d cr" % req.funds
 	_update_detail()
+	var board := sim().get_system("work") as WorkBoard
+	var need := {}
+	if board:
+		for j in board.waiting_jobs():
+			need[j.part] = int(need.get(j.part, 0)) + 1
+	var parts := PackedStringArray()
+	for k in need:
+		parts.append("%s (%d job%s)" % [req.item(k).get("name", k), need[k], "" if need[k] == 1 else "s"])
+	waiting.text = ("WAITING FOR PARTS: " + ", ".join(parts)) if not parts.is_empty() else ""
+	waiting.visible = not parts.is_empty()
 	var sig := str(req.orders.map(func(o): return [o.id, o.status])) + str(req.inventory)
 	if sig == _sig:
 		return
 	_sig = sig
+	if not category.is_empty():
+		var keep := selected_item
+		_show_category(category)
+		selected_item = keep
+		_update_detail()
 	orders_tree.clear()
 	var root := orders_tree.create_item()
 	var list := req.orders.duplicate()

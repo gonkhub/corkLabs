@@ -14,9 +14,12 @@
 #   -> {condition} node_id      go there only if the condition holds
 #   * choice text -> node_id    a reply the supervisor can pick
 #   * {condition} text -> node  a reply that only shows if the condition holds
-# Conditions: knowledge keys, !key, comparisons (standing>=50), joined with &,
-# plus live facts about the unit: quiet (nobody else in its room), unstable,
-# low_power, working.
+# Conditions: knowledge keys, !key, comparisons (standing>=50, trust:tinker>=3),
+# joined with &, plus live facts: quiet (nobody else in the unit's room),
+# unstable, low_power, working, uplink_down, directive:<kind> (corporate is
+# waiting on one).
+# Effects also: accident <device> (this unit goes and "accidentally" breaks
+# it), directive <kind> (meets that directive).
 # Entering a node learns "seen:<robot>.<node>", so scripts can check what's
 # been said before ({!seen:tinker.who}).
 class_name Dialogue
@@ -178,6 +181,12 @@ static func check(sim: FacilitySim, robot_id: String, condition: String) -> bool
 		facts.working = bot.activity.kind == "work"
 		var room := bot.room(sim)
 		facts.quiet = FacilitySetup.robots(sim).all(func(r): return r == bot or r.room(sim) != room)
+	var o := Story.oversight(sim)
+	facts.uplink_down = o != null and o.uplink_down(sim)
+	var dirs := sim.get_system("directives") as Directives
+	if dirs:
+		for kind in ["explain", "report", "inspect", "diagnose", "output", "job", "uplink"]:
+			facts["directive:" + kind] = dirs.active.any(func(d): return d.kind == kind)
 	var rest := PackedStringArray()
 	for part in condition.split("&", false):
 		var c := part.strip_edges()
@@ -213,6 +222,14 @@ static func apply(sim: FacilitySim, robot_id: String, action: String, args: Stri
 			var bot := sim.get_system("robot_" + robot_id) as RobotAgent
 			if bot:
 				bot.request_clip(args.strip_edges())
+		"accident":
+			var bot := sim.get_system("robot_" + robot_id) as RobotAgent
+			if bot:
+				bot.give_order(sim, "accident", -1, args.strip_edges())
+		"directive":
+			var dirs := sim.get_system("directives") as Directives
+			if dirs:
+				dirs.notify(sim, args.strip_edges())
 		_:
 			var camp := Story.campaign(sim)
 			if camp:

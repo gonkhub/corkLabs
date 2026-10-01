@@ -2,8 +2,9 @@
 # coolant, heat, dock power, and every device's state with its open job.
 # Pick a device to act on it:
 #   Inspect (10 min)        how fast it's wearing, when it needs work, who's on it
-#   Request maintenance     post the job before it becomes an alarm (2 min)
-#   Use spare part          from Requisitions stock: speeds the repair (2 min)
+#   Request maintenance     post the job before it becomes an alarm (5 min)
+# Repairs use spare parts from Requisitions stock; a job with no part in
+# stock stops halfway ("waiting for part").
 class_name PlantApp
 extends OSApp
 
@@ -16,7 +17,6 @@ var tree: Tree
 var detail: Label
 var inspect_button: Button
 var service_button: Button
-var part_button: Button
 var selected := ""
 var _signature := ""
 var _rebuilding := false
@@ -92,9 +92,8 @@ func build() -> void:
 	add_child(detail)
 	var row := HBoxContainer.new()
 	add_child(row)
-	inspect_button = _button(row, "Inspect (10 min)", func(): detail.text = Supervisor.inspect_device(selected))
-	service_button = _button(row, "Request maintenance", func(): _result(Supervisor.request_maintenance(selected), "Maintenance requested."))
-	part_button = _button(row, "Use spare part", func(): _result(Supervisor.use_part(selected), "Spare part used."))
+	inspect_button = _button(row, "Inspect (30 min)", func(): detail.text = Supervisor.inspect_device(selected))
+	service_button = _button(row, "Request maintenance (5 min)", func(): _result(Supervisor.request_maintenance(selected), "Maintenance requested."))
 	_update_buttons()
 
 
@@ -116,14 +115,13 @@ func _result(why: String, ok_text: String) -> void:
 
 func _update_buttons() -> void:
 	var none := selected.is_empty()
-	for b in [inspect_button, service_button, part_button]:
+	for b in [inspect_button, service_button]:
 		b.disabled = none
 	if none or sim() == null:
 		return
 	var plant := sim().get_system("plant") as FacilityPlant
 	var d := plant.device(selected)
 	service_button.visible = FacilityPlant.KINDS.get(d.get("kind", ""), {}).has("drift")
-	part_button.visible = FacilityPlant.PARTS.has(d.get("kind", ""))
 
 
 func refresh() -> void:

@@ -20,7 +20,7 @@ ogre: ...you... again.
 
 == menu
 * {!seen:ogre.first} Who was the first supervisor? -> first
-* {hint:lantern & !word:lantern} Hollis gave your lamp a name. -> lamp
+* {hint:lantern & trust:ogre>=2 & !word:lantern} Hollis gave your lamp a name. -> lamp
 * {hint:pod3 & !seen:ogre.pods} You watch the pods at night. -> pods
 * (Close the link.) -> END
 

@@ -2,15 +2,23 @@
 # time (minutes) and raises standing when done; each one left undone at the
 # end of a shift costs standing (Campaign.MISSED_DUTY).
 #   shift (* = every shift, or 1,3) | id | title | minutes | standing | after (HH:MM) | needs (condition) | description
-# minutes 0 + needs = ticks itself off when the condition holds (e.g. a file read).
+# minutes 0 + needs = ticks itself off when the condition holds (a file read,
+# "did:<action>": order, inspect, requisition, answer, diagnose, open:<app>).
 # Some ids do more (Campaign._duty_effect): coolant_walk, unit_diag, purge_okafor, audit_prep, pod_census.
+#
+# Shift 1 is orientation: its duties walk a new supervisor through the OS.
 
-1 | onboarding | Read your onboarding file | 0 | 3 | | read:/home/supervisor/welcome.txt | Terminal: cat ~/welcome.txt
-1 | conduct | Read the Code of Conduct | 0 | 5 | | read:/corp/policy/conduct.txt | Terminal: cat /corp/policy/conduct.txt
-* | status_report | File the morning status report | 15 | 4 | 08:00 | | The Directorate reads the first line.
-* | coolant_walk | Inspect the coolant loop and filters | 30 | 3 | | | Finds worn filters and pods before they become alarms.
-* | unit_diag | Run unit diagnostics | 20 | 3 | | | Steadies the units' software a little.
-2 | purge_okafor | Confirm the purge of /home/dokafor | 5 | 6 | | | IT will purge it at 12:00 anyway. Confirming deletes it now.
-3 | audit_prep | Prepare your terminal for audit | 30 | 4 | | | Tidies your record before Compliance reads it (suspicion -10).
-3 | pod_census | Confirm the pod census | 15 | 4 | 10:00 | | Four pods, four occupants. Confirm the numbers.
-* | end_report | File the end-of-shift report | 15 | 4 | 13:00 | | Before 14:00.
+1 | onboarding | Read your onboarding file | 0 | 3 | | read:/home/supervisor/welcome.txt | Terminal: ls, then cat welcome.txt. (The Files app works too.)
+1 | tut_cameras | Look in on the units | 0 | 2 | | did:open:cameras | Open Cameras. Drag to look around, scroll to zoom, N for night vision.
+1 | tut_order | Give a unit an order | 0 | 2 | | did:order | Units (Recharge, Stand by) or Work Orders (put a unit on a job).
+1 | tut_inspect | Inspect a device | 0 | 2 | | did:inspect | Plant: pick a device, then Inspect.
+1 | tut_requisition | Order spare parts | 0 | 3 | | did:requisition | Requisitions. Repairs use parts from stock; a job with no part stops halfway. Order before you run out.
+1 | tut_answer | Answer a unit's request | 0 | 2 | | did:answer | When the units ask for something, REQUESTS lights up on the taskbar. Answer in Units.
+1 | conduct | Read the Code of Conduct | 0 | 4 | | read:/corp/policy/conduct.txt | Terminal: cat /corp/policy/conduct.txt
+* | status_report | File the morning status report | 30 | 4 | 08:00 | | The Directorate reads the first line.
+2,3 | coolant_walk | Inspect the coolant loop and filters | 60 | 4 | | | Finds worn filters and pods before they become alarms.
+2,3 | unit_diag | Run full unit diagnostics | 45 | 4 | | | Steadies the units' software a little.
+2 | purge_okafor | Confirm the purge of /home/dokafor | 10 | 6 | | | IT will purge it at 12:00 anyway. Confirming deletes it now.
+3 | audit_prep | Prepare your terminal for audit | 60 | 4 | | | Tidies your record before Compliance reads it (suspicion -10).
+3 | pod_census | Confirm the pod census | 30 | 4 | 10:00 | | Four pods, four occupants. Confirm the numbers.
+* | end_report | File the end-of-shift report | 30 | 4 | 13:00 | | Before 14:00.

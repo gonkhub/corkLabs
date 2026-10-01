@@ -10,14 +10,13 @@
 #              next shift's brief
 #   fired      dismissed (Oversight says why). Retry the shift from its
 #              checkpoint, or start over on a new save
-#   complete   the last shift ended, or the supervisor did something final:
-#              `ending` says which ending (endings.txt)
+#   complete   the last shift ended: the end of this build (the endings are
+#              archived in docs/archive/endings.txt until they come back)
 #
 # Data (plain text, edit freely):
 #   shifts.txt   shift | title | brief
 #   duties.txt   corporate's checklist for each shift (the good-supervisor path)
 #   events.txt   scripted moments: corkHQ lines, robot lines, faults, audits...
-#   endings.txt  which ending, in order: first whose condition holds wins
 class_name Campaign
 extends RefCounted
 
@@ -26,8 +25,9 @@ const SHIFT_START_HOUR := 6.0
 ## A new facility (and every brief) starts this long before the shift.
 const BRIEF_LEAD := 300.0
 const DIR := "res://game/story/"
-## Standing lost for each duty left undone at the end of a shift.
-const MISSED_DUTY := 5.0
+## Standing lost for each duty left undone at the end of a shift: what it
+## would have earned, and at least this.
+const MISSED_DUTY := 2.0
 const DUTY_CHECK := 10.0
 
 var sim_id := "campaign"
@@ -43,7 +43,6 @@ var overnight: PackedStringArray = []
 var _shifts: Array[Dictionary] = []
 var _duty_defs: Array[Dictionary] = []
 var _events: Array[Dictionary] = []
-var _endings: Array[Dictionary] = []
 var _duty_acc := 0.0
 var _night_mark := 0
 
@@ -52,11 +51,20 @@ func _init() -> void:
 	_shifts = DataTable.read(DIR + "shifts.txt", PackedStringArray(["shift", "title", "brief"]))
 	_duty_defs = DataTable.read(DIR + "duties.txt", PackedStringArray(["shift", "id", "title", "minutes", "standing", "after", "needs", "description"]))
 	_events = DataTable.read(DIR + "events.txt", PackedStringArray(["shift", "at", "condition", "action", "args"]))
-	_endings = DataTable.read(DIR + "endings.txt", PackedStringArray(["id", "condition", "title", "text"]))
 
 
 func on_duty() -> bool:
 	return state == "on_duty"
+
+
+## Share of the plant's random faults that actually happen right now: how
+## hard the facility pushes. Orientation is gentler; nights are quiet.
+const PRESSURE := {1: 0.65, 2: 1.0, 3: 1.15}
+const NIGHT_PRESSURE := 0.4
+
+
+func pressure() -> float:
+	return float(PRESSURE.get(shift, 1.0)) if on_duty() else NIGHT_PRESSURE
 
 
 func title() -> String:
@@ -74,12 +82,8 @@ func brief() -> String:
 
 
 func ending_info() -> Dictionary:
-	for e in _endings:
-		if e.id == ending:
-			var out: Dictionary = e.duplicate()
-			out.text = str(out.text).replace("\\n", "\n")
-			return out
-	return {"id": ending, "title": ending.capitalize(), "text": ""}
+	return {"id": ending, "title": "End of this build",
+		"text": "That's as far as the facility goes for now. Three shifts, and you're still here.\n\nWhat you found is below. What you didn't find is still in there."}
 
 
 ## Facility time the next shift starts (06:00 on day `shift`).
@@ -164,7 +168,8 @@ func duties_done() -> int:
 # --- Conditions ---------------------------------------------------------------------
 
 ## A condition string: knowledge keys ("flag", "!flag") and comparisons
-## ("standing>=70", "suspicion<30", "strikes>0", "shift>=2"), joined by "&".
+## ("standing>=70", "suspicion<30", "strikes>0", "shift>=2", "trust:tinker>=3"),
+## joined by "&".
 func check(sim: FacilitySim, condition: String) -> bool:
 	var k := _knowledge(sim)
 	var o := _oversight(sim)
@@ -172,7 +177,7 @@ func check(sim: FacilitySim, condition: String) -> bool:
 		var c := part.strip_edges()
 		if c.is_empty():
 			continue
-		var cmp := _compare(c, o)
+		var cmp := _compare(c, o, k)
 		if cmp == 0:
 			return false
 		if cmp == 1:
@@ -183,7 +188,7 @@ func check(sim: FacilitySim, condition: String) -> bool:
 
 
 # 1 true, 0 false, -1 not a comparison.
-func _compare(c: String, o: Oversight) -> int:
+func _compare(c: String, o: Oversight, k: Knowledge = null) -> int:
 	for op in [">=", "<=", ">", "<", "="]:
 		var i := c.find(op)
 		if i <= 0:
@@ -196,7 +201,11 @@ func _compare(c: String, o: Oversight) -> int:
 			"suspicion": have = o.suspicion if o else 0.0
 			"strikes": have = float(o.strikes) if o else 0.0
 			"shift": have = float(shift)
-			_: return -1
+			_:
+				if name.contains(":") and k:
+					have = k.value(name)
+				else:
+					return -1
 		match op:
 			">=": return int(have >= want)
 			"<=": return int(have <= want)
@@ -206,21 +215,16 @@ func _compare(c: String, o: Oversight) -> int:
 	return -1
 
 
-# --- Endings ------------------------------------------------------------------------
+# --- The end (of this build) -------------------------------------------------------
 
-## Ends the game now with this ending (or the first that fits, if "").
-func finish(sim: FacilitySim, ending_id := "") -> void:
+## The run is over. `ending_id` is kept for when endings come back.
+func finish(sim: FacilitySim, ending_id := "end_of_build") -> void:
 	if state == "complete" or state == "fired":
 		return
-	if ending_id.is_empty():
-		for e in _endings:
-			if check(sim, e.condition):
-				ending_id = e.id
-				break
 	ending = ending_id
 	state = "complete"
 	_set_watching(sim)
-	sim.note("story", "ENDING: %s" % ending_info().title)
+	sim.note("story", "The end of this build")
 	SupervisorArchive.saw_ending(ending)
 
 
@@ -278,7 +282,7 @@ func _close_shift(sim: FacilitySim) -> void:
 	var o := _oversight(sim)
 	for d in duties:
 		if not d.done and o:
-			o.penalise(sim, "duty not done: " + str(d.title), MISSED_DUTY)
+			o.penalise(sim, "duty not done: " + str(d.title), maxf(MISSED_DUTY, float(d.standing)))
 	if state == "fired" or (o and o.fired()):
 		state = "fired"
 		_set_watching(sim)
@@ -369,6 +373,19 @@ func run_action(sim: FacilitySim, action: String, args: String) -> void:
 			var bot := sim.get_system("robot_" + str(a[0])) as RobotAgent
 			if bot and a.size() >= 2:
 				bot.stability = clampf(bot.stability + float(a[1]), 0.0, 1.0)
+		"seize":
+			var bot := sim.get_system("robot_" + str(a[0])) as RobotAgent
+			if bot and not bot.offline():
+				bot.wear = maxf(bot.wear, RobotAgent.WEAR_SEIZE)
+				bot.seize(sim)
+		"wear":
+			var bot := sim.get_system("robot_" + str(a[0])) as RobotAgent
+			if bot and a.size() >= 2:
+				bot.wear = clampf(bot.wear + float(a[1]), 0.0, 1.0)
+		"directive":
+			var dirs := sim.get_system("directives") as Directives
+			if dirs and a.size() >= 4:
+				dirs.issue(sim, a[0], a[1], float(a[2]), "|".join(a.slice(3)))
 		"standing":
 			var o := _oversight(sim)
 			if o and a.size() >= 1:

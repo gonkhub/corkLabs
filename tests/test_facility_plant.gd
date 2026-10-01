@@ -69,7 +69,7 @@ func _test_leak_heats_the_facility() -> void:
 	_check(plant.device("pipe_2").fault and fired.has("alarm"), "a leak is a fault and sounds the alarm")
 	var job := _board(sim).get_job(int(plant.device("pipe_2").job))
 	_check(job.get("skill", "") == "heavy" and int(job.get("priority", 0)) == 2, "and posts a heavy, high-priority clamp job")
-	sim.advance(3600.0)
+	sim.advance(5400.0)
 	_check(plant.coolant < 0.6 and plant.heat() > h0 + 1.0, "an unclamped leak drains coolant and heats the facility (coolant %d%%, heat %.1fx)" % [
 		roundi(plant.coolant * 100), plant.heat()])
 	# Pods drift faster when hot.
