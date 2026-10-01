@@ -130,6 +130,8 @@ const NIGHT_WATCH_WEAR := 2.0
 ## A unit that went to charge because it was low stays on the dock until
 ## it's this far above its reserve (no dithering between dock and job).
 const LOW_MARGIN := 0.25
+## Requests about the job in hand: the unit holds still until they're answered.
+const HOLD_FOR := ["recharge"]
 ## Independence at which errant fixations start.
 const FIXATE_FROM := 0.35
 
@@ -253,6 +255,17 @@ func errand_estimate(sim: FacilitySim, job_id: int) -> Dictionary:
 		return {"phase": "travel", "left": maxf(route_length(sim, str(j.station)), 0.0) / maxf(traits.rail_speed * wear_factor() * 0.8, 0.05)}
 	var speed := traits.skill(str(j.get("skill", "general"))) * traits.work_speed * wear_factor()
 	return {"phase": "work", "left": maxf(float(j.work) - float(j.progress), 0.0) / maxf(speed, 0.01)}
+
+
+## Waiting on the supervisor's answer to a question about its job (HOLD_FOR)?
+func waiting_on_answer(sim: FacilitySim) -> bool:
+	var reqs := sim.get_system("requests") as UnitRequests
+	if reqs == null:
+		return false
+	for r in reqs.requests:
+		if str(r.robot) == robot_id and HOLD_FOR.has(str(r.kind)):
+			return true
+	return false
 
 
 ## The station nearest it (where a seized unit is rebooted, where a tool is brought).
@@ -520,6 +533,8 @@ func think(sim: FacilitySim) -> void:
 	_think_left = traits.think_interval
 	if offline() or activity.kind == "glitch" or activity.kind == "link":
 		return
+	if activity.kind == "work" and waiting_on_answer(sim):
+		return   # it asked you what to do: it doesn't make up its own mind meanwhile
 	scores = evaluate(sim)
 	if scores.is_empty():
 		return
@@ -974,6 +989,8 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 			var st := layout.station(activity.station)
 			if not _has_tool(sim, dt):
 				return   # fetching it, or waiting for it
+			if waiting_on_answer(sim):
+				return   # it asked you about this job: it holds until you answer
 			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
 				var board := _board(sim)
 				_use_power(sim, traits.drain_work * dt)

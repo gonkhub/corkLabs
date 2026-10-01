@@ -4,8 +4,9 @@
 #
 #   - Each robot has at most one line up at a time: a newer line replaces it
 #     (so a long Wait that skips an hour doesn't queue up an hour of talk).
-#     Conversations over the unit link (Cameras) QUEUE their lines instead:
-#     each starts when the one before has been read.
+#     Conversations over the unit link (Cameras) and requests QUEUE their
+#     lines instead: each starts when the one before has been read, and
+#     nothing else (idle chatter) replaces a queued line while it's up.
 #   - Words type out at the robot's voice_speed, hold, then fade.
 #   - You only HEAR a robot while it's on an open camera (feeds report which
 #     robots they can see with mark_seen()). Voices can be turned off in Settings.
@@ -17,7 +18,10 @@ extends Node
 const HOLD := 2.5            # seconds after typing finishes
 const HOLD_PER_CHAR := 0.04
 const FADE := 0.6
-const SEEN_GRACE := 0.3      # a robot counts as on camera for this long after a feed saw it
+const SEEN_GRACE := 0.3
+## Lines that matter (story moments, exchanges, answers to orders): passive
+## chatter doesn't replace them while they're up.
+const KEEP := ["story", "exchange", "order_reply"]      # a robot counts as on camera for this long after a feed saw it
 
 ## robot id -> {"text", "color", "shown": float letters, "age", "life"}
 var active := {}
@@ -39,14 +43,19 @@ func _process(delta: float) -> void:
 	if _mark < 0:
 		_mark = chatter.said   # don't replay what was said before we started watching
 	for line in chatter.said_since(_mark):
-		if not _queued.has(str(line.robot)):   # it's talking to you: idle chatter waits
-			_start(str(line.robot), str(line.text))
+		var who := str(line.robot)
+		var keep: bool = KEEP.has(str(line.get("trigger", "")))
+		var busy: bool = _queued.has(who) or (active.has(who) and active[who].get("keep", false))
+		if keep and busy:
+			queue_line(who, str(line.text))   # one that matters waits its turn
+		elif not busy:   # passive chatter never talks over a line that matters
+			_start(who, str(line.text), keep)
 	for id in _queued.keys():
 		var q: Array = _queued[id]
 		if q.is_empty():
 			_queued.erase(id)
 		elif not active.has(id) or float(active[id].age) >= float(active[id].life) - FADE:
-			_start(id, str(q.pop_front()))
+			_start(id, str(q.pop_front()), true)
 	_mark = chatter.said
 	var voices_on: bool = OSSettings.get_value("voices")
 	for id in active.keys():
@@ -99,10 +108,10 @@ func say(robot_id: String, text: String) -> void:
 	_start(robot_id, text)
 
 
-func _start(robot_id: String, text: String) -> void:
+func _start(robot_id: String, text: String, keep := false) -> void:
 	var t := _traits_for(robot_id)
 	var type_time := text.length() / maxf(t.voice_speed, 1.0)
-	active[robot_id] = {"text": text, "color": t.speech_color, "shown": 0.0, "age": 0.0,
+	active[robot_id] = {"text": text, "color": t.speech_color, "shown": 0.0, "age": 0.0, "keep": keep,
 		"life": type_time + HOLD + HOLD_PER_CHAR * text.length() + FADE}
 
 

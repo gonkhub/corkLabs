@@ -8,12 +8,13 @@
 #     start_job, job_done, recharge, charged, low_power, stalled, restarted,
 #     wander, mood_*, route_blocked, and their answers to orders.
 #   - Every CHECK_EVERY seconds it looks around: an idle robot now and then
-#     mutters ("idle"); two robots close together pass on a job tip
-#     ("peer_info" / "peer_info_reply"); and an EXCHANGE plays if its
+#     mutters ("idle"); and an EXCHANGE plays if its
 #     situation holds (Exchanges, exchanges.txt): written conversations
 #     that happen once (or rarely), mostly because of what the supervisor
 #     did. That's most of what they say to each other.
-#   - A robot remembers its last NO_REPEAT lines and doesn't say them again.
+#   - A robot remembers its last NO_REPEAT lines and doesn't say them again,
+#     and doesn't bring up the same topic (trigger) twice within TOPIC_GAP.
+#   - Units never tell each other what to do: orders come from the supervisor.
 #   - Facility events: alarms ("alarm"), routes closing ("route_closed").
 #
 # Some triggers always speak (order replies, stalls, blocked routes, low
@@ -28,12 +29,10 @@ class_name RobotChatter
 extends RefCounted
 
 const CHECK_EVERY := 10.0
-## Robots this close (meters) in the same room may talk to each other.
-const PEER_RANGE := 25.0
-## Minimum facility seconds between two conversations of the same pair.
-const PEER_COOLDOWN := 900.0
-## Seconds before the other robot answers.
-const REPLY_DELAY := 4.0
+## Facility seconds before a robot brings up the same topic again (passive triggers).
+const TOPIC_GAP := 1800.0
+## Topics with a longer gap.
+const TOPIC_GAPS := {"waste": 7200.0, "alarm": 3600.0, "route_closed": 3600.0}
 ## Idle muttering waits this many times the robot's cooldown between lines.
 const IDLE_GAP := 4.0
 ## A robot won't repeat any of its last this-many lines.
@@ -45,13 +44,13 @@ const EXCHANGE_LINE := 4.0
 ## Said lines kept for the camera feeds and panels.
 const RECENT := 40
 ## Triggers that always speak, ignoring cooldown and chattiness.
-const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restarted", "peer_reply", "peer_info_reply",
+const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restarted",
 	"critical_error", "glitch", "rebooting", "rebooted", "stability_critical", "seized", "need_part", "unanswered", "feed_heavy"]
 ## Base chance (before chattiness) for the rest.
 const CHANCE := {"start_job": 0.5, "job_done": 0.6, "recharge": 0.5, "charged": 0.5, "wander": 0.6,
 	"stability_drifting": 0.8, "stability_unstable": 0.9, "stability_stable": 0.4, "idle": 0.06, "alarm": 0.8,
 	"fixate": 0.6, "sabotage": 0.5, "order_ignored": 0.9, "waste": 0.7,
-	"route_closed": 0.7, "peer_greet": 0.6, "peer_info": 0.9}
+	"route_closed": 0.7}
 
 var sim_id := "chatter"
 var library: BarkLibrary
@@ -63,7 +62,7 @@ var said := 0
 
 var _last_spoke := {}     # robot id -> facility time
 var _last_lines := {}     # robot id -> [recent texts] (so it doesn't repeat itself)
-var _pair_last := {}      # "a|b" -> facility time
+var _topic_last := {}     # "robot|trigger" -> facility time
 var _acc := 0.0
 var _exchange_acc := 0.0
 var _exchange_last := -1e18
@@ -84,6 +83,9 @@ func trigger(sim: FacilitySim, robot: RobotAgent, what: String, data := {}) -> b
 		var since := sim.time() - float(_last_spoke.get(robot.robot_id, -INF))
 		if since < robot.traits.chatter_cooldown:
 			return false
+		var topic := robot.robot_id + "|" + what
+		if sim.time() - float(_topic_last.get(topic, -INF)) < float(TOPIC_GAPS.get(what, TOPIC_GAP)):
+			return false
 		var chance: float = CHANCE.get(what, 0.5) * (0.4 + 1.2 * robot.traits.chattiness)
 		if rng.randf() > chance:
 			return false
@@ -92,6 +94,8 @@ func trigger(sim: FacilitySim, robot: RobotAgent, what: String, data := {}) -> b
 	var text := _pick(what, robot, ctx)
 	if text.is_empty():
 		return false
+	if not forced:
+		_topic_last[robot.robot_id + "|" + what] = sim.time()
 	if what == "glitch" or robot.stability_state == "critical" and rng.randf() < 0.3:
 		text = corrupt(text, 0.35 if what == "glitch" else 0.12)
 	return _speak(sim, robot, text, what, str(data.get("peer_id", "")))
@@ -187,10 +191,6 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 		var quiet_for := sim.time() - float(_last_spoke.get(r.robot_id, -INF))
 		if r.activity.kind == "idle" and quiet_for >= r.traits.chatter_cooldown * IDLE_GAP:
 			trigger(sim, r, "idle")
-	# Pairs in the same room, close together.
-	for i in robots.size():
-		for k in range(i + 1, robots.size()):
-			_maybe_talk(sim, robots[i], robots[k])
 	_exchange_acc += CHECK_EVERY
 	if _exchange_acc >= EXCHANGE_EVERY and sim.time() - _exchange_last >= EXCHANGE_GAP:
 		_exchange_acc = 0.0
@@ -225,51 +225,12 @@ func play_exchange(sim: FacilitySim, d: Dictionary) -> void:
 		sim.schedule_in(EXCHANGE_LINE * i, "exchange_line", {"robot": str(d.lines[i].robot), "text": str(d.lines[i].text)})
 
 
-func _maybe_talk(sim: FacilitySim, a: RobotAgent, b: RobotAgent) -> void:
-	var key := "%s|%s" % [a.robot_id, b.robot_id]
-	if sim.time() - float(_pair_last.get(key, -INF)) < PEER_COOLDOWN:
-		return
-	if a.room(sim) != b.room(sim) or a.world_pos(sim).distance_to(b.world_pos(sim)) > PEER_RANGE:
-		return
-	# The chattier one starts, if there's a job the other is better at (no
-	# small talk: what they say to each other otherwise is the exchanges).
-	var first := a if a.traits.chattiness >= b.traits.chattiness else b
-	var second := b if first == a else a
-	var tip := _job_for(sim, first, second)
-	if tip.is_empty():
-		return
-	var what := "peer_info"
-	var data := {"peer": second.display_name(), "peer_id": second.robot_id}
-	data.merge(tip, true)
-	if trigger(sim, first, what, data):
-		_pair_last[key] = sim.time()
-		sim.schedule_in(REPLY_DELAY, "chatter_reply", {"robot": second.robot_id, "peer": first.robot_id,
-			"trigger": "peer_info_reply" if what == "peer_info" else "peer_reply"})
-
-
-# An open, unclaimed job `other` is better at than `me`: {"job", "station"} or {}.
-func _job_for(sim: FacilitySim, me: RobotAgent, other: RobotAgent) -> Dictionary:
-	var board := sim.get_system("work") as WorkBoard
-	var layout := sim.get_system("layout") as FacilityLayout
-	if board == null:
-		return {}
-	for j in board.open_jobs():
-		if j.status == "open" and other.traits.skill(j.skill) > me.traits.skill(j.skill) + 0.3:
-			return {"job": j.title, "station": layout.station(j.station).get("name", "")}
-	return {}
-
-
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 	match event_name:
 		"exchange_line":
 			var who := sim.get_system("robot_" + str(data.robot)) as RobotAgent
 			if who and Exchanges.can_speak(who):
 				_speak(sim, who, str(data.text), "exchange", "")
-		"chatter_reply":
-			var r := sim.get_system("robot_" + str(data.robot)) as RobotAgent
-			var p := sim.get_system("robot_" + str(data.peer)) as RobotAgent
-			if r and p:
-				trigger(sim, r, str(data.trigger), {"peer": p.display_name(), "peer_id": p.robot_id})
 		"alarm":
 			if not data.has("device"):
 				return
@@ -305,7 +266,7 @@ func _nearest_robot(sim: FacilitySim, station_id: String) -> RobotAgent:
 
 func sim_save() -> Dictionary:
 	return {"rng_seed": str(rng.seed), "rng_state": str(rng.state), "recent": recent.duplicate(true), "said": said,
-		"last_spoke": _last_spoke.duplicate(), "last_lines": _last_lines.duplicate(true), "pair_last": _pair_last.duplicate(), "acc": _acc,
+		"last_spoke": _last_spoke.duplicate(), "last_lines": _last_lines.duplicate(true), "topic_last": _topic_last.duplicate(), "acc": _acc,
 		"exchanged": exchanged.duplicate(), "exchange_acc": _exchange_acc, "exchange_last": _exchange_last if _exchange_last > -1e17 else -1e18}
 
 
@@ -321,7 +282,7 @@ func sim_load(d: Dictionary) -> void:
 	said = int(d.get("said", 0))
 	_last_spoke = d.get("last_spoke", {}).duplicate()
 	_last_lines = d.get("last_lines", {}).duplicate(true)
-	_pair_last = d.get("pair_last", {}).duplicate()
+	_topic_last = d.get("topic_last", {}).duplicate()
 	_acc = float(d.get("acc", 0.0))
 	exchanged = {}
 	var ex: Dictionary = d.get("exchanged", {})

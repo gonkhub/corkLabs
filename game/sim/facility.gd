@@ -85,6 +85,9 @@ func _process(delta: float) -> void:
 		return
 	var rate := ERRAND_MIN_RATE
 	for e in errands:
+		var bot := sim.get_system(str(e.unit)) as RobotAgent
+		if bot and bot.waiting_on_answer(sim):
+			return   # the unit's asking you something: the clock waits for your answer
 		_errand_pace(e)
 		rate = maxf(rate, float(e.rate))
 	_errand_step(minf(rate * delta, 900.0))

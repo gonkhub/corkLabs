@@ -55,6 +55,9 @@ var menu: PopupMenu
 var _menu_entries: Array = []      # menu item id -> entry
 ## The conversation over the unit link, while one is open.
 var talk_box: PanelContainer
+## What the unit is asking, written out under the picture (so it can't be missed).
+var talk_said: Label
+var _spoken := {}   # request ids already said out loud
 var talk_choices: HFlowContainer
 ## Everything said over the link so far, "WHO: text" (tests read it; the
 ## player sees it on camera).
@@ -416,8 +419,13 @@ func _check_requests() -> void:
 
 func _ask(q: Dictionary) -> void:
 	asking = int(q.id)
-	if desktop and desktop.speech:
+	if desktop and desktop.speech and not _spoken.has(asking):
+		_spoken[asking] = true   # said out loud once; it stays written under the picture
 		desktop.speech.queue_line(str(q.robot), str(q.text))
+	var asker := sim().get_system("robot_" + str(q.robot)) as RobotAgent if sim() else null
+	talk_said.text = "%s asks: %s" % [asker.display_name().to_upper() if asker else str(q.robot).to_upper(), str(q.text)]
+	talk_said.add_theme_color_override("font_color", OSTheme.category_color(str(q.robot)))
+	talk_said.visible = true
 	for c in talk_choices.get_children():
 		c.queue_free()
 	for i in (q.options as Array).size():
@@ -442,6 +450,8 @@ func answer_request(i: int) -> void:
 
 func _stop_asking() -> void:
 	asking = -1
+	if talk_said:
+		talk_said.visible = false
 	if talk_runner == null:
 		talk_box.visible = false
 		for c in talk_choices.get_children():
@@ -471,10 +481,17 @@ func _build_talk() -> void:
 	talk_box.add_theme_stylebox_override("panel", OSTheme.box(OSTheme.PANEL_LIGHT, OSTheme.LINE, 4, 10, 8))
 	talk_box.visible = false
 	add_child(talk_box)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	talk_box.add_child(col)
+	talk_said = OSTheme.label("", 13, OSTheme.TEXT)
+	talk_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	talk_said.visible = false
+	col.add_child(talk_said)
 	talk_choices = HFlowContainer.new()
 	talk_choices.add_theme_constant_override("h_separation", 6)
 	talk_choices.add_theme_constant_override("v_separation", 4)
-	talk_box.add_child(talk_choices)
+	col.add_child(talk_choices)
 
 
 ## Opens the unit link to a robot (Talk in its menu; the Terminal's talk).

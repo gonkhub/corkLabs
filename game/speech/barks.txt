@@ -84,22 +84,6 @@ alarm | hauler |  | {device}. Trouble.
 alarm | any | low_power | Not now... {device}.
 
 # --- Talking to each other (a line, then the other robot answers) ---------------------
-peer_greet | tinker |  | Hello, {peer}!
-peer_greet | tinker | unstable | {peer}, do you ever run out of things to do?
-peer_greet | tinker | low_power | {peer}, is it just me or are the lights dimmer?
-peer_greet | hauler |  | {peer}.
-peer_greet | hauler | low_power | {peer}. Running low.
-peer_reply | hauler |  | {peer}.
-peer_reply | hauler | unstable | Sometimes. Then I wait.
-peer_reply | hauler | low_power | Get to a dock, {peer}.
-peer_reply | tinker |  | Hi {peer}! Busy shift?
-peer_reply | tinker | low_power | Me too. I'll charge after this.
-peer_info | any |  | {peer}, {job} at {station}. That one's yours.
-peer_info | tinker |  | {peer}! {job}, over at {station}. Heavy. You're good at heavy.
-peer_info | hauler |  | {peer}. {station}. {job}. Fine work, your kind.
-peer_info_reply | any |  | Noted.
-peer_info_reply | tinker |  | On it! Thanks, {peer}.
-peer_info_reply | hauler |  | I'll see to it.
 
 # --- Instability: independence, errant behaviour -----------------------------------
 stability_critical | any | | Something is wrong with me. Something is wrong with me.
@@ -148,10 +132,6 @@ idle | ogre | stable | Everything in reach. Everything in place.
 idle | ogre | unstable | They come and go. I stay.
 route_blocked | ogre |  | Out of my reach. Send the small ones.
 alarm | ogre |  | {device}. I cannot go to it.
-peer_greet | ogre |  | Little {peer}.
-peer_reply | ogre |  | Mm.
-peer_info | ogre |  | {peer}. {job}. {station}. Beyond my reach. Yours.
-peer_info_reply | ogre |  | If it comes to the hangar, I will lift it.
 stability_critical | ogre | | The walls. The walls are closer.
 order_ignored | ogre | | I decide what I lift.
 fixate | ogre | | {station}. Something moved at {station}.
