@@ -246,7 +246,36 @@ func _test_terminal() -> void:
 	dev._set_immune(false)
 	var t_dev := sim.time()
 	dev._spend(3600.0)
+	_check(dev.skipping() and sim.time() - t_dev < 1.0, "DevTools: a skip runs over frames (no freeze)")
+	while dev.skipping():
+		await process_frame
 	_check(sim.time() - t_dev >= 3599.0, "DevTools: pass time")
+	# The safeguard: an empty coolant loop stops the skip, and nobody's fired.
+	var o := Story.oversight(sim)
+	dev._empty_stock()
+	for id in plant.device_ids():
+		if plant.device(id).kind == "pipe":
+			dev.device_pick.select(dev._devices.find(id))
+			dev._break_device()
+	plant.coolant = 0.0
+	t_dev = sim.time()
+	dev._spend(14400.0)
+	while dev.skipping():
+		await process_frame
+	_check(not o.fired() and not o.dev_skip and sim.time() - t_dev < 14399.0 and o.crises().has("coolant"),
+		"DevTools: a skip stops early at a crisis, not fired (%d min passed; %s %s watching %s coolant %.2f crises %s)" % [roundi((sim.time() - t_dev) / 60.0),
+		FacilitySim.format_time(t_dev), Story.campaign(sim).state, o.watching, plant.coolant, o.crises()])
+	_check(o._coolant_since < 0.0, "and the crisis clock restarts: the full hour to fix it from there")
+	dev.alive_box.button_pressed = true
+	plant.coolant = 0.0
+	t_dev = sim.time()
+	dev._spend(14400.0)
+	while dev.skipping():
+		await process_frame
+	_check(not o.fired() and sim.time() - t_dev >= 14399.0 and plant.coolant > 0.0, "DevTools: Keep it alive skips right through")
+	dev.alive_box.button_pressed = false
+	dev._heal()
+	dev._stock_up()
 	term.run("dev off")
 	_check(not desk.app_available("devtools"), "dev off takes it away")
 	_check(term.run("routes").contains("freight_gate"), "Terminal: routes lists the passages")

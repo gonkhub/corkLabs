@@ -6,6 +6,13 @@
 # shifts, faults, units, corporate, stock, story) so a tester can get to any
 # situation fast. Each button says what it does; the log underneath keeps
 # a record of what was done this session.
+#
+# Skipping time (+1 h, end the shift, skip the night) runs a chunk per frame,
+# so the screen doesn't freeze. Nothing dismisses you during a skip (it's
+# noted instead), and a skip stops early when a crisis starts (coolant empty,
+# output collapsed) so you get the full time to deal with it, unless "Keep it
+# alive" is ticked: then coolant is kept above 20% and the skip carries on.
+# Either way the crisis clocks restart when a skip ends.
 class_name DevToolsApp
 extends OSApp
 
@@ -16,8 +23,17 @@ var unit_pick: OptionButton
 var event_pick: OptionButton
 var directive_pick: OptionButton
 var immune_box: CheckBox
+var alive_box: CheckBox
 var _devices: Array[String] = []
 var _events: Array = []
+
+## Facility seconds a skip passes per frame (like the night).
+const SKIP_STEP := 1800.0
+
+var _skip_until := -1.0
+var _skip_cause := ""
+var _skip_then := Callable()
+var _skip_known: Array = []
 
 const DIRECTIVES := ["report", "inspect", "diagnose", "output", "explain", "uplink"]
 
@@ -55,6 +71,10 @@ func build() -> void:
 		["Clock in", func(): _do("clock in", func(): desktop.clock_in())],
 		["Finish errands", func(): _do("errands finished", func(): Facility.finish_errands())],
 	])
+	alive_box = CheckBox.new()
+	alive_box.text = "Keep it alive while skipping (top up coolant, don't stop at a crisis)"
+	alive_box.focus_mode = Control.FOCUS_NONE
+	col.add_child(alive_box)
 
 	_section(col, "Corporate")
 	immune_box = CheckBox.new()
@@ -155,8 +175,7 @@ func refresh() -> void:
 # --- Actions ---------------------------------------------------------------------------
 
 func _spend(seconds: float) -> void:
-	Facility.spend(seconds, "dev: time")
-	_log("+%d min" % roundi(seconds / 60.0))
+	_skip(seconds, "dev: time", func(): _log("+%d min" % roundi(seconds / 60.0)))
 
 
 func _end_shift() -> void:
@@ -164,8 +183,7 @@ func _end_shift() -> void:
 	if camp == null or not camp.on_duty():
 		_log("not on duty")
 		return
-	Facility.spend(camp.shift_end_time() - sim().time() + 2.0, "dev: end of shift")
-	_log("shift ended")
+	_skip(camp.shift_end_time() - sim().time() + 2.0, "dev: end of shift", func(): _log("shift ended"))
 
 
 func _skip_night() -> void:
@@ -173,10 +191,82 @@ func _skip_night() -> void:
 	if camp == null or camp.state != "off_duty":
 		_log("not off duty (end the shift first)")
 		return
-	Facility.spend(camp.night_until() - sim().time(), "dev: the night", false)
-	camp.night_over(sim())
+	_skip(camp.night_until() - sim().time(), "dev: the night", func():
+		camp.night_over(sim())
+		Facility.save()
+		_log("night skipped: %s brief" % camp.title()))
+
+
+## True while a skip is running.
+func skipping() -> bool:
+	return _skip_until >= 0.0
+
+
+# Passes time a chunk per frame (_process), safely: see the header.
+func _skip(seconds: float, cause: String, then: Callable) -> void:
+	if skipping() or seconds <= 0.0 or sim() == null:
+		return
+	var o := Story.oversight(sim())
+	if o.fired():
+		_log("already dismissed")
+		return
+	sim().note("time", "+%d min  %s" % [roundi(seconds / 60.0), cause])
+	_skip_until = sim().time() + seconds
+	_skip_cause = cause
+	_skip_then = then
+	_skip_known = o.crises()
+	o.dev_skip = true
+
+
+func _process(_delta: float) -> void:
+	if not skipping():
+		return
+	if sim() == null:
+		_end_skip("")
+		return
+	var left := _skip_until - sim().time()
+	if left <= 0.0:
+		_end_skip("done")
+		return
+	Facility.spend(minf(SKIP_STEP, left), _skip_cause, false)
+	if status:
+		status.text = "Skipping... %s (%d min left)" % [FacilitySim.format_time(sim().time()), roundi(maxf(_skip_until - sim().time(), 0.0) / 60.0)]
+	var o := Story.oversight(sim())
+	if alive_box and alive_box.button_pressed:
+		var plant := sim().get_system("plant") as FacilityPlant
+		if plant.coolant < 0.2:
+			plant.coolant = 0.6
+			_log("kept alive: coolant topped up to 60%")
+		o.restart_crisis_clocks()
+		return
+	var fresh := o.crises().filter(func(c): return not _skip_known.has(c))
+	if fresh.is_empty():
+		return
+	_end_skip("stopped early: crisis (%s). You have the full time to fix it" % ", ".join(fresh))
+
+
+func _end_skip(why: String) -> void:
+	var finished := why == "done"
+	_skip_until = -1.0
+	if sim():
+		var o := Story.oversight(sim())
+		o.dev_skip = false
+		o.restart_crisis_clocks()
+	var then := _skip_then
+	_skip_then = Callable()
+	if finished and then.is_valid():
+		then.call()
+	elif not why.is_empty():
+		_log(why)
 	Facility.save()
-	_log("night skipped: %s brief" % camp.title())
+	if desktop and desktop.has_method("_refresh_all"):
+		desktop._refresh_all()
+	refresh()
+
+
+func _exit_tree() -> void:
+	if skipping():
+		_end_skip("window closed: skip stopped")
 
 
 func _issue_directive() -> void:

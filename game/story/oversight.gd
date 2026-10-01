@@ -73,6 +73,8 @@ var fired_reason := ""
 var fired_kind := ""
 ## DevTools: never dismissed (not saved).
 var immune := false
+## Set while DevTools skips time: a dismissal is noted, not done (not saved).
+var dev_skip := false
 var rng := RandomNumberGenerator.new()
 ## Audits only run while this is true (the Campaign sets it: on duty).
 var watching := true
@@ -186,7 +188,7 @@ func penalise(sim: FacilitySim, what: String, amount: float) -> void:
 func fire(sim: FacilitySim, kind: String, reason: String) -> void:
 	if fired():
 		return
-	if immune:
+	if immune or dev_skip:
 		sim.note("oversight", "(dev) would have been dismissed: %s" % reason)
 		return
 	fired_kind = kind
@@ -239,6 +241,18 @@ func _caught(sim: FacilitySim, what: String) -> void:
 
 
 # --- Crises ---------------------------------------------------------------------------
+
+## The crises corporate has warned about and not yet seen fixed ("coolant", "output").
+func crises() -> Array:
+	return _warned.keys()
+
+
+## Starts the crisis clocks again: a crisis that began during a dev skip
+## gives the full time to fix it from where the skip stopped.
+func restart_crisis_clocks() -> void:
+	_coolant_since = -1.0
+	_output_since = -1.0
+
 
 func _check_crisis(sim: FacilitySim) -> void:
 	var plant := sim.get_system("plant") as FacilityPlant
