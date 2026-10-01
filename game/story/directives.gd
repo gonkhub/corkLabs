@@ -107,7 +107,7 @@ func _generate(sim: FacilitySim) -> void:
 			# Inspect something that's wearing, or anything with a fault.
 			var ids := plant.device_ids().filter(func(i): return plant.device(i).kind in ["pod", "filter", "pipe", "relay", "door", "camera"])
 			var id: String = ids[rng.randi() % ids.size()]
-			issue(sim, "inspect", id, rng.randf_range(45.0, 75.0), ("Have %s inspected (Cameras: open it and click its caption, send a unit)." if plant.device(id).kind == "camera" else "Have %s inspected (Cameras: click it, send a unit).") % plant.device(id).name))
+			issue(sim, "inspect", id, rng.randf_range(45.0, 75.0), ("Have %s inspected (Plant, or the Terminal: inspect " + id + ")." if plant.device(id).kind == "camera" else "Have %s inspected (Cameras: click it, send a unit).") % plant.device(id).name))
 		options.append(func():
 			var target := clampi(roundi(plant.throughput * 100.0) + 2, 78, 88)
 			issue(sim, "output", str(target), rng.randf_range(60.0, 90.0), "Throughput is %d%%. Have it at %d%% or better." % [roundi(plant.throughput * 100.0), target], 4.0, 8.0))

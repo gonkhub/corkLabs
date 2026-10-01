@@ -98,14 +98,6 @@ func build() -> void:
 		if c:
 			c.set_auto_track(on))
 	row.add_child(track_button)
-	var this_cam := Button.new()
-	this_cam.text = "This camera"
-	this_cam.focus_mode = Control.FOCUS_NONE
-	this_cam.tooltip_text = "This camera's own menu: inspect it, have it repaired (or click the caption on the picture)"
-	this_cam.pressed.connect(func():
-		if not grid_mode:
-			open_menu("cam_%d" % (cam + 1)))
-	row.add_child(this_cam)
 	reset_button = Button.new()
 	reset_button.text = "Reset view"
 	reset_button.focus_mode = Control.FOCUS_NONE
