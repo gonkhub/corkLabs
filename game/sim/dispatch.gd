@@ -94,6 +94,9 @@ static func unfit(sim: FacilitySim, bot: RobotAgent, job: Dictionary) -> String:
 		return "offline"
 	if not str(job.get("only", "")).is_empty() and str(job.only) != bot.sim_id:
 		return "someone else's"
+	var units: Array = job.get("units", [])
+	if not units.is_empty() and not bot.robot_id in units:
+		return "%s's work" % " or ".join(units.map(func(u): return str(u).capitalize()))
 	if str(job.get("not_by", "")) == bot.sim_id:
 		return "it broke it"
 	if bot.traits.stationary and job.get("rail_only", false):
@@ -125,6 +128,9 @@ static func job_for_device(sim: FacilitySim, device_id: String) -> Dictionary:
 	if WorkBoard.active(job):
 		return job
 	var k: Dictionary = FacilityPlant.KINDS[d.kind]
+	if d.kind == "feed":   # always something to feed, while there are canisters
+		d.job = board.post(sim, FacilityPlant._job_title(d), k.skill, d.station, k.work, 2, device_id)
+		return board.get_job(int(d.job))
 	if k.has("drift") and float(d.value) < 0.95:
 		d.job = board.post(sim, FacilityPlant._job_title(d), k.skill, d.station, k.work * maxf(1.0 - float(d.value), 0.3), 1, device_id)
 		return board.get_job(int(d.job))

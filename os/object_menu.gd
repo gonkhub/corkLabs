@@ -9,7 +9,7 @@
 #                uplink...: order maintenance (Dispatch picks the unit), call
 #                it off, make it urgent; with no part in stock: order one,
 #                express one, or patch it without; inspect; pipes: pump in
-#                a coolant canister
+#                a coolant canister (hangar: the coolant feed, the compactor)
 #   bench        the workbench: crated units to activate
 #
 # Every entry: {"text", "disabled", "tip", "act": Callable -> String (what
@@ -185,15 +185,17 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 				out.append(_item("Make it urgent", "", "Critical priority: units put it first. 5 min", func():
 					Supervisor.set_priority(jid, 3)
 					return "Job #%d is critical now." % jid))
+	elif d.kind == "feed":
+		var cans := int(req.inventory.get("coolant_canister", 0)) if req else 0
+		out.append(_item("Feed a coolant canister (%d in stock, coolant %d%%)" % [cans, _pct(plant.coolant)],
+			"No coolant canisters in stock." if cans <= 0 else ("The reservoir is full." if plant.coolant >= 0.95 else ""),
+			"Ogre lifts one into the loop: +%d%% coolant." % _pct(FacilityPlant.COOLANT_CANISTER), func(): return str(Supervisor.pump_coolant().text)))
 	elif k.has("drift") and float(d.value) < 0.95:
 		out.append({"text": "Order maintenance (early)", "sub": _units_for(sim, {"skill": FacilityPlant.KINDS[d.kind].skill, "station": d.station, "id": -1}, id, false)})
 	else:
 		out.append(_label("Nothing needs doing."))
 	if d.kind == "pipe" and plant:
-		var cans := int(req.inventory.get("coolant_canister", 0)) if req else 0
-		out.append(_item("Pump in a coolant canister (%d in stock, coolant %d%%)" % [cans, _pct(plant.coolant)],
-			"No coolant canisters in stock." if cans <= 0 else ("The reservoir is full." if plant.coolant >= 0.95 else ""), "+%d%% coolant. 5 min" % _pct(FacilityPlant.COOLANT_CANISTER),
-			func(): return str(Supervisor.pump_coolant().text)))
+		out.append(_label("Coolant %d%%: top it up at the coolant feed in the hangar (Ogre)" % _pct(plant.coolant)))
 	out.append({"sep": true})
 	out.append(_item("Inspect (%d min)" % int(Supervisor.INSPECT_MINUTES), "", "Wear rate, when it needs work, who's on it, the part it needs.",
 		func(): return Supervisor.inspect_device(id)))

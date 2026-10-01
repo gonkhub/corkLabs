@@ -74,6 +74,19 @@ func sim() -> FacilitySim:
 # keep the supervisor employed (and the facility alive) between them.
 func _keep_employed() -> void:
 	var o := Story.oversight(sim())
+	# Nobody runs this facility between tests (nothing's fixed unless ordered):
+	# keep it from collapsing under them.
+	var plant := sim().get_system("plant") as FacilityPlant
+	plant.coolant = 1.0
+	for id in plant.device_ids():
+		if plant.devices[id].kind == "pod":
+			plant.devices[id].value = 1.0
+	o._coolant_since = -1.0
+	o._output_since = -1.0
+	for bot in FacilitySetup.robots(sim()):
+		bot.wear = minf(bot.wear, 0.3)
+		if bot.offline():
+			bot.activity = {"kind": "idle"}
 	o.standing = 100.0
 	o.suspicion = 0.0
 	o.strikes = 0
@@ -262,6 +275,14 @@ func _test_parts_and_wear() -> void:
 	_check(Story.campaign(sim()).duty("tut_requisition").done or Story.knows(sim(), "did:requisition"), "(the tutorial notices)")
 	req.unpacked(sim(), int(req.orders.back().id))
 	var clamps := int(req.inventory["pipe_clamps"])
+	var hauler0 := sim().get_system("robot_hauler") as RobotAgent   # (fit for it, in this random facility)
+	hauler0.activity = {"kind": "idle"}
+	hauler0.power = 1.0
+	hauler0.wear = 0.2
+	hauler0.order = {}
+	for id in FacilityPlant.DOORS:
+		plant.devices[id].fault = false
+		(sim().get_system("layout") as FacilityLayout).set_blocked(sim(), FacilityPlant.DOORS[id][1], false)
 	menu = load("res://os/object_menu.gd").entries(sim(), "pipe_2")
 	order = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))[0]
 	var pick: Array = order.get("sub", []).filter(func(u): return not u.disabled)
@@ -312,8 +333,8 @@ func _test_parts_and_wear() -> void:
 	_check(book.size() == 1 and not book[0].disabled, "its menu offers a service")
 	book[0].act.call()
 	var svc := board.jobs.filter(func(j): return str(j.source) == "service:hauler" and WorkBoard.active(j))
-	_check(svc.size() == 1 and str(svc[0].get("only", "")) == hauler.sim_id and int(req.inventory["servo_bundle"]) == 0,
-		"Book a service posts a service only that unit takes, with the servo taken from stock")
+	_check(svc.size() == 1 and svc[0].get("units", []) == ["tinker"] and int(req.inventory["servo_bundle"]) == 0,
+		"Book a service posts a service Tinker does, with the servo taken from stock")
 	facility.finish_errands()
 	if svc.size() == 1 and WorkBoard.active(svc[0]):
 		board.release(int(svc[0].id), str(svc[0].claimed_by))
@@ -337,10 +358,10 @@ func _test_corporate() -> void:
 	var met := dirs.met
 	sup.file_report()
 	_check(dirs.met > met, "filing the report meets it")
-	dirs.issue(sim(), "diagnose", "tinker", 30.0, "Diagnose Tinker.")
+	var did := dirs.issue(sim(), "diagnose", "tinker", 30.0, "Diagnose Tinker.")
 	o.standing = 50.0
 	facility.spend(31.0 * 60.0, "test")
-	_check(not dirs.active.any(func(d): return d.kind == "diagnose") and o.standing < 50.0, "a missed directive costs standing (%s, %s, %.0f)" % [FacilitySim.format_clock(sim().time()), Story.campaign(sim()).state, o.standing])
+	_check(dirs.get_directive(did).is_empty() and o.standing < 50.0, "a missed directive costs standing (%s, %s, %.0f)" % [FacilitySim.format_clock(sim().time()), Story.campaign(sim()).state, o.standing])
 	# Pell escalates as violations of a kind pile up.
 	var hq := sim().get_system("hq") as CorkHQ
 	o.counts.clear()

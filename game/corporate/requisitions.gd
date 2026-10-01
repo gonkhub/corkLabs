@@ -274,10 +274,12 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 				want.append(str(j.part))
 	var plant := sim.get_system("plant") as FacilityPlant
 	if plant and plant.coolant < NIGHT_COOLANT and int(inventory.get("coolant_canister", 0)) > 0:
-		# A canister from stock first.
-		inventory.coolant_canister = int(inventory.coolant_canister) - 1
-		plant.coolant = minf(plant.coolant + FacilityPlant.COOLANT_CANISTER, 1.0)
-		sim.note("requisitions", "Night procurement: pumped a coolant canister from stock (coolant %d%%)" % roundi(plant.coolant * 100.0))
+		# A canister from stock first: Ogre feeds it in.
+		if int(plant.device("coolant_feed").job) < 0 and board:
+			var feed := Dispatch.job_for_device(sim, "coolant_feed")
+			if not feed.is_empty():
+				board.request(sim, int(feed.id))
+				sim.note("requisitions", "Night procurement: a coolant canister from stock, for Ogre to feed in")
 	elif plant and plant.coolant < NIGHT_COOLANT and not orders.any(func(o): return o.item == "coolant_canister" and o.placed > sim.time() - 12 * 3600.0):
 		want.append("coolant_canister")   # one a night at most
 	for item_id in want:

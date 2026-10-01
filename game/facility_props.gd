@@ -65,6 +65,8 @@ func build(layout: FacilityLayout) -> void:
 		_build_bay(bay, _beside_rail(bay, 0.0, 3.5))
 	_build_relay(_by_wall("relay"))
 	_build_uplink(_by_wall("uplink"))
+	_build_compactor(layout.station_world_pos("compactor"))
+	_build_feed(layout.station_world_pos("coolant_feed"))
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
 	for id in plant.device_ids():
@@ -118,6 +120,11 @@ func _process(delta: float) -> void:
 	(up[0] as OmniLight3D).light_color = BAD if down else OK
 	(up[0] as OmniLight3D).light_energy = (2.0 * flash) if down else 0.3
 	(up[1] as StandardMaterial3D).emission = BAD if down else OK
+	var fill := 1.0 - float(plant.device("compactor").value)
+	var full := fill >= 0.98
+	(_lamps["compactor"][1] as StandardMaterial3D).emission = BAD if full else _health_color(1.0 - fill * 0.9)
+	(_lamps["compactor"][1] as StandardMaterial3D).emission_energy_multiplier = (0.5 + 1.5 * flash) if full else 0.8
+	(_lamps["coolant_feed"][1] as StandardMaterial3D).emission = _health_color(plant.coolant)
 	var relay: Array = _lamps["relay"]
 	var out: bool = plant.device("relay").fault
 	(relay[0] as OmniLight3D).light_color = BAD if out else OK
@@ -321,6 +328,39 @@ func _build_uplink(at: Vector3) -> void:
 	for n in [box, mast, bulb]:
 		_pick("uplink", n)
 	_add_label("uplink", at + Vector3(0, 1.7, 0))
+
+
+# The waste compactor: a big skip-like box with a fill gauge (green: room,
+# red: full). Ogre lifts it out to empty it.
+func _build_compactor(at: Vector3) -> void:
+	var floor_at := Vector3(at.x, 0.0, at.z)
+	var body := _mesh(_box(Vector3(5.0, 3.0, 4.0)), _mat(Color(0.35, 0.33, 0.28), 0.5), self)
+	body.position = floor_at + Vector3(0, 1.5, 0)
+	var lid := _mesh(_box(Vector3(5.2, 0.3, 4.2)), _mat(Color(0.5, 0.42, 0.15), 0.4), self)
+	lid.position = floor_at + Vector3(0, 3.15, 0)
+	var gauge_mat := _mat(OK, 0.2, true)
+	var gauge := _mesh(_box(Vector3(0.3, 2.2, 0.1)), gauge_mat, self)
+	gauge.position = floor_at + Vector3(2.0, 1.5, 2.06)
+	_lamps["compactor"] = [null, gauge_mat]
+	for n in [body, lid, gauge]:
+		_pick("compactor", n)
+	_add_label("compactor", floor_at + Vector3(0, 4.6, 0))
+
+
+# The coolant feed: a squat tank with a hopper the crane drops canisters into.
+func _build_feed(at: Vector3) -> void:
+	var floor_at := Vector3(at.x, 0.0, at.z)
+	var tank := _mesh(_cyl(1.6, 3.0), _mat(Color(0.3, 0.42, 0.55), 0.7), self)
+	tank.position = floor_at + Vector3(0, 1.5, 0)
+	var hopper := _mesh(_cyl(0.9, 0.8), _mat(Color(0.45, 0.47, 0.5), 0.8), self)
+	hopper.position = floor_at + Vector3(0, 3.4, 0)
+	var lamp_mat := _mat(OK, 0.2, true)
+	var bulb := _mesh(_sphere(0.15), lamp_mat, self)
+	bulb.position = floor_at + Vector3(1.65, 2.2, 0)
+	_lamps["coolant_feed"] = [null, lamp_mat]
+	for n in [tank, hopper, bulb]:
+		_pick("coolant_feed", n)
+	_add_label("coolant_feed", floor_at + Vector3(0, 4.6, 0))
 
 
 func _build_bench(at: Vector3) -> void:

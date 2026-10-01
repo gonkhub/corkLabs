@@ -62,9 +62,11 @@ static func book_service(bot: RobotAgent) -> int:
 	var id := bot.book_service(sim)
 	if id >= 0:
 		sim.note("supervisor", "Books a service for %s" % bot.display_name())
-		if not bot.offline() and Dispatch.unfit(sim, bot, sim.get_system("work").get_job(id)) in ["", "busy"]:
-			bot.give_order(sim, "job", id)
-		_go(id, bot, "Supervisor books a service")
+		var board := sim.get_system("work") as WorkBoard
+		var who := Dispatch.best_unit(sim, board.get_job(id))   # Tinker, if it's free
+		if who != null:
+			who.give_order(sim, "job", id)
+		_go(id, who, "Supervisor books a service")
 	return id
 
 
@@ -353,7 +355,8 @@ static func cancel_request(job_id: int) -> void:
 	Facility.act(ORDER_COST, "Supervisor calls off a job")
 
 
-## Pumps a coolant canister from stock into the reservoir. 5 minutes.
+## Has Ogre feed a coolant canister from stock into the loop (the coolant
+## feed in the hangar; +50% when it's done). An errand, like maintenance.
 static func pump_coolant() -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var req := sim.get_system("requisitions") as Requisitions
@@ -362,11 +365,7 @@ static func pump_coolant() -> Dictionary:
 		return {"ok": false, "text": "No coolant canisters in stock."}
 	if plant.coolant >= 0.95:
 		return {"ok": false, "text": "The reservoir is full."}
-	req.inventory.coolant_canister = int(req.inventory.coolant_canister) - 1
-	plant.coolant = minf(plant.coolant + FacilityPlant.COOLANT_CANISTER, 1.0)
-	sim.note("supervisor", "Pumps a coolant canister into the loop: coolant %d%%" % roundi(plant.coolant * 100.0))
-	Facility.act(ORDER_COST, "Supervisor pumps in coolant")
-	return {"ok": true, "text": "Coolant at %d%%." % roundi(plant.coolant * 100.0)}
+	return order_maintenance("coolant_feed")
 
 
 ## Diagnostics on a unit (its object menu): reads it out properly and

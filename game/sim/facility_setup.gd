@@ -14,7 +14,8 @@
 #   Maintenance   12 x 12 m   west; both docks
 #   Hangar        50 x 40 m   south; Ogre hangs from the middle of its ceiling
 #                             and works everything its crane reaches (the
-#                             loading bay, the deep stacks). It never leaves.
+#                             loading bay, the deep stacks, the coolant feed,
+#                             the waste compactor). It never leaves.
 #
 #   PASSAGES (the caveats)
 #   Pod bay door       hall - pod bay     wide: everyone fits
@@ -85,6 +86,8 @@ static func layout() -> FacilityLayout:
 	l.add_segment("hangar_rail", "g_door", "g_e", "Hangar loading rail")
 	l.add_pad("ogre_mount", "hangar", -15, 45, "Ogre's mount", 23.0)
 	l.add_pad("deep_stacks", "hangar", -2, 56, "Deep stacks")
+	l.add_pad("feed_pad", "hangar", -31, 50, "Coolant feed")
+	l.add_pad("compactor_pad", "hangar", 2, 41, "Waste compactor")
 
 	# Passages between rooms, with their caveats.
 	l.add_segment("pod_door", "h_n", "p_s", "Pod bay door", 3.0)
@@ -112,6 +115,8 @@ static func layout() -> FacilityLayout:
 	l.add_station("hangar_door_ctl", "hall_s", 57.0, "work", "Hangar door controls")
 	l.add_station("uplink", "ws_front", 3.0, "work", "corkHQ uplink relay")
 	l.add_station("stacks", "deep_stacks", 0.5, "work", "Deep stacks")
+	l.add_station("coolant_feed", "feed_pad", 0.5, "work", "Coolant feed")
+	l.add_station("compactor", "compactor_pad", 0.5, "work", "Waste compactor")
 	return l
 
 

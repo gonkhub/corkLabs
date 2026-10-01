@@ -14,6 +14,8 @@ func _initialize() -> void:
 	_test_never_moves()
 	_test_reach_and_orders()
 	_test_freight()
+	_test_hangar_work()
+	_test_roles()
 	_test_speech()
 	await _test_world()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
@@ -171,6 +173,72 @@ func _test_freight() -> void:
 	_check(plant.device_text("freight_stacks").contains("clear"), "and the stacks are clear again")
 
 
+# Ogre's hangar: the coolant feed and the waste compactor.
+func _test_hangar_work() -> void:
+	var sim := _facility(6)
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var req: Requisitions = sim.get_system("requisitions")
+	for j in board.open_jobs():
+		board.cancel(sim, j.id, "test")
+	var ogre: RobotAgent = sim.get_system("robot_ogre")
+	for id in ["coolant_feed", "compactor"]:
+		_check(ogre.why_cant_reach(sim, plant.device(id).station).is_empty(), "%s is in Ogre's reach" % id)
+	# Coolant: a canister from stock, fed in by Ogre.
+	plant.coolant = 0.3
+	var cans := int(req.inventory.get("coolant_canister", 0))
+	var feed := Dispatch.job_for_device(sim, "coolant_feed")
+	_check(not feed.is_empty() and feed.get("units", []) == ["ogre"], "feeding coolant is a job, and Ogre's")
+	board.request(sim, int(feed.id))
+	_check(int(req.inventory.coolant_canister) == cans - 1, "it takes a canister from stock")
+	sim.advance(900.0)
+	_check(board.get_job(int(feed.id)).status == "done" and plant.coolant > 0.7, "Ogre feeds it in: coolant %d%%" % roundi(plant.coolant * 100.0))
+	# The compactor: cleared debris fills it; full, debris can't be cleared.
+	var comp := plant.device("compactor")
+	comp.value = 0.1
+	plant._repaired(sim, "bay_1", "robot_hauler")
+	_check(float(comp.value) <= 0.02 and plant.device_text("compactor").contains("FULL"), "cleared debris fills the compactor")
+	plant.devices["bay_2"].job = -1
+	sim.schedule_in(0.0, "plant_fault", {"device": "bay_2"})
+	sim.step()
+	var debris := board.get_job(int(plant.device("bay_2").job))
+	_check(board.request(sim, int(debris.id)).contains("compactor"), "full: debris can't be cleared until it's emptied")
+	var empty := board.get_job(int(comp.job)) if int(comp.job) >= 0 else {}
+	sim.advance(20.0)
+	empty = board.get_job(int(comp.job)) if int(comp.job) >= 0 else {}
+	_check(not empty.is_empty() and empty.get("units", []) == ["ogre"], "emptying it is a job, and Ogre's")
+	board.request(sim, int(empty.id))
+	sim.advance(1500.0)
+	_check(float(comp.value) >= 0.99, "Ogre empties it")
+
+
+# Each unit has its own work.
+func _test_roles() -> void:
+	var sim := _facility(7)
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var tinker: RobotAgent = sim.get_system("robot_tinker")
+	var hauler: RobotAgent = sim.get_system("robot_hauler")
+	plant.devices["pipe_1"].job = -1
+	sim.schedule_in(0.0, "plant_fault", {"device": "pipe_1"})
+	sim.step()
+	var leak := board.get_job(int(plant.device("pipe_1").job))
+	_check(leak.get("units", []) == ["hauler"], "a leak is Hauler's work")
+	var r := tinker.give_order(sim, "job", int(leak.id))
+	_check(not r.ok and r.reply.contains("Hauler's work"), "Tinker won't take it (%s)" % r.reply)
+	_check(Dispatch.unfit(sim, tinker, leak).contains("Hauler"), "and Dispatch knows why")
+	hauler.seize(sim)
+	var reboot := board.jobs.filter(func(j): return str(j.source) == "unit:hauler" and WorkBoard.active(j))
+	_check(reboot.size() == 1 and reboot[0].get("units", []) == ["tinker"], "only Tinker reboots a seized unit")
+	hauler.activity = {"kind": "idle"}
+	var svc := hauler.book_service(sim)
+	_check(svc < 0 or board.get_job(svc).get("units", []) == ["tinker"], "and only Tinker services one")
+	plant.devices["pod_1"].value = 0.4
+	sim.advance(20.0)
+	var pod := board.get_job(int(plant.device("pod_1").job))
+	_check(pod.get("units", []) == ["tinker"], "pods are Tinker's work")
+
+
 func _test_speech() -> void:
 	var lib := BarkLibrary.new()
 	lib.load_text("""start_job | any !ogre |  | Heading to {station}.
@@ -209,8 +277,13 @@ func _test_world() -> void:
 	for sid in l.segments:
 		if not l.is_pad(sid):
 			expect += 1
+	var pad_nodes := {}
+	for sid in l.segments:
+		if l.is_pad(sid):
+			pad_nodes[l.segments[sid].a] = true
+			pad_nodes[l.segments[sid].b] = true
 	for nid in l.nodes:
-		if not (nid.begins_with("ogre_mount") or nid.begins_with("deep_stacks")):
+		if not pad_nodes.has(nid):
 			expect += 1
 	_check(rail_bits == expect, "no rail is drawn to the pads (%d pieces, expected %d)" % [rail_bits, expect])
 	world.free()

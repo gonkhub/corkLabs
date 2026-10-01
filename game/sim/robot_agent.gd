@@ -301,6 +301,8 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 				continue
 			if not str(j.get("only", "")).is_empty() and str(j.only) != sim_id:
 				continue   # someone else's service
+			if not (j.get("units", []) as Array).is_empty() and not robot_id in j.units:
+				continue   # not its kind of work
 			if str(j.get("not_by", "")) == sim_id:
 				continue   # it broke this one
 			var requested: bool = j.get("requested", false)
@@ -563,10 +565,11 @@ func book_service(sim: FacilitySim) -> int:
 	for j in board.jobs:
 		if str(j.source) == "service:" + robot_id and WorkBoard.active(j):
 			return -1
-	var dock := _nearest_dock(sim)
-	var id := board.post(sim, "Service %s" % display_name(), "general", str(dock.get("id", "t_dock")), SERVICE_WORK, 1, "service:" + robot_id)
+	var where := str(_nearest_dock(sim).get("id", "")) if not traits.stationary else _nearest_station(sim)
+	if where.is_empty():
+		where = _nearest_station(sim)
+	var id := board.post(sim, "Service %s" % display_name(), "precise", where, SERVICE_WORK, 1, "service:" + robot_id)
 	var j := board.get_job(id)
-	j.only = sim_id
 	j.part = "servo_bundle"
 	if not board.request(sim, id).is_empty():
 		board.cancel(sim, id, "no servo bundles in stock")
@@ -644,6 +647,8 @@ func give_order(sim: FacilitySim, kind: String, job_id := -1, device := "") -> D
 			return _reply(sim, false, "I can't get to %s: %s." % [st.get("name", j.station), why])
 		if j.status == "claimed" and j.claimed_by != sim_id:
 			return _reply(sim, false, "%s is already on job #%d." % [str(j.claimed_by).trim_prefix("robot_").capitalize(), job_id])
+		if not (j.get("units", []) as Array).is_empty() and not robot_id in j.units:
+			return _reply(sim, false, "No. '%s' is %s's work." % [j.title, " or ".join(j.units.map(func(u): return str(u).capitalize()))])
 		if traits.skill(j.skill) < traits.refuse_below_skill:
 			return _reply(sim, false, "No. '%s' is %s work; I'm not built for it." % [j.title, j.skill])
 	var before := evaluate(sim)   # what it wanted before the order (not the cached scores: those aren't saved)

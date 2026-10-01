@@ -21,6 +21,7 @@
 #   priority   0 low, 1 normal, 2 high, 3 critical
 #   status     "open", "claimed", "done", "cancelled"
 #   requested  true once someone asked for it to be done (see above)
+#   units      the units whose work it is (robot ids; absent = anyone's)
 #   part       a Requisitions stock item the repair uses up, or absent;
 #              taken when it's requested ("part_used"). "makeshift": patched
 #              without it.
@@ -74,6 +75,10 @@ func post(sim: FacilitySim, title: String, skill: String, station: String, work:
 		var part: String = FacilityPlant.KINDS[plant.device(source).kind].get("part", "")
 		if not part.is_empty():
 			job.part = part
+	# Whose work it is (FacilityPlant: roles).
+	var units: Array = FacilityPlant.units_for(source, plant.device(source).kind if plant and plant.devices.has(source) else "")
+	if not units.is_empty():
+		job.units = units.duplicate()
 	jobs.append(job)
 	var st: Dictionary = _layout(sim).station(station)
 	sim.note("work", "Job #%d posted: %s at %s (%s, %s priority)" % [job.id, title,
@@ -90,6 +95,10 @@ func request(sim: FacilitySim, id: int, makeshift := false) -> String:
 	var j := get_job(id)
 	if not active(j):
 		return "There's no open job #%d." % id
+	var plant := sim.get_system("plant") as FacilityPlant
+	var blocked := plant.request_blocker(j) if plant else ""
+	if not blocked.is_empty() and not j.get("requested", false):
+		return blocked
 	if j.has("part") and not j.get("part_used", false):
 		if makeshift:
 			j.part_used = true
