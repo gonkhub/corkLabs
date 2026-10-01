@@ -139,6 +139,21 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-10-01 | **Parts are taken when a repair is ordered**, not halfway (no part: order it, express it, or patch it) | User: jobs stopping halfway for another action felt weird |
 | 2026-10-01 | **Reprimands** are a corkHQ message kind of their own (policy breaches only) and shake the panel violently; operational warnings no longer come as reprimands | User: a Pell warning appeared after reading a harmless file |
 | 2026-10-01 | Directives are due by the end of the shift and settled at 14:00, never overnight; the facility starts with an order or two of every part and two coolant canisters | User: a missed directive in the overnight summary; start with basic resources |
+| 2026-10-01 | **Errands**: ordering a unit to do a job costs nothing up front; the clock runs (a few real seconds) while it rides there and works, and stops when it's done | User: time should pass when the job completes, not when it's ordered |
+| 2026-10-01 | You **pick the unit** (Order maintenance lists every unit, best first, the ones that can't greyed out with why); Send to a job lists only jobs the unit can take | User |
+| 2026-10-01 | **Talk and requests happen on camera**: no transcript, the unit's words float over it; requests ping and are asked when you watch the unit's feed; stale ones are withdrawn | User |
+| 2026-10-01 | **Roles**: Tinker precision (and the only one who services or reboots units), Hauler heavy work and the rounds, Ogre the hangar (freight, coolant feed, waste compactor); doors either | User: clearer, more specialised units; Ogre needed a real role |
+| 2026-10-01 | **Routine work is most of the work** (pods, filters, pod waste, the compactor, rail grime, freight: no parts); parts are for real breakdowns. Chores wait for the supervisor overnight | User: busywork over alarm repairs; a run-down facility should come from a supervisor who spent their time elsewhere |
+| 2026-10-01 | Pod waste fills about once a day (unevenly); the compactor has room on day 1 and fills by day 2; overflowing waste wears on every unit's software | User |
+| 2026-10-01 | Balance from simulated play: fewer leaks, a proper repair holds 8 h, hot pipes leak more (neglect spirals), units charge to a safe margin. An efficient supervisor survives with time to spare; one who snoops a lot runs the facility down | User: lots of leaks on day 2 felt unwinnable; failure should come from neglect |
+| 2026-10-01 | **Inspecting is a unit's errand** (it goes, looks, reports back) | User |
+| 2026-10-01 | **The relay powers the uplink** (20 minutes on battery); `hqctl disable` cuts it by hand (replaces mute) | User: snooping should rely on the facility being in a bad state |
+| 2026-10-01 | **The Terminal does everything the cameras do** (maintain, inspect, order, requests, talk...) | User: work must stay possible in a room whose camera is out |
+| 2026-10-01 | **The cameras are corporate's eyes**: in-room acts (conversations, a unit's accident or sabotage) are only recorded where a working camera covers the room | Ties the facility's state to the snooping game: a dead camera is something you might want |
+| 2026-10-01 | **Trust from treatment**: answering requests, services, keeping units working build trust; ignoring, overruling, leaving them seized cost it | Management play feeds the story gates |
+| 2026-10-01 | Packages: every one works (ir-vision, remote-reboot (also frees seized units), route-control, firmware-stabilizer, night-watch, overclock); the rest cut. Catalogue: rail lubricant, the pod calibration kit and the Sweeper cut | User |
+| 2026-10-01 | Units are picked on camera in screen space (a generous target), things by their own rotated boxes, rails last | User: small Tinker was hard to click; the rail got in the way |
+| 2026-10-01 | **DevTools** (secret `dev` command): full control of time, shifts, faults, units, corporate, stock and story, for testing | User |
 
 ## Gameplay directions (approved long-term, not started)
 

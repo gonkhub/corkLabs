@@ -9,10 +9,10 @@
 # Shift 1 is orientation: its duties walk a new supervisor through the OS.
 
 1 | onboarding | Read your onboarding file | 0 | 3 | | read:/home/supervisor/welcome.txt | Terminal: ls, then cat welcome.txt. (The Files app works too.)
-1 | tut_cameras | Look in on the units | 0 | 2 | | did:open:cameras | Open Cameras. Drag to look around, scroll to zoom, N for night vision.
+1 | tut_cameras | Look in on the units | 0 | 2 | | did:open:cameras | Open Cameras. Drag to look around, scroll to zoom. Hover a unit or a machine to see what it is.
 1 | tut_order | Give a unit an order | 0 | 2 | | did:order | In Cameras, click a broken machine: Order maintenance. (Or click a unit: Send to a job, Recharge...)
 1 | tut_inspect | Inspect a device | 0 | 2 | | did:inspect | In Cameras, click a machine: Send a unit to inspect it. It reports back.
-1 | tut_requisition | Order spare parts | 0 | 3 | | did:requisition | Requisitions. Repairs use parts from stock; a job with no part stops halfway. Order before you run out.
+1 | tut_requisition | Order spare parts | 0 | 3 | | did:requisition | Requisitions. Repairs use parts from stock, taken when you order the repair. Order before you run out.
 1 | tut_answer | Answer a unit's request | 0 | 2 | | did:answer | When the units ask for something, REQUESTS lights up on the taskbar. Click it (or the asking unit, in Cameras) to answer.
 1 | conduct | Read the Code of Conduct | 0 | 4 | | read:/corp/policy/conduct.txt | Terminal: cat /corp/policy/conduct.txt
 * | status_report | File the morning status report | 30 | 4 | 08:00 | | The Directorate reads the first line.

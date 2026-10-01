@@ -183,7 +183,8 @@ performing what it's doing (work clips at a job, idles otherwise).
 | Need | Goes down | Goes up | When it runs low |
 | --- | --- | --- | --- |
 | **Power** | always a little; more moving, most working | on its dock | below its reserve it drops everything to recharge; at 0 it stalls and limps on emergency cells |
-| **Software stability** | standing idle (robots think the work keeps *them* running), stalling, being overruled by orders | working, finishing jobs, a reboot | it turns **independent and unpredictable** (below) |
+| **Software stability** | standing idle (robots think the work keeps *them* running; slower while waiting for orders), stalling, being overruled, overflowing pod waste | working, finishing jobs, a reboot, a conversation | it turns **independent and unpredictable** (below) |
+| **Wear** | working and riding (more when overclocked) | a service (Tinker, a servo bundle) | slower; past 50% it can **seize** (Tinker reboots it by hand, or remote-reboot, or it frees itself after 2 h) |
 
 **Software stability** is the heart of a robot's reliability:
 
@@ -203,9 +204,28 @@ facility (corkHQ may notice "anomalous damage"); the journal's `sabotage`
 lines say who did it. Tinker (curious, fidgety) turns independent faster and
 is likelier to sabotage than stoic Hauler.
 
+**Roles.** Every kind of work belongs to particular units (`FacilityPlant`
+`KINDS[...].units`, copied onto the job): **Tinker** pods, the relay,
+cameras, the uplink, unpacking, salvaged parts, and it's the only one who
+services or reboots a unit; **Hauler** leaks, filters, debris, the gate,
+pod waste, the rails, hauling; **Ogre** everything in the hangar (freight,
+the coolant feed, the waste compactor); stuck doors are Hauler's or
+Tinker's. A unit refuses someone else's work ("No. That's Hauler's work.").
+
+**Who decides.** A **stable** unit (60%+) doesn't choose its own work: it
+does the jobs you **request** (Cameras: click the thing → Order maintenance,
+pick the unit or let `Dispatch` pick the best free one) and the one you send
+it to, and it always does as it's told. Below stable it has a will of its
+own: it picks any open job, and orders count for less and less. Off duty a
+**night autopilot** requests breakdowns and routine work (not the chores:
+those wait for you, unless the night-watch package is in). An order sends
+the unit on an **errand** (`Facility` errands): no time passes when you
+order; the facility runs on fast-forward for a few real seconds while you
+watch it ride there and work, and stops when the job's done.
+
 **Deciding: utility scores, like a mixer.** Every couple of facility seconds
-a robot scores everything it could do (each reachable job, recharge, stand
-by, wander) and does the best. Job scores come from priority × skill ×
+a robot scores everything it could do (each job it may take, recharge,
+stand by, wander) and does the best. Job scores come from priority × skill ×
 distance × power × hunger for work (low stability makes it hungrier). The F1 robots page shows the top scores
 and the reason; every change of mind goes in the journal with the runner-up:
 
@@ -213,10 +233,10 @@ and the reason; every change of mind goes in the journal with the runner-up:
 06:55  Hauler: work #7 Replace fuse (0.60: high priority, precise skill 35%, 12 m away); next best stand by (0.34)
 ```
 
-**Orders are a strong nudge, not a command.** `agent.give_order(sim, "job", id)`
-(or `"recharge"`, `"standby"`, `"cancel"`) adds the robot's `obedience` to
-that option. Usually it wins, and the robot says "On it." But below its power
-reserve it recharges first, it refuses work it's hopeless at ("No. 'Clear
+**Orders.** `agent.give_order(sim, "job", id)` (or `"recharge"`, `"standby"`,
+`"cancel"`). A stable unit does it ("On it."); an unstable one weighs it
+against its own ideas. Below its power reserve it recharges first (to a safe
+margin, then goes), it refuses work it's hopeless at ("No. 'Clear
 debris' is heavy work; I'm not built for it.") or can't get to ("I can't get
 to Workbench: Freight gate is blocked (jammed)."), and an unstable robot finds
 it hard to stand still. It says its answer on camera; it's also journaled.
@@ -475,6 +495,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 | **Terminal** | The command line you **learn** (no orders here: that's Cameras): `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `units` and `jobs` (read-only), `talk <unit>` (opens the unit link in Cameras), `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
 | **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
+| **DevTools** (hidden) | Typing `dev` in the Terminal puts it on the desktop (`dev off` removes it; kept with the OS settings) | Testing: pass time, end the shift, skip the night; standing, suspicion, funds, never fired; break or fix any device, heal the facility; seize, free, power, stability, wear and trust per unit; stock, packages, commands, secrets; run any scripted event now |
 
 Robots answer orders out loud, on camera; the apps just say the order was sent.
 
@@ -515,9 +536,16 @@ with a review. Clocking out runs the night (the facility carries on without
 you) up to the next brief. After shift 3: the end of this build (the endings
 are archived in `docs/archive/endings.txt` for now).
 
-The facility **fights back**: leaks, the relay, debris, the freight gate,
-three passage doors (stuck = route blocked), seven cameras (NO SIGNAL), the
-corkHQ uplink. **Nothing is fixed until you order it**: a fault posts a job,
+Most of the work is **routine**, no parts, just the units' time and a
+little wear: pods drift out of calibration (Tinker), filters clog, pod waste
+fills its bins about once a day and the hangar compactor fills with it
+(Hauler takes the waste down, Ogre empties the compactor; full bins wear on
+every unit's software), rail grime slows everyone (Hauler), freight arrives
+(Ogre). The facility also **breaks**: leaks, the relay (and, 20 minutes
+later, the corkHQ uplink on its battery), debris, the freight gate, three
+passage doors (stuck = route blocked), seven cameras (NO SIGNAL), the
+uplink. A proper repair holds at least 8 hours; a hot facility strains its
+pipes, so neglect spirals. **Nothing is fixed until you order it**: a fault posts a job,
 but stable units only work on jobs you've asked for (Cameras: click the
 thing, Order maintenance: `Dispatch` sends the most suitable free unit).
 Units below "stable" stop waiting and pick their own work (and start
@@ -528,8 +556,11 @@ part: order one, or patch it without, and it won't hold). **Units wear out**: wo
 The **units ask** for things (UnitRequests); corporate issues **directives**
 with deadlines (Directives); **Pell escalates** as you break rules; and the
 **uplink** relay, while it's down, blinds corkHQ entirely (talk Hauler into
-an accident). How hard the facility pushes depends on the shift
-(`Campaign.PRESSURE`: orientation is gentler; nights are quiet).
+an accident, or `hqctl disable` as maint). **The cameras are corporate's
+eyes**: what happens in a room (talking to a unit, a unit wrecking
+something) is only on the record if a working camera covers that room. How
+hard the facility pushes depends on the shift (`Campaign.PRESSURE`:
+orientation is gentler; nights are quiet).
 
 `Oversight` (`game/story/oversight.gd`) is how corporate judges you:
 **standing** (0-100; reviews, duties, crashes; 0 = dismissed for
@@ -541,8 +572,10 @@ save is checkpointed at every brief: `facility_save_checkpoint.json`) or
 
 `Knowledge` (`game/story/knowledge.gd`) is what this supervisor has found:
 commands, files read, secrets, story flags. Conditions everywhere (files,
-events, duties, dialogue) check it. It also holds a few numbers: trust
-("trust:tinker"), built one conversation every two facility hours.
+events, duties, dialogue) check it. It also holds a few numbers: **trust**
+("trust:tinker", 0-5), built by a conversation every two facility hours and
+by how you treat the unit (answering its requests, services, keeping it
+working; ignoring, overruling and leaving it seized cost it).
 
 The OS has a **file system** (`game/story/fs/`, one text file per file, with
 `#!` headers for hidden, encrypted, restricted, appearing, disappearing
@@ -575,9 +608,10 @@ corporate tops up after every review (more for a better grade), and a
 catalogue in `game/corporate/catalog.txt` (resources, replacement parts, new
 robot models: price, delivery hours, whether corporate must approve it, and
 what happens on delivery). Orders go pending → approved/denied (refunded) →
-in transit → delivered. Placeholders for now: delivered parts go into stock
-and robot units arrive crated; the coolant canister is wired (tops up the
-reservoir).
+in transit → delivered. Parts go into stock (express: couriered straight
+in; standard: a crate the units bring in), crated units are activated at
+the workbench, and coolant canisters are fed into the loop by Ogre (the
+coolant feed in the hangar).
 
 **Software packages** (`SoftwareLibrary`, `game/corporate/packages.txt`):
 unlockables downloaded from the Cork package server **through the
@@ -594,13 +628,13 @@ corkpkg installed
 ```
 
 Corporate only approves packages up to your **clearance** (1-3), which rises
-with A/B reviews and falls with an F. Three packages already do something:
-`remote-reboot` (Remote reboot in a unit's menu), `route-control` (the
-Terminal's `block` / `unblock`), `firmware-stabilizer` (robots' software
-drifts half as fast). The rest (peer-sync, pathfinder-pro,
-predictive-maintenance, self-service, diag-suite, night-watch, overclock)
-are placeholders for robot behaviours and supervisor tools to come. Check
-for one in code with `Supervisor.has_software("id")`.
+with A/B reviews and falls with an F. Every package does something:
+`ir-vision` (night vision for the cameras), `remote-reboot` (a unit's menu;
+also frees a seized unit), `route-control` (`block` / `unblock`),
+`firmware-stabilizer` (software drifts half as fast), `night-watch` (the
+night crew does the chores too; more wear overnight), `overclock` (units 30%
+faster; more wear, faster drift). Check for one in code with
+`Supervisor.has_software("id")`.
 
 ## Using robots in the game
 

@@ -5,8 +5,8 @@ lives, so it can be reviewed, rewritten and rebalanced. All of it is
 first-pass writing, meant to be rewritten freely: every piece is a plain
 text file, so no code changes are needed to change a line.
 
-*Updated 2026-09-30 (second pass: pacing, pushback, longer chains; endings
-archived).*
+*Updated 2026-10-01 (third pass: run it from the cameras, roles, routine
+work, errands, cameras as corporate's eyes, trust from treatment).*
 
 ## The shape of a run
 
@@ -63,59 +63,74 @@ passwords work on a new save.
   | talk | 3rd / 6th / 10th |
   | maint | 1st / 2nd / 3rd |
 
-## Avoiding corporate: the uplink
+## Avoiding corporate: blind spots
 
-corkHQ sees the facility through one **uplink relay** in the workshop
-(the facility map memo and `ps` both mention it). **While it's down:** no
-suspicion, no audit trail, no audits, no Pell, no new directives. The
-corkHQ panel shows UPLINK LOST and holds its messages.
+**The cameras are corporate's eyes.** What happens in a room (talking to a
+unit, a unit's "accident" or sabotage) is only on the record if a working
+camera covers that room. A dead camera is a blind spot: the Code of Conduct
+says the cameras record, and that an out-of-service camera must be repaired
+without delay. The terminal (files, accounts, tools) is audited whatever the
+cameras see. One camera covers the workshop and the maintenance room each.
 
-How it goes down:
+**The uplink.** corkHQ sees the facility through one **uplink relay** in the
+workshop (the facility map memo and `ps` both mention it). While it's down:
+no suspicion, no audit trail, no audits, no Pell, no new directives. The
+corkHQ panel goes dark and holds its messages. Corporate sees an outage,
+wants it back within the hour (a directive), and every repeat outage adds
+suspicion (+5 per repeat). Ways down:
+- **The relay.** A blown fuse left for 20 minutes flattens the uplink's
+  battery; a new fuse brings it back. No uplink job: fix the relay (Tinker).
+- **Hauler** (trust 2, the uplink known): "Could it have an... accident?"
+  If the **workshop camera** is working, Hauler warns you it'll be seen, and
+  if you go ahead, corporate sees a unit wreck the uplink on tape
+  (suspicion +15). Kill the camera first.
+- **`hqctl disable`** (maint): cut it by hand; `hqctl enable` restores it.
 - Rarely on its own.
-- **Hauler**, with trust 2 and the uplink known: "The uplink relay in the
-  workshop. Could it have an... accident?" Hauler rides in through the
-  freight gate (if the gate's jammed, it can't) and knocks into it. To the
-  facility it's an ordinary fault, and Hauler won't be the one to fix it.
 
-What it costs: corporate posts a critical repair job and a directive to
-restore it within the hour. Tinker will go and fix it (about 30 minutes of
-work) unless you keep it busy, reprioritise, or block its way. Every outage
-after the first adds suspicion of its own (+5 per repeat).
+Other ways to deal with corporate, as maint: `auditctl purge` (once a
+shift), `kill 45` (auditd restarts in 0.3 s, and that's noticed).
 
-Other ways to deal with corporate, as maint: `auditctl purge` (once a shift),
-`hqctl disable` (cut the uplink by hand: to corporate, an outage, with the same blind window and the same "restore it within the hour"), `kill 45` (auditd restarts in 0.3 s,
-and that's noticed).
+## The facility
 
-## The facility fights back
-
-- **Failures:** leaks (drain coolant), the relay (slow charging), debris,
-  the freight gate and three **passage doors** (pod bay, dock, hangar:
-  stuck = route blocked; a stuck dock door cuts the units off from their
-  chargers), seven **cameras** (NO SIGNAL), the **uplink**.
-- **Nothing is fixed until you say so.** A fault posts a job, but a stable
-  unit only works on jobs you ordered (Cameras: click the thing → Order
-  maintenance; Dispatch sends the best free unit) or the one you sent it to.
-  A unit below "stable" picks its own work and starts ignoring you. Standing
-  by waiting for orders still frets its software (slowly). Off duty a
-  **night autopilot** asks for everything it can.
-- **Parts:** repairs use spare parts from stock (clamps, fuses, filter
-  cartridges, gate actuators, camera modules), taken when you order the
-  repair. No part in stock: the menu offers to order it, express it, or
-  **patch it** without (it fails again within 40-120 minutes). The facility
-  starts with an order or two of everything and two coolant canisters
-  (pump one in from a pipe's menu). Deliveries take hours (express: ~1/3 the
-  time, +75% cost, straight into stock); standard ones arrive as crates the
-  units bring in (Ogre → a rail unit → Tinker unpacks), without being asked.
-- **Wear:** units wear with work. Worn units slow down; past 50% they can
-  **seize up** and need another unit to reboot them by hand (Tinker's work),
-  or they free themselves after two hours. A **service** at the dock uses a
-  servo bundle and brings wear back down. Units wear far less overnight and
-  never seize in standby.
-- **Requests:** the units ask for things: book a service, let me go and
-  reboot X, finish or recharge, clamp a live leak (faster, wears the unit),
-  nobody's asked me for anything, can I sweep. Answer in the unit's menu
-  (REQUESTS on the taskbar takes you there). Unanswered ones expire, the unit decides,
-  and being ignored costs it stability.
+- **Routine work is most of it** (no parts, just time and a little wear):
+  pods (Tinker), filters (Hauler), **pod waste** (fills about once a day,
+  unevenly: Hauler takes it to the hangar), the **waste compactor** (fills
+  with waste and debris: room on day 1, full by day 2: Ogre empties it),
+  **rail grime** (slows every unit: Hauler), freight (Ogre). Near-full waste
+  bins make the units grumble; overflowing, they wear on every unit's
+  software. **Chores** (waste, the compactor, the rails) wait for you: the
+  night crew only keeps the facility alive (night-watch changes that).
+- **Breakdowns** use parts: leaks (clamps; coolant drains, the facility
+  heats, hot pipes leak more), the relay (fuses; slow charging, then the
+  uplink), the freight gate (actuators), cameras (modules). Doors stick
+  (no part: Hauler or Tinker frees them). A proper repair holds at least
+  8 hours; a patch (no part) holds 2-5.
+- **Nothing is done until you say so.** A stable unit only does jobs you
+  order (Cameras: click the thing, Order maintenance, pick the unit) or
+  the one you send it to; then it's an **errand**: no time passes when you
+  order, the clock runs while you watch it work, and stops when it's done.
+  A unit below stable picks its own work and starts ignoring you.
+- **Roles:** Tinker (precision; the only one who services or reboots a
+  unit), Hauler (heavy work and the rounds), Ogre (the hangar: freight, the
+  coolant feed, the compactor).
+- **Inspecting** is a unit's errand: it goes, looks and reports back
+  (cameras: Plant or the Terminal, `inspect cam_5`).
+- **Wear:** past 50% a unit can seize; Tinker reboots it by hand, the
+  remote-reboot package frees it from the desk, or it frees itself after
+  two hours (and trusts you less). Services: Tinker, a servo bundle.
+- **Requests:** a unit that wants something pings (toast, REQUESTS,
+  "ASKING" on its camera) and asks out loud when you watch its feed; the
+  answers are buttons under the picture (or `requests` / `answer`).
+  Requests about things you've already dealt with are withdrawn. Ignored
+  ones cost it stability and trust.
+- **Trust** (0-5) grows with conversations and with how you treat a unit:
+  answering it, servicing it, keeping it working. Ignoring, overruling and
+  leaving it seized cost it.
+- **Everything the cameras do, the Terminal does** (for when a camera's
+  out): `maintain`, `patch`, `inspect`, `order`, `diagnose`, `service`,
+  `rescue`, `reboot`, `feed`, `requests`, `answer`, `talk` (in Cameras if a
+  camera sees the unit, otherwise in the Terminal).
+- **Night vision** needs the `ir-vision` package.
 
 ## The cast
 
@@ -187,10 +202,11 @@ and that's noticed).
 | --- | --- | --- |
 | Reading a file (first time) | 1 min per 5 lines, at least 5 (or its `minutes:` x3) | Former staff: +3 (files) |
 | `grep` | 15 min | Matching former staff files: +2 |
-| Talking to a unit | 3 min a line, 5 a reply | +1.5 a conversation (talk); builds trust every 2 h |
+| Talking to a unit | 3 min a line, 5 a reply | +1.5 a conversation (talk), **only if a camera sees the unit's room**; builds trust every 2 h |
 | Replying to Pell | the same | No (what you say can be) |
-| Orders, priorities, requisitions, answering requests, booking services, maintenance requests | 5 min | No |
-| Inspect a device, diagnose a unit | 30 min | No |
+| Ordering maintenance, sending a unit to a job or to inspect | Nothing up front: the time passes while it works (an errand) | No (but a conversation or an "accident" in a room a camera sees is) |
+| Requisitions, priorities, answering requests, recharge / stand by | 5 min | No |
+| Diagnose a unit | 30 min | No |
 | Duties | 10-60 min | Undone at 14:00: standing down |
 | Interim report (directive) | 20 min | No |
 | A run of Night Run | 30 min | +3 first run each time it's opened (games) |
