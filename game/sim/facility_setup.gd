@@ -123,6 +123,29 @@ static func layout() -> FacilityLayout:
 	l.add_station("crate_a", "crate_pad_a", 0.5, "work", "Ogre's crate spot")
 	l.add_station("crate_b", "crate_pad_b", 0.5, "work", "Ogre's other crate spot")
 	l.add_station("compactor", "compactor_pad", 0.5, "work", "Waste compactor")
+	# Each camera is repaired from the point on its room's rail closest to it.
+	var cams := cameras()
+	for i in cams.size():
+		var best := ""
+		var best_off := 0.0
+		var best_d := INF
+		for sid in l.segments:
+			var s: Dictionary = l.segments[sid]
+			if s.get("pad", false) or s.room != cams[i].room:
+				continue
+			var a: Vector3 = l.nodes[s.a].pos
+			var b: Vector3 = l.nodes[s.b].pos
+			var t := clampf((cams[i].pos - a).dot(b - a) / maxf((b - a).length_squared(), 0.001), 0.0, 1.0)
+			var d := a.lerp(b, t).distance_to(cams[i].pos)
+			if d < best_d:
+				best_d = d
+				best = sid
+				best_off = t * float(s.length)
+		if best.is_empty():
+			var st := l.station(FacilityPlant.CAMERA_STATIONS.get(cams[i].room, "bay_2"))
+			best = st.segment
+			best_off = st.offset
+		l.add_station("cam_%d_spot" % (i + 1), best, best_off, "work", "Under the %s camera" % str(cams[i].name).to_lower())
 	return l
 
 

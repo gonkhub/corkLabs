@@ -202,8 +202,8 @@ func _face_camera(a: RobotAgent, delta: float) -> bool:
 	return true
 
 
-# A unit that just repaired a camera: the camera comes back on to its face,
-# close up; it backs away a little, and waves.
+# A unit that just repaired a camera (from the rail right under it): the
+# camera comes back on looking at it, no zoom; it backs away a little, and waves.
 func _start_greet(cam: int) -> void:
 	var w := get_parent() as FacilityWorld
 	if w == null or cam < 0 or cam >= w.cameras.size():
@@ -211,7 +211,7 @@ func _start_greet(cam: int) -> void:
 	_greet_cam = cam
 	_greet_t = 0.0
 	_greet_back = 0.0
-	w.cameras[cam].frame(actor if actor else self, 9.0, GREET_HOLD + GREET_BACK + GREET_WAVE)
+	w.cameras[cam].frame(actor if actor else self, -1.0, GREET_HOLD + GREET_BACK + GREET_WAVE)
 
 
 func _greet(delta: float) -> void:
@@ -224,8 +224,6 @@ func _greet(delta: float) -> void:
 	# Back away from the lens.
 	if _greet_t > GREET_HOLD and _greet_t <= GREET_HOLD + GREET_BACK:
 		_greet_back = GREET_BACK_M * smoothstep(GREET_HOLD, GREET_HOLD + GREET_BACK, _greet_t)
-		if cam:
-			cam.zoom_fov = lerpf(9.0, 16.0, (_greet_t - GREET_HOLD) / GREET_BACK)
 	# Wave: the recorded clip if there is one, else a little happy wobble.
 	if was <= GREET_HOLD + GREET_BACK and _greet_t > GREET_HOLD + GREET_BACK:
 		if actor and actor.action_names.has("act_wave_camera"):

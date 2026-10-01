@@ -88,7 +88,7 @@ const KINDS := {
 	"relay": {"job": "Replace relay fuse", "skill": "precise", "work": 360.0, "rate": 0.08, "priority": 2, "part": "fuse_pack", "units": ["tinker"]},
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.12, "priority": 1, "units": ["hauler"]},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.06, "priority": 2,
-		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler"], "tool": {"hauler": "wrench"}},
+		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler", "tinker"], "tool": {"hauler": "wrench"}},   # Tinker too: Hauler may be shut in the workshop
 	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler", "tinker"], "tool": {"hauler": "wrench"}},
 	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.015, "priority": 1, "part": "camera_module", "units": ["tinker"]},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3, "units": ["tinker"]},
@@ -194,7 +194,7 @@ func _init() -> void:
 		devices[id].blocks = DOORS[id][1]
 	var cams := FacilitySetup.cameras()
 	for i in cams.size():
-		_add("cam_%d" % (i + 1), "camera", "Camera %d" % (i + 1), CAMERA_STATIONS.get(cams[i].room, "bay_2"))
+		_add("cam_%d" % (i + 1), "camera", "Camera %d" % (i + 1), "cam_%d_spot" % (i + 1))   # (FacilitySetup.layout)
 	_add("uplink", "uplink", "corkHQ uplink relay", "uplink")
 	_add("freight_bay", "freight", "Loading bay", "loading")
 	_add("freight_stacks", "freight", "Deep stacks", "stacks")
@@ -405,7 +405,8 @@ func _fault(sim: FacilitySim, id: String) -> void:
 		sim.note("plant", "Freight delivered: crates waiting at %s" % d.name)
 	elif not d.kind in ARRIVALS:
 		d.fault = true
-		sim.note("alarm", {"pipe": "COOLANT LEAK: %s", "relay": "%s FUSE BLOWN: docks charge at 40%%",
+		# A dead camera is a nuisance, not an alarm.
+		sim.note("plant" if d.kind == "camera" else "alarm", {"pipe": "COOLANT LEAK: %s", "relay": "%s FUSE BLOWN: docks charge at 40%%",
 			"gate": "%s JAMMED: the route is blocked", "door": "%s STUCK: the route is blocked",
 			"camera": "%s: NO SIGNAL", "uplink": "%s DOWN: no link to corkHQ"}.get(d.kind, "FAULT: %s") % d.name)
 		if d.has("blocks"):

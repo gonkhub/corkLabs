@@ -29,11 +29,12 @@ func _init() -> void:
 
 
 ## Things broken right now (leaks, blown fuse, desynced pods): the alarm light.
+## Faults worth the ALARM light (a dead camera isn't one).
 static func active_faults(plant: FacilityPlant) -> int:
 	var n := 0
 	for id in plant.device_ids():
 		var d := plant.device(id)
-		if d.fault or (d.kind == "pod" and float(d.value) <= 0.0):
+		if (d.fault and d.kind != "camera") or (d.kind == "pod" and float(d.value) <= 0.0):
 			n += 1
 	return n
 
@@ -162,6 +163,8 @@ static func _color(v: float, warn: float, bad: float) -> Color:
 static func _device_color(d: Dictionary) -> Color:
 	if d.fault or (d.kind == "bay" and int(d.job) >= 0):
 		return OSTheme.ALARM if d.kind != "bay" else OSTheme.WARN
-	if d.kind == "pod" or d.kind == "filter":
-		return _color(float(d.value), 0.75, 0.45)
+	if d.kind in ["waste", "compactor"]:
+		return _color(float(d.value), 0.4, 0.15)   # they fill up every day: only nearly full is a worry
+	if FacilityPlant.KINDS[d.kind].has("drift"):
+		return _color(float(d.value), 0.75, 0.45)   # pods, filters, rail grime...
 	return OSTheme.ACCENT

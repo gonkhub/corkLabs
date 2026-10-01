@@ -57,16 +57,17 @@ func _ready() -> void:
 	auto_track = target != null
 
 
-## Points at `subject` and zooms to `fov_deg` for `seconds` (a moment worth
-## seeing: a unit that just fixed this camera, looking into it), then goes
-## back to how it was.
+## Points at `subject` (and zooms to `fov_deg`, unless it's negative) for
+## `seconds` (a moment worth seeing: a unit that just fixed this camera,
+## looking into it), then goes back to how it was.
 func frame(subject: Node3D, fov_deg: float, seconds: float) -> void:
 	if _frame_left <= 0.0:
 		_frame_restore = {"target": target, "auto_track": auto_track, "zoom": zoom_fov}
 	target = subject
 	auto_track = true
 	target_in_view = true
-	zoom_fov = fov_deg
+	if fov_deg > 0.0:
+		zoom_fov = fov_deg
 	_frame_left = seconds
 
 
