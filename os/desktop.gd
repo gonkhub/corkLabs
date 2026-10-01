@@ -41,6 +41,7 @@ const SNAP_MARGIN := 12.0
 ## [id, script] in desktop-icon order.
 const APPS := [
 	["duties", preload("res://os/apps/duties_app.gd")],
+	["forms", preload("res://os/apps/forms_app.gd")],
 	["cameras", preload("res://os/apps/cameras_app.gd")],
 	["plant", preload("res://os/apps/plant_app.gd")],
 	["requisitions", preload("res://os/apps/requisitions_app.gd")],

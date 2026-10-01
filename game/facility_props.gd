@@ -66,7 +66,7 @@ func build(layout: FacilityLayout) -> void:
 	_build_relay(_by_wall("relay"))
 	_build_uplink(_by_wall("uplink"))
 	_build_compactor(layout.station_world_pos("compactor"))
-	_build_feed(layout.station_world_pos("coolant_feed"))
+	_build_feed(_beside_rail("coolant_feed", 0.0, 3.5))
 	_build_waste(_beside_rail("waste_bins", 0.0, 2.5))
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))

@@ -21,6 +21,8 @@ class_name Campaign
 extends RefCounted
 
 const SHIFTS := 3
+## The fault code a diagnostic reads off Ogre's dead core (Form C-9 asks for it).
+const OGRE_FAULT := "E-417"
 const SHIFT_START_HOUR := 6.0
 const SHIFT_END_HOUR := 14.0
 ## A new facility (and every brief) starts this long before the shift.
@@ -242,6 +244,14 @@ func sim_start(sim: FacilitySim) -> void:
 	_load_duties()
 	SupervisorArchive.new_run()
 	_set_watching(sim)
+	# A new facility: Ogre's core regulator failed in the night (Form C-9 gets a new one).
+	var ogre := sim.get_system("robot_ogre") as RobotAgent
+	if ogre:
+		ogre.break_down(sim, "core regulator failure")
+		ogre.activity.code = OGRE_FAULT
+		var k := sim.get_system("knowledge") as Knowledge
+		if k:
+			k.learn(sim, "ogre_down")
 
 
 func sim_tick(sim: FacilitySim, dt: float) -> void:

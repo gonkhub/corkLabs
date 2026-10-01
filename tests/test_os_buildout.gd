@@ -212,6 +212,22 @@ func _test_terminal() -> void:
 	_check(term.mode == "", "and 0 closes the link")
 	for i in desk.world.cameras.size():
 		plant.devices["cam_%d" % (i + 1)].fault = false
+	# Forms: paperwork takes its time.
+	var forms_app = desk.open_app("forms")
+	await process_frame
+	forms_app.refresh()
+	_check(forms_app.list.item_count == 0, "Forms: nothing until your liaison issues one")
+	Story.learn(sim, "form:c9")
+	forms_app._key = ""
+	forms_app.refresh()
+	_check(forms_app.list.item_count == 1 and forms_app.fields.size() == 3, "Forms: Form C-9, three fields")
+	forms_app.set_answer("Unit designation", "OGRE")
+	forms_app.set_answer("Unit serial number", "OGR-79-001")
+	forms_app.set_answer("Fault code", "E-417")
+	var t_form := sim.time()
+	forms_app._file()
+	_check(sim.time() - t_form >= 75.0 * 60.0 - 1.0 and (sim.get_system("forms") as Forms).status("c9") == "review", forms_app.result.text + " " +
+		"Forms: filing it takes 75 minutes, and it goes under review")
 	# The secret "dev": DevTools on the desktop.
 	_check(not desk.app_available("devtools") and not term.run("help").contains("dev "), "DevTools is hidden, and dev isn't in help")
 	term.run("dev")
@@ -242,7 +258,7 @@ func _test_terminal() -> void:
 	_check(not layout.segment("pod_door").blocked, "Terminal: unblock reopens it")
 	_check(term.run("frobnicate").contains("command not found"), "Terminal: unknown commands")
 	_check(term.run("wait 5").contains("command not found"), "Terminal: there is no wait")
-	_check(term.run("log 3 alarm").contains("COOLANT LEAK"), "Terminal: log with a category filter")
+	_check(term.run("log 40 alarm").contains("COOLANT LEAK"), "Terminal: log with a category filter")
 	term.run("open plant")
 	_check(desk.is_open("plant"), "Terminal: open an app")
 

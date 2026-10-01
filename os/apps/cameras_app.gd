@@ -504,11 +504,7 @@ func _talk_lines(lines: Array) -> void:
 	for c in talk_choices.get_children():
 		c.queue_free()
 	if talk_runner == null or talk_runner.done or talk_runner.choices.is_empty():
-		var close := Button.new()
-		close.text = "Close the link"
-		close.focus_mode = Control.FOCUS_NONE
-		close.pressed.connect(end_talk)
-		talk_choices.add_child(close)
+		end_talk()   # the conversation's over: the link closes (its last words still float on camera)
 		return
 	for i in talk_runner.choices.size():
 		var b := Button.new()
@@ -517,11 +513,13 @@ func _talk_lines(lines: Array) -> void:
 		var n := i
 		b.pressed.connect(func(): _talk_choose(n))
 		talk_choices.add_child(b)
-	var bye := Button.new()
-	bye.text = "(close the link)"
-	bye.focus_mode = Control.FOCUS_NONE
-	bye.pressed.connect(end_talk)
-	talk_choices.add_child(bye)
+	# One way out: the script's own, or (if it offers none here) ours.
+	if not talk_runner.choices.any(func(c): return str(c.target) == "END"):
+		var bye := Button.new()
+		bye.text = "(close the link)"
+		bye.focus_mode = Control.FOCUS_NONE
+		bye.pressed.connect(end_talk)
+		talk_choices.add_child(bye)
 
 
 func _talk_choose(i: int) -> void:

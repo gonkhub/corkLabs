@@ -105,6 +105,8 @@ func build() -> void:
 		["Wear 0", func(): _unit(func(b): b.wear = 0.0)],
 		["Wear 70%", func(): _unit(func(b): b.wear = 0.7)],
 		["Trust +1", func(): _unit(func(b): Story.knowledge(sim()).add_value("trust:" + b.robot_id, 1.0))],
+		["Break its core", func(): _unit(func(b): b.break_down(sim(), "core regulator failure (dev)"))],
+		["Repair it", func(): _unit(func(b): b.repair(sim()))],
 		["Make it ask", func(): _unit(func(b): (sim().get_system("requests") as UnitRequests).ask(sim(), b.robot_id, "service",
 			"(dev) Book me a service?", ["Book a service", "Not now"], 1))],
 	])

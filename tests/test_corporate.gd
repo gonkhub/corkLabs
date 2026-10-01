@@ -77,14 +77,15 @@ func _test_requisitions() -> void:
 	sim.advance(2.1 * 3600.0)
 	var hauling := (sim.get_system("work") as WorkBoard).jobs.any(func(j): return str(j.source) == "crate:haul:%d" % int(parts.order.id))
 	_check(parts.order.status == "crated" and (plant.crates.size() + int(plant.device("freight_stacks").job >= 0) >= 1 or hauling),
-		"parts arrive as a crate in the deep stacks (%s)" % parts.order.status)
-	# The hand-off chain: Ogre lifts it to the loading bay, a rail unit hauls it, Tinker unpacks it.
+		"parts arrive as a crate (%s)" % parts.order.status)
+	# The hand-off chain: ordinary parts are left at the loading bay; a rail unit hauls them, Tinker unpacks them.
 	var hours := 0.0
 	while parts.order.status != "unpacked" and hours < 12.0:
 		sim.advance(600.0)
 		hours += 600.0 / 3600.0
 	var texts := sim.journal.entries.map(func(e): return str(e.text))
-	_check(texts.any(func(t): return t.contains("Ogre lowered the crate")), "Ogre lifts the crate to the loading bay")
+	_check(texts.any(func(t): return t.contains("Crate delivered to the loading bay")) and not texts.any(func(t): return t.contains("Ogre lowered the crate")),
+		"ordinary parts are left at the loading bay (no crane needed)")
 	_check(texts.any(func(t): return t.contains("hauled the crate") and not t.contains("Ogre hauled")), "a rail unit hauls it to the workshop")
 	_check(texts.any(func(t): return t.contains("unpacked the crate")), "and it's unpacked at the workbench")
 	_check(int(req.inventory.get("fuse_pack", 0)) >= fuses_before - 1 + 8 and parts.order.status == "unpacked",

@@ -16,6 +16,11 @@ extends RefCounted
 
 const CATALOG_PATH := "res://game/corporate/catalog.txt"
 const START_FUNDS := 1000
+## Deliveries too heavy for anything but Ogre's crane: they wait in the deep
+## stacks. Everything else is left at the loading bay.
+const HEAVY := ["gate_actuator", "robot_tinker", "robot_hauler"]
+## Ogre's replacement core: approved Form C-9 sends it by priority courier.
+const CORE_HOURS := 2.0
 ## Spare parts on the shelf when a new supervisor arrives: an order or two of
 ## each (and two coolant canisters to pump in when it runs low); not the week.
 const START_STOCK := {"pipe_clamps": 6, "fuse_pack": 4, "actuator_kit": 2,
@@ -115,7 +120,25 @@ func _ship(sim: FacilitySim, o: Dictionary) -> void:
 			o.id, o.qty, it.name, FacilitySim.format_time(o.eta)])
 
 
+## Form C-9 approved: Ogre's core, by priority courier, free of charge.
+func ship_core(sim: FacilitySim) -> float:
+	var eta := sim.time() + CORE_HOURS * 3600.0
+	sim.schedule(eta, "core_delivery", {})
+	var hq := _hq(sim)
+	if hq:
+		hq.post(sim, "Logistics", "order", "Essential component dispatched by priority courier, free of charge: core regulator for Unit OGRE. Arrives %s at the loading bay." % FacilitySim.format_time(eta))
+	return eta
+
+
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
+	if event_name == "core_delivery":
+		var plant := sim.get_system("plant") as FacilityPlant
+		if plant:
+			plant.receive_core(sim)
+		var hq0 := _hq(sim)
+		if hq0:
+			hq0.post(sim, "Logistics", "order", "Delivered to the loading bay: core regulator for Unit OGRE. Your units will bring it in.")
+		return
 	var o := get_order(int(data.get("order", -1)))
 	if o.is_empty():
 		return
@@ -143,7 +166,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			_deliver(sim, o, it)
 			if hq:
 				hq.post(sim, "Logistics", "order", "Requisition #%d delivered: %dx %s.%s" % [o.id, o.qty, it.name,
-					"" if str(it.effect).begins_with("coolant:") else " Crated in the deep stacks; your units will bring it in."])
+					"" if str(it.effect).begins_with("coolant:") or o.get("express", false) else
+					(" Crated in the deep stacks (Ogre lifts those)." if HEAVY.has(str(o.item)) else " Crated at the loading bay; your units will bring it in.")])
 
 
 # What arrives: coolant is pumped straight into the reservoir; everything else
@@ -159,7 +183,7 @@ func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 		return
 	if plant and not o.get("express", false):
 		o.status = "crated"
-		plant.receive_crate(sim, int(o.id), "%dx %s" % [int(o.qty), it.name])
+		plant.receive_crate(sim, int(o.id), "%dx %s" % [int(o.qty), it.name], HEAVY.has(str(o.item)))
 	else:
 		# Express is couriered straight to the workshop: no crate, no units needed.
 		unpacked(sim, int(o.id))

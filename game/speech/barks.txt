@@ -182,3 +182,8 @@ waste | tinker |  | It's getting into my joints. The waste. It's everywhere.
 waste | hauler |  | Bins are full. Say the word.
 waste | hauler |  | Can't think with that in the air.
 waste | ogre |  | ...the... bins... are... full...
+
+# --- Hauler doing Ogre's lifting (the coolant feed) --------------------------------
+feed_heavy | hauler |  | Canisters are Ogre's job. My joints know it.
+feed_heavy | hauler |  | Heavy. Heavier than they look. I'll be feeling that.
+feed_heavy | hauler |  | Ogre lifts these with one arm. I lift them with everything.

@@ -55,9 +55,9 @@ func _initialize() -> void:
 	var menu: Array = load("res://os/object_menu.gd").entries(sim, "bay_2")
 	var order: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))
 	_check(order.size() == 1 and order[0].has("sub"), "clicking it in Cameras offers Order maintenance")
-	var send: Array = load("res://os/object_menu.gd").entries(sim, "robot:ogre").filter(func(e): return str(e.get("text", "")) == "Send to a job")
+	var send: Array = load("res://os/object_menu.gd").entries(sim, "robot:tinker").filter(func(e): return str(e.get("text", "")) == "Send to a job")
 	_check(send.size() == 1 and not send[0].sub.any(func(e): return e.get("disabled", false) and not e.get("label", false)),
-		"a unit's Send to a job lists only jobs it can take (Ogre: %s)" % str(send[0].sub.map(func(e): return e.text)) if send.size() == 1 else "")
+		"a unit's Send to a job lists only jobs it can take (Tinker: %s)" % (str(send[0].sub.map(func(e): return e.text)) if send.size() == 1 else "no menu"))
 	var units: Array = order[0].sub
 	_check(units.size() == FacilitySetup.robots(sim).size() and str(units[0].text).contains("(best)"),
 		"you pick which unit goes: every unit listed, the best free one first (%s)" % str(units.map(func(u): return u.text)))

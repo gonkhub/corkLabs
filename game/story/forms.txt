@@ -1,0 +1,10 @@
+# Corporate paperwork (the Forms app). A form is issued (Knowledge
+# "form:<id>", usually by Liaison Pell), filled in at the terminal (it costs
+# its minutes when filed: paperwork is slow on purpose), and reviewed by
+# corporate a while later. Every answer must match corporate's records
+# (case, spaces, dashes and dots don't matter); one wrong answer and it comes
+# back, saying which. Approved: Knowledge "filed:<id>", and its action runs.
+#   id | title | minutes | fields (label=answer; ...) | on approval | what it's for
+# Actions: core (ship Ogre's replacement core).
+
+c9 | Form C-9: Replacement of an Essential Component | 75 | Unit designation=OGRE; Unit serial number=OGR-79-001; Fault code=E-417 | core | For a component a unit can't work without. Supplied free of charge by priority courier. The serial number is in the unit's configuration file; the fault code comes from a diagnostic.

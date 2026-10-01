@@ -223,7 +223,29 @@ func errand_estimate(sim: FacilitySim, job_id: int) -> Dictionary:
 
 ## Out of action (crashed, rebooting, stalled, seized): it can't think or take orders.
 func offline() -> bool:
-	return activity.kind in ["crashed", "rebooting", "stalled", "seized"]
+	return activity.kind in ["crashed", "rebooting", "stalled", "seized", "broken"]
+
+
+## Something's broken inside it (Ogre's core): offline until the part is
+## replaced (FacilityPlant: the core chain). No reboot fixes it.
+func break_down(sim: FacilitySim, why: String) -> void:
+	var board := _board(sim)
+	if activity.kind == "work" and board:
+		board.release(int(activity.job), sim_id)
+	route = []
+	order = {}
+	activity = {"kind": "broken", "why": why}
+	sim.note(robot_id, "%s is OFFLINE: %s" % [display_name(), why])
+
+
+## The part's in: back online.
+func repair(sim: FacilitySim) -> void:
+	if activity.kind != "broken":
+		return
+	activity = {"kind": "idle"}
+	_think_left = 0.0
+	sim.note(robot_id, "%s is back online" % display_name())
+	_say(sim, "restarted", {})
 
 
 ## How much wear slows it: 1 = not at all ... 0.5 = half speed at full wear.
@@ -631,6 +653,8 @@ func _nearest_station(sim: FacilitySim) -> String:
 
 ## Remote reboot (supervisor): offline for REBOOT_TIME, then stability up.
 func reboot(sim: FacilitySim) -> void:
+	if activity.kind == "broken":
+		return   # a dead part isn't a software problem
 	var board := _board(sim)
 	if activity.kind == "work" and board:
 		board.release(int(activity.job), sim_id)
@@ -755,6 +779,8 @@ func _say(sim: FacilitySim, trigger: String, data: Dictionary) -> void:
 # --- Doing ------------------------------------------------------------------------------
 
 func _perform(sim: FacilitySim, dt: float) -> void:
+	if activity.kind == "broken":
+		return   # dead: no power drawn, nothing done, until it's repaired
 	var layout := _layout(sim)
 	_use_power(sim, traits.drain_idle * dt)
 	moving = false
@@ -771,6 +797,8 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 			if sim.time() >= float(activity.until):
 				_finish_reboot(sim)
 			return
+		"broken":
+			return   # nothing until it's repaired
 		"seized":
 			# Frozen until someone reboots it by hand, or (slowly) it works itself free.
 			if sim.time() >= float(activity.get("until", INF)):
@@ -1175,6 +1203,8 @@ func doing_text(sim: FacilitySim) -> String:
 			return "STALLED (no power)"
 		"seized":
 			return "SEIZED UP (needs a manual reboot)"
+		"broken":
+			return "OFFLINE: %s" % str(activity.get("why", "broken"))
 		"accident":
 			return "heading to %s" % _layout(sim).station(activity.station).get("name", "?")
 	return "standing by (%s)" % _room_name(sim)

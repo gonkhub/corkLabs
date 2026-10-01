@@ -15,6 +15,7 @@ pell: I'm here to help you succeed. Success here is simple: numbers up, question
 
 == menu
 * {directive:explain} About my activity: I can explain. -> explain
+* {ogre_down & !form:c9} Unit OGRE is down. I need a replacement core. -> ogre_core
 * How am I doing? -> perf
 * {!seen:pell.okafor} What happened to the last supervisor? -> okafor
 * {transfer:okafor & !seen:pell.transfer} What is Long-Term Processing? -> transfer
@@ -108,4 +109,12 @@ pell: Especially with me.
 == silence
 pell: The link is never quiet, Supervisor. Sometimes you just can't hear it.
 ~ suspicion 4 | asked the liaison about the suspended link
+-> menu
+
+== ogre_core
+pell: Ogre. Yes. Its core regulator failed in the night.
+pell: Essential components are supplied free of charge. On Form C-9, Replacement of an Essential Component. It's in your Forms now.
+pell: Fill it in properly. The unit's serial number is in its configuration file, and the fault code comes from a diagnostic.
+pell: Forms that come back wrong go to the bottom of the pile.
+~ learn form:c9
 -> menu

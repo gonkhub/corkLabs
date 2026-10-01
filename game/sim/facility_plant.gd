@@ -38,6 +38,13 @@
 # real breakdowns (leaks, the relay, the gate, cameras).
 #   feed     The hangar's coolant feed: a canister from stock goes into the
 #            loop by Ogre's crane ("Feed a coolant canister", +50% coolant).
+#            Hauler can do it from the rail when it must (Ogre's down), but
+#            the canisters are too heavy for it: it wears, and it says so.
+#
+# OGRE'S CORE. A new facility starts with Ogre offline (core regulator).
+# The replacement comes through corporate (Form C-9, see Forms); a courier
+# drops it at the loading bay, Hauler carries it under Ogre ("core:haul"),
+# Tinker fits it ("core:install"), and Ogre's back.
 #
 # ROLES. Every kind of work belongs to particular units ("units" below; the
 # board copies it onto the job, and nobody else will take it):
@@ -92,11 +99,15 @@ const KINDS := {
 		"levels": [0.5, 0.3, 0.12], "units": ["hauler"], "chore": true},
 	"rails": {"job": "Clean the rails", "skill": "general", "work": 540.0, "drift": 0.04,
 		"levels": [0.6, 0.4, 0.2], "start_priority": 0, "units": ["hauler"], "chore": true},
-	"feed": {"job": "Feed a coolant canister", "skill": "heavy", "work": 300.0, "part": "coolant_canister", "units": ["ogre"]},
+	"feed": {"job": "Feed a coolant canister", "skill": "heavy", "work": 300.0, "part": "coolant_canister", "units": ["ogre", "hauler"]},
 }
 ## Who does the work that isn't a device's: job source prefix -> units.
-const SOURCE_UNITS := {"crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
+const SOURCE_UNITS := {"core:haul": ["hauler"], "core:install": ["tinker"], "crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
 	"part:refit": ["hauler"], "unit:": ["tinker"], "service:": ["tinker"], "freight_stacks": ["ogre"]}
+## Extra wear when Hauler feeds a coolant canister (they're Ogre's to lift).
+const FEED_WEAR_HAULER := 0.12
+const CORE_HAUL_WORK := 420.0
+const CORE_INSTALL_WORK := 900.0
 ## How much one load of cleared debris, or of pod waste, fills the compactor.
 const DEBRIS_LOAD := 0.1
 const WASTE_LOAD := 0.3
@@ -286,6 +297,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				_part_step(sim, id, str(data.get("by", "")))
 			elif id.begins_with("crate:"):
 				_crate_step(sim, id, str(data.get("by", "")))
+			elif id.begins_with("core:"):
+				_core_step(sim, id, str(data.get("by", "")))
 			shift_stats.jobs += 1
 		"job_cancelled":
 			var id := str(data.get("source", ""))
@@ -484,6 +497,13 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"feed":
 			coolant = minf(coolant + COOLANT_CANISTER, 1.0)
 			sim.note("plant", "%s fed a coolant canister into the loop: coolant %d%%" % [who, _pct(coolant)])
+			var bot := sim.get_system(by) as RobotAgent
+			if bot and not bot.traits.stationary:
+				# Not built for it: the canisters are Ogre's to lift.
+				bot.wear = minf(bot.wear + FEED_WEAR_HAULER, 1.0)
+				var chatter := sim.get_system("chatter") as RobotChatter
+				if chatter:
+					chatter.trigger(sim, bot, "feed_heavy", {})
 		"freight":
 			sim.note("plant", "Freight at %s stacked by %s" % [d.name, who])
 			if id == "freight_stacks" and not crates.is_empty():
@@ -540,8 +560,44 @@ func _part_step(sim: FacilitySim, source: String, by: String) -> void:
 
 # --- Crates ----------------------------------------------------------------------------
 
-## A requisition has arrived: its crate waits in the deep stacks for Ogre.
-func receive_crate(sim: FacilitySim, order_id: int, label: String) -> void:
+## Ogre's replacement core has arrived at the loading bay: Hauler brings it
+## under Ogre, Tinker fits it.
+func receive_core(sim: FacilitySim) -> void:
+	sim.note("plant", "Priority courier: Ogre's replacement core is at the loading bay")
+	var board := sim.get_system("work") as WorkBoard
+	if board:
+		var id := board.post(sim, "Haul crate: Ogre's core", "heavy", "loading", CORE_HAUL_WORK, 2, "core:haul")
+		board.get_job(id).rail_only = true
+
+
+func _core_step(sim: FacilitySim, source: String, by: String) -> void:
+	var board := sim.get_system("work") as WorkBoard
+	var who := by.trim_prefix("robot_").capitalize()
+	if source == "core:haul" and board:
+		sim.note("plant", "%s set Ogre's new core down under it" % who)
+		board.post(sim, "Install Ogre's core", "precise", "ogre_service", CORE_INSTALL_WORK, 2, "core:install")
+	elif source == "core:install":
+		sim.note("plant", "%s fitted Ogre's new core regulator" % who)
+		var ogre := sim.get_system("robot_ogre") as RobotAgent
+		if ogre:
+			ogre.repair(sim)
+		var k := sim.get_system("knowledge") as Knowledge
+		if k:
+			k.forget("ogre_down")
+			k.learn(sim, "ogre_fixed")
+
+
+## A requisition has arrived as a crate. A very heavy one waits in the deep
+## stacks for Ogre to lift; anything else is left at the loading bay for a
+## rail unit to haul in.
+func receive_crate(sim: FacilitySim, order_id: int, label: String, heavy := true) -> void:
+	if not heavy:
+		sim.note("plant", "Crate delivered to the loading bay: %s" % label)
+		var board0 := sim.get_system("work") as WorkBoard
+		if board0:
+			var jid := board0.post(sim, "Haul crate: %s" % label, "heavy", "loading", HAUL_WORK, 1, "crate:haul:%d" % order_id)
+			board0.get_job(jid).rail_only = true
+		return
 	crates.append(order_id)
 	sim.note("plant", "Crate delivered to the deep stacks: %s" % label)
 	var d: Dictionary = devices["freight_stacks"]

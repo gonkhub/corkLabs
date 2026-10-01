@@ -14,6 +14,7 @@
 1 | tut_inspect | Inspect a device | 0 | 2 | | did:inspect | In Cameras, click a machine: Send a unit to inspect it. It reports back.
 1 | tut_requisition | Order spare parts | 0 | 3 | | did:requisition | Requisitions. Repairs use parts from stock, taken when you order the repair. Order before you run out.
 1 | tut_answer | Answer a unit's request | 0 | 2 | | did:answer | When the units ask for something, REQUESTS lights up on the taskbar. Click it (or the asking unit, in Cameras) to answer.
+1 | ogre_core | Get Ogre back online | 0 | 6 | | filed:c9 | Ogre's core regulator failed in the night. Ask Pell for a replacement (corkHQ: Reply), then file the form (Forms).
 1 | conduct | Read the Code of Conduct | 0 | 4 | | read:/corp/policy/conduct.txt | Terminal: cat /corp/policy/conduct.txt
 * | status_report | File the morning status report | 30 | 4 | 08:00 | | The Directorate reads the first line.
 2,3 | coolant_walk | Inspect the coolant loop and filters | 60 | 4 | | | Finds worn filters and pods before they become alarms.

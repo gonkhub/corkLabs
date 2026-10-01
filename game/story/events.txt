@@ -21,6 +21,8 @@
 # --- Shift 1: orientation. Things go wrong on purpose, one at a time, so a
 # new supervisor meets each system while Pell walks them through it.
 1 | 06:02 | | hq | Liaison Pell | directive | Good morning, Supervisor. I'm Pell, your liaison. Today is orientation: your Duties list walks you through the job. Start with your onboarding file (Terminal: ls, then cat welcome.txt).
+1 | 06:04 | | hq | IT Services | notice | Unit OGRE has been offline since 03:12: core regulator failure. Replacement components for essential units are requested through your liaison (corkHQ: Reply).
+1 | 06:30 | ogre_down | say | hauler | Ogre's quiet. Somebody has to lift the canisters. Somebody is me.
 1 | 06:50 | !read:/home/supervisor/welcome.txt | hq | Liaison Pell | notice | You haven't opened your onboarding yet. Terminal: cat ~/welcome.txt
 1 | 07:10 | | fault | pipe_1
 1 | 07:11 | | hq | Liaison Pell | notice | A coolant leak in bay 1. Nobody fixes anything until you say so: Cameras, find the bay 1 pipe, click it, Order maintenance.

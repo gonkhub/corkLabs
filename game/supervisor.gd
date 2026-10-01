@@ -370,6 +370,22 @@ static func pump_coolant() -> Dictionary:
 	return order_maintenance("coolant_feed")
 
 
+## Files a corporate form (the Forms app): it costs its minutes, and comes
+## back approved or returned later. Returns "" or why not.
+static func file_form(id: String, answers: Dictionary) -> String:
+	var sim: FacilitySim = Facility.sim
+	var forms := sim.get_system("forms") as Forms
+	var d := Forms.def(id)
+	if forms == null or d.is_empty():
+		return "No such form."
+	var why := forms.submit(sim, id, answers)
+	if not why.is_empty():
+		return why
+	did("form")
+	Facility.spend(float(d.minutes) * 60.0, "Supervisor fills in %s" % d.title)
+	return ""
+
+
 ## Diagnostics on a unit (its object menu): reads it out properly and
 ## steadies it a little. 30 minutes. Returns the read-out.
 static func diagnose(bot: RobotAgent) -> String:
@@ -382,6 +398,9 @@ static func diagnose(bot: RobotAgent) -> String:
 	if not bot.offline():
 		bot.stability = minf(bot.stability + DIAGNOSE_STEADY, 1.0)
 	Facility.spend(DIAGNOSE_MINUTES * 60.0, "Supervisor runs diagnostics on %s" % bot.display_name())
+	if bot.activity.kind == "broken":
+		return "DIAG %s: OFFLINE. %s. Fault code %s. No response from the unit's software." % [
+			bot.display_name().to_upper(), str(bot.activity.get("why", "")).capitalize(), str(bot.activity.get("code", "unknown"))]
 	return "DIAG %s: power %d%%, stability %d%% (%s), independence %d%%, wear %d%%, jobs done %d, trust %.1f. %s" % [
 		bot.display_name().to_upper(), roundi(bot.power * 100.0), roundi(bot.stability * 100.0), bot.stability_state,
 		roundi(bot.independence() * 100.0), roundi(bot.wear * 100.0), bot.jobs_done, Story.knowledge(sim).value("trust:" + bot.robot_id),
