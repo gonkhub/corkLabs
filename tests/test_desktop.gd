@@ -13,6 +13,7 @@ var failures := 0
 func _initialize() -> void:
 	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	var facility: Node = get_root().get_node("Facility")
+	facility.seed_override = 4242   # the same facility every run (its random faults too)
 	facility.wipe_save(SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
 	OSSettings.use_file(OS_SETTINGS)

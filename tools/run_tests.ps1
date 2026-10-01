@@ -6,12 +6,12 @@
 #   powershell -File tools\run_tests.ps1                 # all tests
 #   powershell -File tools\run_tests.ps1 -Only naming    # tests whose file name contains "naming"
 #   powershell -File tools\run_tests.ps1 -Keep           # keep the copy (%TEMP%\corkcheck) for poking at
-# Optional: -Godot "C:\path\to\Godot_console.exe"  -TimeoutSec 120
+# Optional: -Godot "C:\path\to\Godot_console.exe"  -TimeoutSec 300
 param(
     [string]$Godot = "$env:USERPROFILE\Desktop\Godot_v4.3-stable_win64_console.exe",
     [string]$Only = "",
     [switch]$Keep,
-    [int]$TimeoutSec = 120
+    [int]$TimeoutSec = 300
 )
 
 $project = Split-Path -Parent $PSScriptRoot

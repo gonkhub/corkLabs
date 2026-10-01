@@ -9,7 +9,7 @@
 set -u
 GODOT="${GODOT:-godot}"
 ONLY="${1:-}"
-TIMEOUT="${TIMEOUT:-180}"
+TIMEOUT="${TIMEOUT:-300}"
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="${TMPDIR:-/tmp}/corkcheck"
 

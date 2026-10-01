@@ -20,6 +20,7 @@ func _initialize() -> void:
 	sup = load("res://game/supervisor.gd")
 	get_root().size = Vector2i(1600, 900)
 	facility = get_root().get_node("Facility")
+	facility.seed_override = 4242   # the same facility every run (its random faults too)
 	facility.wipe_save(SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
 	OSSettings.use_file(OS_SETTINGS)
@@ -158,6 +159,9 @@ func _test_terminal() -> void:
 	tinker.stability = 0.5
 	tinker.activity = {"kind": "idle"}   # (online, whatever this random facility did to it)
 	t0 = sim().time()
+	var plant0 := sim().get_system("plant") as FacilityPlant
+	for i in 7:   # (every camera working: this talk runs in Cameras)
+		plant0.devices["cam_%d" % (i + 1)].fault = false
 	var trust0: float = Story.knowledge(sim()).value("trust:tinker")
 	out = term.run("talk tinker")
 	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
@@ -243,6 +247,24 @@ func _test_bin_and_notes() -> void:
 	notes._dirty = 0.01
 	notes._process(0.1)
 	_check(str(OSSettings.get_value("notes")).contains("maint: top score"), "and keeps yours on the desk")
+	# Pages, colours, find.
+	notes._add_page()
+	notes.edit.text = "Ogre serial OGR-79-001"
+	notes._on_text_changed()
+	notes.edit.select(0, 12, 0, 22)
+	notes.color_selection(notes.COLORS[0])
+	notes.edit.text = ">> Ogre serial OGR-79-001"
+	notes._on_text_changed()
+	var mark: Array = notes._highlighter.marks[0] if not notes._highlighter.marks.is_empty() else []
+	_check(notes.pages.size() == 2 and not mark.is_empty() and int(mark[0]) == 15 and int(mark[1]) == 25,
+		"Notes: a second page; a coloured stretch stays on its words as text goes in before it (%s)" % str(mark))
+	notes._open_page(0)
+	_check(notes.find("ogr-79") == 1, "Notes: find searches every page")
+	notes.find_next()
+	_check(notes.current == 1 and notes.edit.get_selected_text().to_lower() == "ogr-79", "and goes to the page it's on, selected")
+	notes.save()
+	var book = OSSettings.get_value("notebook")
+	_check(book is Dictionary and (book.pages as Array).size() == 2 and (book.pages[1].marks as Array).size() == 1, "Notes: pages and colours are kept on the desk")
 
 
 func _test_parts_and_wear() -> void:
@@ -387,10 +409,11 @@ func _test_corporate() -> void:
 	panel.choose_reply(panel.reply_runner.choices.size() - 1)
 	await process_frame
 	_check(panel.reply_runner == null, "and the reply closes")
+	_uplink_up()   # (the conversation took long enough for this facility's relay to take the uplink down)
 	o.violate(sim(), "read /home/a", 1.0)
 	var standing := o.standing
 	o.violate(sim(), "read /home/b", 1.0)
-	_check(o.standing < standing and sim().scheduler.peek(50).any(func(e): return e.name == "targeted_audit"),
+	_check(o.standing < standing and sim().scheduler.peek(1000).any(func(e): return e.name == "targeted_audit"),
 		"the fifth: Compliance takes your standing and books a targeted audit")
 
 

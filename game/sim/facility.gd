@@ -44,6 +44,8 @@ const COST := {
 var sim: FacilitySim
 var running := false
 var save_path := SAVE_PATH
+## Tests: every new facility uses this seed (-1: a new one each time).
+var seed_override := -1
 
 ## Real seconds an errand's trip and its work take to watch.
 const ERRAND_TRAVEL := 3.0
@@ -131,7 +133,7 @@ func start_session(systems: Array = [], path := SAVE_PATH, seed_value := -1) -> 
 		sim.add_system(s)
 	var data := _read_save(path)
 	if data.is_empty():
-		sim.new_game(seed_value if seed_value >= 0 else int(Time.get_unix_time_from_system()))
+		sim.new_game(seed_value if seed_value >= 0 else (seed_override if seed_override >= 0 else int(Time.get_unix_time_from_system())))
 		for s in systems:
 			if s.has_method("sim_start"):
 				s.sim_start(sim)

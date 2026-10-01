@@ -35,6 +35,7 @@ const DEFAULTS := {
 	"feed_muted": false,
 	"feed_volume": 1.0,
 	"windows": {},     # app id -> {"rect": [x, y, w, h], "open": bool, "minimized": bool, "maximized": bool, "state": {...}}
+	"notebook": {},   # the Notes app's pages (the first time, "notes" below becomes page one)
 	"notes": NOTES_LEFTOVER,   # the Notes app: the supervisor's own notepad (it's the desk: it survives new saves)
 }
 
