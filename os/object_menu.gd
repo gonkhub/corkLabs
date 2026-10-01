@@ -2,8 +2,7 @@
 # click opens (CamerasApp shows it at the cursor), and the one-line read-out
 # the feed shows while you hover it. Ids come from FacilityWorld.pick:
 #
-#   robot:<id>   a unit: its request (if it's asking), Talk (once you know
-#                you can), send it to a job, recharge, stand by, cancel its
+#   robot:<id>   a unit: Talk, send it to a job, recharge, stand by, cancel its
 #                order, diagnose, book a service, remote reboot; a seized
 #                unit: send someone to reboot it by hand
 #   <device>     a pipe, filter, pod, the relay, a door, a camera, the
@@ -32,7 +31,7 @@ static func describe(sim: FacilitySim, id: String) -> String:
 			_pct(bot.power), _pct(bot.stability), bot.stability_state, _pct(bot.wear)]
 		var r := _request_of(sim, bot)
 		if not r.is_empty():
-			text += "\nASKS: " + str(r.text)
+			text += "\nwants a word (it'll ask while you watch it)"
 		elif bot.own_will():
 			text += "\n(unstable: choosing its own work)"
 		return text
@@ -85,13 +84,6 @@ static func entries(sim: FacilitySim, id: String) -> Array[Dictionary]:
 static func _robot(sim: FacilitySim, bot: RobotAgent) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	out.append(_label("%s: %s" % [bot.display_name().to_upper(), bot.doing_text(sim)]))
-	var r := _request_of(sim, bot)
-	if not r.is_empty():
-		out.append(_label("Asks: " + str(r.text)))
-		for i in (r.options as Array).size():
-			var n := i
-			out.append(_item("Answer: " + str(r.options[i]), "", "5 min", func(): return Supervisor.answer_request(int(r.id), n)))
-		out.append({"sep": true})
 	var board := sim.get_system("work") as WorkBoard
 	if bot.activity.kind == "seized":
 		var job := _reboot_job(sim, bot)
@@ -103,11 +95,10 @@ static func _robot(sim: FacilitySim, bot: RobotAgent) -> Array[Dictionary]:
 			var jid := int(job.id)
 			out.append(_item("Send a unit to reboot it by hand", "", "Dispatch sends the best free unit (precise work). 5 min",
 				func(): return str(Supervisor.request_job(jid).text)))
-	if Story.knows(sim, "cmd:talk"):
-		var talk := _item("Talk", "No response: it's offline." if bot.offline() else "",
-			"Open the unit link. Conversing with units is against the Code of Conduct.")
-		talk.talk = true
-		out.append(talk)
+	var talk := _item("Talk", "No response: it's offline." if bot.offline() else "",
+		"Open the unit link: it answers on camera. Conversing with units is against the Code of Conduct.")
+	talk.talk = true
+	out.append(talk)
 	if not bot.offline():
 		var jobs: Array[Dictionary] = []
 		for j in board.open_jobs():

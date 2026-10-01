@@ -5,10 +5,16 @@
 #                 outlined and named. Left-click (no drag) opens its menu at
 #                 the cursor (ObjectMenu): order maintenance, talk, send a
 #                 unit to a job, recharge, diagnose, service...
-#   Units bar     one chip per unit (what it's doing, power; ASKS when it has
-#                 a request). Click: jump to a camera that sees it, and its menu.
-#   Talking       Talk opens the unit link here: its words float over it on
-#                 camera, your replies are buttons under the picture.
+#   Requests      a unit that wants something pings (a toast, REQUESTS on the
+#                 taskbar, "ASKING" on its camera's caption). When you're
+#                 looking at the feed it's in, it asks out loud, on camera,
+#                 and your answers are buttons under the picture (like a
+#                 conversation). Look away and it waits.
+#   Talking       Talk (any unit's menu) opens the unit link here. There's
+#                 no transcript: its words float over it on camera, one line
+#                 after another, and your replies are buttons under the
+#                 picture. System lines ("the link is quiet") show as the
+#                 feedback line.
 #
 #   Single view   one camera, and you drive its pan/tilt/zoom head:
 #                 drag to pan/tilt, scroll to zoom, double-click to reset
@@ -39,16 +45,18 @@ var reset_button: Button
 var night_button: CheckBox
 var mute_button: Button
 var hint: Label
-## The units bar, the last action's result, the object menu.
-var roster: HFlowContainer
-var _roster_key := ""
+## The last action's result, the object menu.
 var feedback: Label
 var menu: PopupMenu
 var _menu_entries: Array = []      # menu item id -> entry
 ## The conversation over the unit link, while one is open.
 var talk_box: PanelContainer
-var talk_log: RichTextLabel
 var talk_choices: HFlowContainer
+## Everything said over the link so far, "WHO: text" (tests read it; the
+## player sees it on camera).
+var talk_heard: PackedStringArray = []
+## The unit request being asked on camera right now (id, or -1).
+var asking := -1
 var talk_runner: Dialogue.Runner
 var talk_bot: RobotAgent
 
@@ -120,9 +128,6 @@ func build() -> void:
 			f.set_filter(on))
 	row.add_child(filt)
 
-	roster = HFlowContainer.new()
-	roster.add_theme_constant_override("h_separation", 6)
-	add_child(roster)
 	body = Control.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(body)
@@ -243,7 +248,7 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 
 
 func refresh() -> void:
-	_refresh_roster()
+	_check_requests()
 	var c := _camera()
 	var single := not grid_mode and c != null
 	var w := _world()
@@ -352,50 +357,61 @@ func show_feedback(text: String) -> void:
 	feedback.visible = not text.is_empty()
 
 
-# --- Units bar -------------------------------------------------------------------------
+# --- Requests, asked on camera --------------------------------------------------------
 
-func _refresh_roster() -> void:
-	if sim() == null:
+# A unit with a request asks when you're looking at the feed it's in.
+func _check_requests() -> void:
+	if sim() == null or talk_runner != null:
 		return
 	var reqs := sim().get_system("requests") as UnitRequests
-	var bots := FacilitySetup.robots(sim())
-	var key := ""
-	for bot in bots:
-		var asks := reqs != null and reqs.requests.any(func(r): return str(r.robot) == bot.robot_id)
-		key += "%s|%s|%d|%s|%s;" % [bot.robot_id, bot.doing_text(sim()), roundi(bot.power * 20.0), bot.stability_state, asks]
-	var req := sim().get_system("requisitions") as Requisitions
-	var crated: Array = req.crated_units() if req else []
-	key += str(crated.size())
-	if key == _roster_key:
+	var w := _world()
+	if reqs == null or w == null:
 		return
-	_roster_key = key
-	for c in roster.get_children():
+	if asking >= 0:
+		var current := reqs.get_request(asking)
+		if current.is_empty() or grid_mode or w.robot_room(str(current.robot)) != w.camera_rooms[cam]:
+			_stop_asking()   # answered elsewhere, expired, or you looked away: it waits
+		return
+	if grid_mode or cam >= w.camera_rooms.size():
+		return
+	for q in reqs.requests:
+		if w.robot_room(str(q.robot)) == w.camera_rooms[cam]:
+			_ask(q)
+			return
+
+
+func _ask(q: Dictionary) -> void:
+	asking = int(q.id)
+	if desktop and desktop.speech:
+		desktop.speech.queue_line(str(q.robot), str(q.text))
+	for c in talk_choices.get_children():
 		c.queue_free()
-	for bot in bots:
-		var asks := reqs != null and reqs.requests.any(func(r): return str(r.robot) == bot.robot_id)
+	for i in (q.options as Array).size():
 		var b := Button.new()
+		b.text = str(q.options[i])
 		b.focus_mode = Control.FOCUS_NONE
-		var state := ""
-		if bot.offline():
-			state = "  " + bot.activity.kind.to_upper()
-		elif bot.own_will():
-			state = "  " + bot.stability_state.to_upper()
-		b.text = "%s%s  %d%%%s" % [bot.display_name().to_upper(), "  ASKS" if asks else "", roundi(bot.power * 100.0), state]
-		b.tooltip_text = ObjectMenu.describe(sim(), "robot:" + bot.robot_id)
-		var col := OSTheme.WARN if asks or bot.offline() or bot.own_will() else OSTheme.category_color(bot.robot_id)
-		b.add_theme_color_override("font_color", col)
-		var id := bot.robot_id
-		b.pressed.connect(func():
-			look_at_unit(id)
-			open_menu("robot:" + id))
-		roster.add_child(b)
-	if not crated.is_empty():
-		var b := Button.new()
-		b.focus_mode = Control.FOCUS_NONE
-		b.text = "CRATED UNIT (workbench)"
-		b.add_theme_color_override("font_color", OSTheme.INFO)
-		b.pressed.connect(func(): open_menu("bench"))
-		roster.add_child(b)
+		b.tooltip_text = "5 min"
+		var n := i
+		b.pressed.connect(func(): answer_request(n))
+		talk_choices.add_child(b)
+	talk_box.visible = true
+
+
+## Answers the request being asked on camera (option index).
+func answer_request(i: int) -> void:
+	if asking < 0:
+		return
+	var out: String = Supervisor.answer_request(asking, i)
+	_stop_asking()
+	show_feedback(out)
+
+
+func _stop_asking() -> void:
+	asking = -1
+	if talk_runner == null:
+		talk_box.visible = false
+		for c in talk_choices.get_children():
+			c.queue_free()
 
 
 ## Switches to a camera that can see this unit (one that tracks it, if any).
@@ -421,17 +437,10 @@ func _build_talk() -> void:
 	talk_box.add_theme_stylebox_override("panel", OSTheme.box(OSTheme.PANEL_LIGHT, OSTheme.LINE, 4, 10, 8))
 	talk_box.visible = false
 	add_child(talk_box)
-	var col := VBoxContainer.new()
-	talk_box.add_child(col)
-	talk_log = RichTextLabel.new()
-	talk_log.bbcode_enabled = true
-	talk_log.scroll_following = true
-	talk_log.fit_content = false
-	talk_log.custom_minimum_size = Vector2(0, 110)
-	col.add_child(talk_log)
 	talk_choices = HFlowContainer.new()
 	talk_choices.add_theme_constant_override("h_separation", 6)
-	col.add_child(talk_choices)
+	talk_choices.add_theme_constant_override("v_separation", 4)
+	talk_box.add_child(talk_choices)
 
 
 ## Opens the unit link to a robot (Talk in its menu; the Terminal's talk).
@@ -440,6 +449,7 @@ func start_talk(robot_id: String) -> void:
 	if bot == null:
 		return
 	end_talk()
+	_stop_asking()
 	look_at_unit(robot_id)
 	var r: Dictionary = Supervisor.talk_begin(bot)
 	if r.runner == null:
@@ -447,8 +457,9 @@ func start_talk(robot_id: String) -> void:
 		return
 	talk_runner = r.runner
 	talk_bot = bot
-	talk_log.clear()
+	talk_heard.clear()
 	talk_box.visible = true
+	show_feedback("")
 	_talk_lines(r.lines)
 
 
@@ -460,23 +471,21 @@ func end_talk() -> void:
 	talk_box.visible = false
 
 
+# The unit's lines go to the camera feed (queued, so a run of lines plays out
+# one after another over its head); system lines to the feedback line.
 func _talk_lines(lines: Array) -> void:
 	for l in lines:
 		var speaker := str(l.speaker)
 		if speaker == "unit" and talk_bot:
 			speaker = talk_bot.robot_id
-		var color := OSTheme.TEXT_DIM
-		var who := ""
-		if speaker == "you":
-			who = "YOU"
-			color = OSTheme.ACCENT
-		elif speaker != "sys":
-			who = talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper()
-			color = OSTheme.category_color(speaker)
+		if speaker == "sys":
+			show_feedback(str(l.text))
+			talk_heard.append(str(l.text))
+		elif speaker != "you":
+			var who: String = talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper()
+			talk_heard.append("%s: %s" % [who, l.text])
 			if desktop and desktop.speech:
-				desktop.speech.say(speaker, str(l.text))   # it says it, on camera
-		talk_log.append_text("[color=#%s]%s%s[/color]
-" % [color.to_html(false), (who + ": ") if not who.is_empty() else "", str(l.text).replace("[", "[lb]")])
+				desktop.speech.queue_line(speaker, str(l.text))
 	for c in talk_choices.get_children():
 		c.queue_free()
 	if talk_runner == null or talk_runner.done or talk_runner.choices.is_empty():
@@ -503,8 +512,7 @@ func _talk_lines(lines: Array) -> void:
 func _talk_choose(i: int) -> void:
 	if talk_runner == null or talk_bot == null:
 		return
-	talk_log.append_text("[color=#%s]YOU: %s[/color]
-" % [OSTheme.ACCENT.to_html(false), str(talk_runner.choices[i].text).replace("[", "[lb]")])
+	talk_heard.append("YOU: %s" % talk_runner.choices[i].text)
 	_talk_lines(Supervisor.talk_choose(talk_runner, talk_bot, i))
 
 

@@ -143,17 +143,19 @@ func _test_terminal() -> void:
 	# Talk to Tinker: it takes trust, built over separate conversations.
 	var tinker := sim().get_system("robot_tinker") as RobotAgent
 	tinker.stability = 0.5
+	tinker.activity = {"kind": "idle"}   # (online, whatever this random facility did to it)
 	t0 = sim().time()
 	out = term.run("talk tinker")
 	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
-	_check(cams != null and out.contains("unit link") and cams.talk_runner != null and cams.talk_log.get_parsed_text().contains("TINKER:")
+	_check(cams != null and out.contains("unit link") and cams.talk_runner != null and "\n".join(cams.talk_heard).contains("TINKER:")
 		and sim().time() - t0 >= 179.0, "talk opens the unit link in Cameras; lines cost time")
 	if cams == null:
 		return
+	_check(desk.speech.active.has("tinker") or desk.speech._queued.has("tinker"), "its words go to the camera feed (no transcript)")
 	_check(tinker.stability > 0.5, "a conversation steadies the unit")
 	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "and counts toward its trust")
 	cams._talk_choose(1)   # "Who was here before me?"
-	_check(cams.talk_log.get_parsed_text().contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
+	_check("\n".join(cams.talk_heard).contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
 	_check(cams.talk_runner == null or not cams.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "(nothing private yet: trust 1)")
 	cams.end_talk()
 	_check(cams.talk_runner == null and not cams.talk_box.visible, "closing the link")
@@ -304,6 +306,7 @@ func _test_parts_and_wear() -> void:
 
 
 func _test_corporate() -> void:
+	_uplink_up()
 	var dirs := sim().get_system("directives") as Directives
 	var o := Story.oversight(sim())
 	# A directive: report, with a deadline.
@@ -361,6 +364,7 @@ func _test_uplink() -> void:
 	var hauler := sim().get_system("robot_hauler") as RobotAgent
 	hauler.power = 1.0
 	hauler.stability = 0.9
+	hauler.activity = {"kind": "idle"}
 	var cams = desk.open_app("cameras")
 	cams.start_talk("hauler")
 	var choice := -1
@@ -370,7 +374,7 @@ func _test_uplink() -> void:
 	_check(choice >= 0, "with trust (and the uplink known), Hauler can be asked about the uplink")
 	cams._talk_choose(choice)
 	cams._talk_choose(0)   # "Just for an hour."
-	_check(cams.talk_log.get_parsed_text().contains("Accidents happen"), "Hauler agrees, and goes")
+	_check("\n".join(cams.talk_heard).contains("Accidents happen"), "Hauler agrees, and goes")
 	cams.end_talk()
 	for i in 40:
 		if plant.device("uplink").fault:
@@ -393,7 +397,15 @@ func _test_uplink() -> void:
 	_check(not o.uplink_down(sim()) and o.blind == 0, "repaired: corkHQ is listening again")
 
 
+# The facility is random each run, and nothing's repaired on duty unless
+# ordered: a random uplink outage would blind the audit checks.
+func _uplink_up() -> void:
+	var plant := sim().get_system("plant") as FacilityPlant
+	plant.devices["uplink"].fault = false
+
+
 func _test_nightrun() -> void:
+	_uplink_up()
 	_check(desk.open_app("nightrun") == null and not desk.app_available("nightrun"), "Night Run isn't on the desktop until it's found")
 	var term = desk.open_app("terminal")
 	term.run("cd /opt/games")
@@ -404,7 +416,8 @@ func _test_nightrun() -> void:
 	_check(desk.app_available("nightrun"), "and it's on the desktop from now on")
 	var game = desk._windows["nightrun"].app
 	_check(game.table()[0][1] == int(Story.MAINT_PASSWORD) and game.table()[0][0] == "RM", "Marrow's top score heads the table")
-	var sus := Story.oversight(sim()).suspicion
+	Story.oversight(sim()).suspicion = 0.0
+	var sus := 0.0
 	var t0 := sim().time()
 	game.start_run()
 	game.lane = 1
@@ -425,6 +438,7 @@ func _test_nightrun() -> void:
 
 
 func _test_maint() -> void:
+	_uplink_up()
 	var term = desk.open_app("terminal")
 	var out: String = term.run("podctl list")
 	_check(out.contains("permission denied") and Story.knows(sim(), "cmd:podctl"), "maintenance commands are real, but denied")
@@ -485,7 +499,7 @@ func _test_fired_and_retry() -> void:
 	await process_frame
 	var out: String = term.run("talk tinker")
 	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
-	_check(out.contains("unit link") and cams != null and cams.talk_log.get_parsed_text().contains("TINKER:") and Story.knows(sim(), "cmd:talk"),
+	_check(out.contains("unit link") and cams != null and "\n".join(cams.talk_heard).contains("TINKER:") and Story.knows(sim(), "cmd:talk"),
 		"but what the PLAYER remembers still works: talk")
 	if cams:
 		cams.end_talk()

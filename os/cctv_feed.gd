@@ -220,7 +220,7 @@ func _process(delta: float) -> void:
 	eye.global_transform = src.global_transform
 	eye.fov = src.fov
 	var clock := FacilitySim.format_time(Facility.sim.time()) if Facility.running else ""
-	caption.text = "CAM %02d  %s\n%s  ● REC%s" % [cam + 1, src.display_name.to_upper(), clock, "   IR" if night_vision else ""]
+	caption.text = "CAM %02d  %s\n%s  ● REC%s%s" % [cam + 1, src.display_name.to_upper(), clock, "   IR" if night_vision else "", _asking_text()]
 	ptz_label.position.y = size.y - 24
 	var ptz := "AUTO-TRACK" if src.auto_track else "PAN %+4d°  TILT %+3d°" % [roundi(src.pan), roundi(src.tilt)]
 	var audio := ""
@@ -228,6 +228,18 @@ func _process(delta: float) -> void:
 		audio = "   AUDIO MUTED" if FeedAudio.is_muted() else "   AUDIO"
 	ptz_label.text = "%s   ZOOM %.1fx%s" % [ptz, src.zoom_level(), audio]
 	_draw_speech()
+
+
+# "  ! TINKER ASKING" when a unit in this camera's room has a request.
+func _asking_text() -> String:
+	var reqs := Facility.sim.get_system("requests") as UnitRequests if Facility.running else null
+	if reqs == null or world == null or cam >= world.camera_rooms.size():
+		return ""
+	var names := PackedStringArray()
+	for q in reqs.requests:
+		if world.robot_room(str(q.robot)) == world.camera_rooms[cam] and not names.has(str(q.robot).to_upper()):
+			names.append(str(q.robot).to_upper())
+	return "" if names.is_empty() else "   ! %s ASKING" % ", ".join(names)
 
 
 # Floating words over each speaking robot this camera can see.

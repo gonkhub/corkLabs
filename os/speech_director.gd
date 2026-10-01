@@ -4,6 +4,8 @@
 #
 #   - Each robot has at most one line up at a time: a newer line replaces it
 #     (so a long Wait that skips an hour doesn't queue up an hour of talk).
+#     Conversations over the unit link (Cameras) QUEUE their lines instead:
+#     each starts when the one before has been read.
 #   - Words type out at the robot's voice_speed, hold, then fade.
 #   - You only HEAR a robot while it's on an open camera (feeds report which
 #     robots they can see with mark_seen()). Voices can be turned off in Settings.
@@ -23,6 +25,8 @@ var voices := {}             # robot id -> RobotVoice
 var _mark := -1
 var _seen := {}              # robot id -> seconds since a feed last saw it
 var _traits := {}
+## robot id -> [text, ...] waiting to be said (queue_line)
+var _queued := {}
 
 
 func _process(delta: float) -> void:
@@ -35,7 +39,14 @@ func _process(delta: float) -> void:
 	if _mark < 0:
 		_mark = chatter.said   # don't replay what was said before we started watching
 	for line in chatter.said_since(_mark):
-		_start(str(line.robot), str(line.text))
+		if not _queued.has(str(line.robot)):   # it's talking to you: idle chatter waits
+			_start(str(line.robot), str(line.text))
+	for id in _queued.keys():
+		var q: Array = _queued[id]
+		if q.is_empty():
+			_queued.erase(id)
+		elif not active.has(id) or float(active[id].age) >= float(active[id].life) - FADE:
+			_start(id, str(q.pop_front()))
 	_mark = chatter.said
 	var voices_on: bool = OSSettings.get_value("voices")
 	for id in active.keys():
@@ -74,6 +85,13 @@ func mark_seen(robot_id: String) -> void:
 
 func heard(robot_id: String) -> bool:
 	return float(_seen.get(robot_id, INF)) <= SEEN_GRACE
+
+
+## Queues a line: it's said after the robot's current one (a conversation).
+func queue_line(robot_id: String, text: String) -> void:
+	if not _queued.has(robot_id):
+		_queued[robot_id] = []
+	_queued[robot_id].append(text)
 
 
 ## Starts a line (the Terminal / tests can call this directly too).

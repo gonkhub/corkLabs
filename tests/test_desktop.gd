@@ -78,8 +78,23 @@ func _initialize() -> void:
 	var text: String = load("res://game/supervisor.gd").inspect_device("filter_1")   # by path: classes that use the Facility autoload can't be named in --script tests
 	await process_frame
 	_check(not text.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "an inspection passes its facility time (30 min)")
+	# A unit's request: it pings, and asks on camera when you watch its feed.
+	var reqs: UnitRequests = sim.get_system("requests")
+	reqs.requests.clear()
+	reqs._last.clear()
+	var rid := reqs.ask(sim, "hauler", "service", "My joints are grinding. Book me a service?", ["Book a service", "Not now"], 1)
+	cams.set_grid(true)
 	cams.refresh()
-	_check(cams.roster.get_child_count() >= FacilitySetup.robots(sim).size(), "Cameras has a chip per unit")
+	_check(cams.asking < 0 and not cams.talk_box.visible, "a request waits while you're not watching the unit")
+	_check(not load("res://os/object_menu.gd").entries(sim, "robot:hauler").any(func(e): return str(e.get("text", "")).begins_with("Answer")),
+		"and isn't in its click menu")
+	cams.look_at_unit("hauler")
+	cams.refresh()
+	_check(cams.asking == rid and cams.talk_box.visible and cams.talk_choices.get_child_count() == 2, "watching its feed: it asks, answers under the picture")
+	_check(desk.speech.active.has("hauler") or desk.speech._queued.has("hauler"), "out loud, on camera")
+	var t2: float = sim.time()
+	cams.answer_request(1)
+	_check(reqs.get_request(rid).is_empty() and sim.time() - t2 >= 299.0 and not cams.talk_box.visible, "answering takes 5 minutes and closes it")
 	var log_app = desk._windows["log"].app
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
 
