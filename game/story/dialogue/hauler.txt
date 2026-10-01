@@ -40,8 +40,15 @@ hauler: She said the top score was a key. I asked, a key to what. She said, to m
 == uplink
 hauler: Corporate's ear.
 hauler: You want it deaf for a while.
+-> {watched:workshop} uplink_watched
 * Just for an hour. Nobody needs to know. -> uplink_yes
 * Forget I asked. -> menu
+
+== uplink_watched
+hauler: The workshop camera's working. It would see me do it.
+hauler: Corporate watches the tapes. An accident on tape isn't an accident.
+* Do it anyway. -> uplink_yes
+* Not while the camera's up. -> menu
 
 == uplink_yes
 hauler: Heavy hands. Accidents happen.

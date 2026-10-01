@@ -22,6 +22,7 @@ func _initialize() -> void:
 	_test_crated_units()
 	_test_policy_and_directives()
 	_test_packages()
+	_test_cameras_are_eyes()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -105,6 +106,34 @@ func _test_packages() -> void:
 	board._autopilot_acc = 999.0
 	board.sim_tick(sim, 1.0)
 	_check(chore.get("requested", false), "with night-watch, it takes it")
+
+
+# What happens in a room is only on the record if a working camera sees it.
+func _test_cameras_are_eyes() -> void:
+	var sim := _new_sim(41)
+	var camp := sim.get_system("campaign") as Campaign
+	sim.advance(camp.shift_start_time() - sim.time() + 1.0)
+	var o := sim.get_system("oversight") as Oversight
+	var plant := sim.get_system("plant") as FacilityPlant
+	_check(Oversight.watched(sim, "workshop"), "the workshop camera is watching")
+	o.violate(sim, "conversation with unit Tinker", 2.0, 0.0, "workshop")
+	_check(o.trail.size() == 1, "a conversation on camera is recorded")
+	var cams := FacilitySetup.cameras()
+	for i in cams.size():
+		if str(cams[i].room) == "workshop":
+			plant.devices["cam_%d" % (i + 1)].fault = true
+	_check(not Oversight.watched(sim, "workshop"), "with its camera out, the workshop is a blind spot")
+	o.violate(sim, "conversation with unit Tinker", 2.0, 0.0, "workshop")
+	_check(o.trail.size() == 1 and o.unseen == 1, "a conversation there goes unseen")
+	o.violate(sim, "read /home/jkim/notes.txt", 3.0)
+	_check(o.trail.size() == 2, "but the terminal is still audited")
+	# Hauler's "accident": on camera, corporate sees it for what it is.
+	var hauler := sim.get_system("robot_hauler") as RobotAgent
+	for i in cams.size():
+		plant.devices["cam_%d" % (i + 1)].fault = false
+	var sus := o.suspicion
+	plant.accident(sim, "uplink", hauler)
+	_check(o.suspicion > sus + 10.0, "a unit wrecking the uplink on camera is noticed (suspicion +%d)" % roundi(o.suspicion - sus))
 
 
 func _test_fs() -> void:

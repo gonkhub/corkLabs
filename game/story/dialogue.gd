@@ -17,7 +17,7 @@
 # Conditions: knowledge keys, !key, comparisons (standing>=50, trust:tinker>=3),
 # joined with &, plus live facts: quiet (nobody else in the unit's room),
 # unstable, low_power, working, uplink_down, directive:<kind> (corporate is
-# waiting on one).
+# waiting on one), watched:<room> (a working camera covers that room).
 # Effects also: accident <device> (this unit goes and "accidentally" breaks
 # it), directive <kind> (meets that directive).
 # Entering a node learns "seen:<robot>.<node>", so scripts can check what's
@@ -183,6 +183,8 @@ static func check(sim: FacilitySim, robot_id: String, condition: String) -> bool
 		facts.quiet = FacilitySetup.robots(sim).all(func(r): return r == bot or r.room(sim) != room)
 	var o := Story.oversight(sim)
 	facts.uplink_down = o != null and o.uplink_down(sim)
+	for r in ["hall", "pod_bay", "workshop", "maintenance", "hangar"]:
+		facts["watched:" + r] = Oversight.watched(sim, r)
 	var dirs := sim.get_system("directives") as Directives
 	if dirs:
 		for kind in ["explain", "report", "inspect", "diagnose", "output", "job", "uplink"]:

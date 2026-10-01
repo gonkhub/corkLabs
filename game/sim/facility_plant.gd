@@ -127,6 +127,8 @@ const REPAIR_GRACE := 8.0 * 3600.0
 const HEAT_STRAIN := 2.5
 ## How long the corkHQ uplink runs on its battery once the relay's fuse blows.
 const UPLINK_BATTERY := 1200.0
+## Suspicion when a camera sees a unit "accidentally" wreck something.
+const ACCIDENT_SEEN := 15.0
 ## Seconds of work in an inspection (a unit goes and looks).
 const INSPECT_WORK := 240.0
 const HAUL_WORK := 360.0
@@ -419,7 +421,7 @@ func sabotage(sim: FacilitySim, id: String, robot: RobotAgent) -> void:
 		return
 	sim.note("sabotage", "%s SABOTAGED %s" % [robot.display_name(), d.name])
 	var hq := sim.get_system("hq") as CorkHQ
-	if hq:
+	if hq and Oversight.watched(sim, robot.room(sim)):   # corporate only sees it on camera
 		hq.noticed_damage(sim, robot)
 	if KINDS[d.kind].has("drift"):
 		d.value = maxf(float(d.value) - 0.45, 0.0)   # the job gets posted on the next update
@@ -446,6 +448,9 @@ func accident(sim: FacilitySim, id: String, robot: RobotAgent) -> void:
 	if d.is_empty() or d.fault:
 		return
 	sim.note(robot.robot_id, "%s knocked into %s" % [robot.display_name(), d.name])
+	var o := sim.get_system("oversight") as Oversight
+	if o:   # on camera, it's not an accident (recorded before the link goes)
+		o.violate(sim, "unit %s damaged the %s, on camera" % [robot.display_name(), d.name], ACCIDENT_SEEN, 0.0, robot.room(sim))
 	_fault(sim, id)
 	# It won't be the one to fix what it just broke.
 	var board := sim.get_system("work") as WorkBoard

@@ -217,7 +217,7 @@ static func talk_begin(bot: RobotAgent) -> Dictionary:
 		k.learn(sim, key)
 	var o := Story.oversight(sim)
 	if o:
-		o.violate(sim, "conversation with unit %s" % bot.display_name(), TALK_VIOLATION)
+		o.violate(sim, "conversation with unit %s" % bot.display_name(), TALK_VIOLATION, 0.0, bot.room(sim))
 	var runner := Dialogue.Runner.new(d, bot.robot_id)
 	var lines := runner.begin(sim)
 	if k and not runner.done:

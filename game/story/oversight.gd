@@ -25,6 +25,13 @@
 # her Reply), then sets Compliance on you (level 3: standing down, and a
 # targeted audit half an hour later).
 #
+# THE CAMERAS ARE CORPORATE'S EYES. What happens in a room (talking to a
+# unit, a unit's "accident" or sabotage) is only on the record if a working
+# camera covers that room (`room` in violate()). A dead camera is a blind
+# spot; a careful supervisor makes one before doing something it shouldn't.
+# Terminal activity (files, accounts, tools) goes through the audit daemon
+# whatever the cameras see.
+#
 # THE UPLINK. corkHQ sees the facility through one relay in the workshop.
 # While it's down (it breaks now and then, or a unit can be talked into an
 # "accident" with it), nothing is recorded: no suspicion, no trail, no audits,
@@ -82,10 +89,22 @@ var counts := {}
 var uplink_breaks := 0
 var _uplink_since := -1.0
 var blind := 0
+## Things done where no camera could see them (this run).
+var unseen := 0
 
 
 func fired() -> bool:
 	return not fired_reason.is_empty()
+
+
+## Does a working camera cover this room (does corporate see what happens there)?
+static func watched(sim: FacilitySim, room: String) -> bool:
+	var plant := sim.get_system("plant") as FacilityPlant if sim else null
+	var cams := FacilitySetup.cameras()
+	for i in cams.size():
+		if str(cams[i].room) == room and (plant == null or not bool(plant.device("cam_%d" % (i + 1)).get("fault", false))):
+			return true
+	return false
 
 
 ## Is corkHQ's uplink down (nothing gets recorded)?
@@ -96,11 +115,15 @@ func uplink_down(sim: FacilitySim) -> bool:
 
 ## A policy violation: suspicion + a line in the audit trail. With
 ## `catch_chance`, corporate may notice right now. Nothing at all while the
-## uplink is down.
-func violate(sim: FacilitySim, what: String, amount: float, catch_chance := 0.0) -> void:
+## uplink is down, or (something done in a `room`) if no camera sees it.
+func violate(sim: FacilitySim, what: String, amount: float, catch_chance := 0.0, room := "") -> void:
 	if uplink_down(sim):
 		blind += 1
 		sim.note("oversight", "Unrecorded (uplink down): %s" % what)
+		return
+	if not room.is_empty() and not watched(sim, room):
+		unseen += 1
+		sim.note("oversight", "Unseen (no working camera in the %s): %s" % [room.replace("_", " "), what])
 		return
 	suspicion = clampf(suspicion + amount, 0.0, 100.0)
 	trail.append({"t": sim.time(), "what": what, "amount": amount})
@@ -116,7 +139,7 @@ static func category(what: String) -> String:
 		return "files"
 	if what.contains("recreational"):
 		return "games"
-	if what.begins_with("conversation with unit"):
+	if what.begins_with("conversation with unit") or what.ends_with("on camera"):
 		return "talk"
 	if what.contains("maintenance account") or what.contains("pod ") or what.contains("audit") or what.contains("corkHQ link") \
 			or what.contains("override") or what.contains("unapproved") or what.contains("decommissioned"):

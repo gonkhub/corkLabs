@@ -9,7 +9,8 @@ corkLabs SUPERVISOR CODE OF CONDUCT  (revision 9)
 
 2. Units are corporate property. Do not converse with units beyond the
    needs of the work. Units do not need encouragement. Units do not need
-   explanations.
+   explanations. The facility cameras record for corporate review; a
+   camera out of service is to be reported and repaired without delay.
 
 3. Supervisors may not access the home directories of former staff. These
    are retained for records purposes and will be purged in due course.

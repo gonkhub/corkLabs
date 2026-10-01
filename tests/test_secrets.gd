@@ -423,7 +423,8 @@ func _test_uplink() -> void:
 			choice = i
 	_check(choice >= 0, "with trust (and the uplink known), Hauler can be asked about the uplink")
 	cams._talk_choose(choice)
-	cams._talk_choose(0)   # "Just for an hour."
+	_check("\n".join(cams.talk_heard).contains("workshop camera"), "with the workshop camera up, Hauler warns it would be seen")
+	cams._talk_choose(0)   # "Do it anyway."
 	_check("\n".join(cams.talk_heard).contains("Accidents happen"), "Hauler agrees, and goes")
 	cams.end_talk()
 	for i in 40:
