@@ -106,6 +106,12 @@ const NIGHT_DRIFT := 0.15
 ## How much slower a stable unit's software drifts while it stands by
 ## waiting for orders (on duty: that's its job now, but it still frets).
 const WAITING_DRIFT := 0.4
+## The overclock package: faster, at a price (wear, and software drift).
+const OVERCLOCK_SPEED := 1.3
+const OVERCLOCK_WEAR := 1.5
+const OVERCLOCK_DRIFT := 1.4
+## The night-watch package: the night crew does the chores, and wears for it.
+const NIGHT_WATCH_WEAR := 2.0
 ## A unit that went to charge because it was low stays on the dock until
 ## it's this far above its reserve (no dithering between dock and job).
 const LOW_MARGIN := 0.25
@@ -531,7 +537,20 @@ func _maybe_critical_error(sim: FacilitySim) -> void:
 # Between shifts the units work gently (standby, no pushing): less wear.
 func _wear_scale(sim: FacilitySim) -> float:
 	var camp := sim.get_system("campaign") as Campaign
-	return NIGHT_WEAR if camp and not camp.on_duty() else 1.0
+	var s := 1.0
+	if camp and not camp.on_duty():
+		s = NIGHT_WEAR * (NIGHT_WATCH_WEAR if _has(sim, "night-watch") else 1.0)   # the night crew does the rounds
+	return s * (OVERCLOCK_WEAR if _has(sim, "overclock") else 1.0)
+
+
+## Overclocked units move and work this much faster.
+func speed_boost(sim: FacilitySim) -> float:
+	return OVERCLOCK_SPEED if _has(sim, "overclock") else 1.0
+
+
+func _has(sim: FacilitySim, package_id: String) -> bool:
+	var sw := sim.get_system("software") as SoftwareLibrary
+	return sw != null and sw.installed(package_id)
 
 
 func _maybe_seize(sim: FacilitySim, dt: float) -> void:
@@ -609,6 +628,12 @@ func reboot(sim: FacilitySim) -> void:
 	var board := _board(sim)
 	if activity.kind == "work" and board:
 		board.release(int(activity.job), sim_id)
+	if activity.kind == "seized" and board:
+		# Rebooted remotely: nobody needs to come and do it by hand.
+		for j in board.open_jobs():
+			if str(j.source) == "unit:" + robot_id:
+				board.cancel(sim, int(j.id), "rebooted remotely")
+		wear = maxf(wear - 0.05, 0.0)
 	route = []
 	order = {}
 	activity = {"kind": "rebooting", "until": sim.time() + REBOOT_TIME}
@@ -816,7 +841,7 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				stability = minf(stability + traits.stability_from_work * dt, 1.0)
 				var j := board.get_job(int(activity.job))
 				wear = minf(wear + WEAR_WORK * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
-				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * wear_factor() * dt
+				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * wear_factor() * speed_boost(sim) * dt
 				if j.get("status", "") != "claimed" or j.get("claimed_by", "") != sim_id:
 					activity = {"kind": "idle"}   # stopped under it (waiting for a part, cancelled)
 					_think_left = 0.0
@@ -869,7 +894,7 @@ func _travel(sim: FacilitySim, goal: String, to_seg: String, to_off: float, dt: 
 			return false
 		route = r.legs.duplicate(true)
 		_route_goal = goal
-	var budget := traits.rail_speed * wear_factor() * (_plant_ref.rail_factor() if _plant_ref else 1.0) * dt   # meters at speed 1 (grime slows the rails)
+	var budget := traits.rail_speed * wear_factor() * speed_boost(sim) * (_plant_ref.rail_factor() if _plant_ref else 1.0) * dt   # meters at speed 1 (grime slows the rails)
 	wear = minf(wear + WEAR_MOVE * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
 	while budget > 0.0001 and not route.is_empty():
 		var leg: Dictionary = route[0]
@@ -962,7 +987,8 @@ func _decay(sim: FacilitySim) -> float:
 		night = NIGHT_DRIFT   # no supervisor: idle units sit in low-power standby
 	elif camp and not own_will() and activity.get("kind", "") == "idle":
 		night = WAITING_DRIFT   # stable, waiting to be told: it frets, slowly
-	return traits.stability_decay * night * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0)
+	return traits.stability_decay * night * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0) \
+		* (OVERCLOCK_DRIFT if sw and sw.installed("overclock") else 1.0)
 
 
 # Travel costs from where it is to every node. Cached: a robot standing still

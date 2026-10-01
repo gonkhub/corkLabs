@@ -108,8 +108,10 @@ static func requisition(item_id: String, qty := 1, express := false) -> Dictiona
 
 
 ## Remote reboot (needs the "remote-reboot" software package). Returns false if locked.
+## Remote reboot (the remote-reboot package): offline a few minutes,
+## stability restored. It also frees a seized unit (no manual reboot needed).
 static func reboot(bot: RobotAgent) -> bool:
-	if not has_software("remote-reboot") or bot.offline():
+	if not has_software("remote-reboot") or (bot.offline() and bot.activity.kind != "seized"):
 		return false
 	var sim: FacilitySim = Facility.sim
 	sim.note("supervisor", "Remote reboot: %s" % bot.display_name())

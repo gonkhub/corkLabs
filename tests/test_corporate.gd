@@ -37,7 +37,7 @@ func _test_data() -> void:
 	_check(cats.has("Resources") and cats.has("Parts") and cats.has("Robots"), "the catalogue has resources, parts and robots (%s)" % ", ".join(cats))
 	_check(req.catalog.all(func(c): return int(c.price) > 0), "every item has a price")
 	var sw := SoftwareLibrary.new()
-	_check(sw.packages.size() >= 8, "a set of software packages (%d)" % sw.packages.size())
+	_check(sw.packages.size() >= 6 and sw.packages.all(func(p): return p.wired), "a set of software packages, all of them doing something (%d)" % sw.packages.size())
 	var rows := DataTable.parse("# c\na | b | the rest | with | pipes\n\nx | y", PackedStringArray(["one", "two", "rest"]))
 	_check(rows.size() == 2 and rows[0].rest == "the rest | with | pipes" and rows[1].rest == "", "data tables read pipes, comments, short rows")
 

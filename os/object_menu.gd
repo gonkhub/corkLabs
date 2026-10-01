@@ -134,8 +134,9 @@ static func _robot(sim: FacilitySim, bot: RobotAgent) -> Array[Dictionary]:
 			var sid := Supervisor.book_service(bot)
 			return ("Service booked: job #%d." % sid) if sid >= 0 else ("No servo bundles in stock." if sid == -2 else "A service is already booked.")))
 	if Supervisor.has_software("remote-reboot"):
-		out.append(_item("Remote reboot", "It's already offline." if bot.offline() else "",
-			"Offline %d min, restores stability" % int(RobotAgent.REBOOT_TIME / 60.0),
+		out.append(_item("Remote reboot" + (" (frees it)" if bot.activity.kind == "seized" else ""),
+			"It's already offline." if bot.offline() and bot.activity.kind != "seized" else "",
+			"Offline %d min, restores stability; frees a seized unit" % int(RobotAgent.REBOOT_TIME / 60.0),
 			func(): return "Reboot sent." if Supervisor.reboot(bot) else "It can't be rebooted now."))
 	return out
 

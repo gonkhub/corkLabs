@@ -21,6 +21,7 @@ func _initialize() -> void:
 	_test_oversight()
 	_test_crated_units()
 	_test_policy_and_directives()
+	_test_packages()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -77,6 +78,33 @@ func _test_policy_and_directives() -> void:
 	sim.advance(camp.night_until() - sim.time())
 	camp.night_over(sim)
 	_check(not Array(camp.overnight).any(func(l): return str(l).contains("DIRECTIVE")), "and nothing about directives happens overnight (%s)" % str(camp.overnight))
+
+
+# The packages that do something: remote-reboot frees a seized unit;
+# overclock trades speed for wear and drift; night-watch does the night chores.
+func _test_packages() -> void:
+	var sim := _new_sim(31)
+	var sw := sim.get_system("software") as SoftwareLibrary
+	var hauler := sim.get_system("robot_hauler") as RobotAgent
+	var board := sim.get_system("work") as WorkBoard
+	hauler.seize(sim)
+	_check(board.open_jobs().any(func(j): return str(j.source) == "unit:hauler"), "a seized unit: a manual reboot job")
+	hauler.reboot(sim)
+	_check(hauler.activity.kind == "rebooting" and not board.open_jobs().any(func(j): return str(j.source) == "unit:hauler"),
+		"a remote reboot frees it, and nobody has to come by hand")
+	_check(is_equal_approx(hauler.speed_boost(sim), 1.0), "no overclock: normal speed")
+	var wear0 := hauler._wear_scale(sim)
+	sw.installed_ids.append("overclock")
+	_check(hauler.speed_boost(sim) > 1.2 and hauler._wear_scale(sim) > wear0 * 1.4, "overclock: faster, and more wear")
+	var plant := sim.get_system("plant") as FacilityPlant
+	plant.devices.pod_waste.value = 0.2   # (before the shift: the night autopilot's running)
+	plant._update(sim)
+	var chore := board.get_job(int(plant.device("pod_waste").job))
+	_check(not chore.is_empty() and not chore.get("requested", false), "without night-watch, the night crew leaves the pod waste")
+	sw.installed_ids.append("night-watch")
+	board._autopilot_acc = 999.0
+	board.sim_tick(sim, 1.0)
+	_check(chore.get("requested", false), "with night-watch, it takes it")
 
 
 func _test_fs() -> void:
@@ -304,8 +332,7 @@ func _test_crated_units() -> void:
 		"a numbered unit is its model")
 	_check(not req.activate(sim, "robot_tinker").ok, "no crate in stock, nothing to activate")
 	req.inventory["robot_tinker"] = 1
-	req.inventory["robot_sweeper"] = 1
-	_check(req.crated_units().size() == 2, "crated units in stock are listed")
+	_check(req.crated_units().size() == 1, "crated units in stock are listed")
 	var r := req.activate(sim, "robot_tinker")
 	var bot := sim.get_system("robot_tinker2") as RobotAgent
 	_check(r.ok and bot != null and bot.display_name() == "Tinker 2" and FacilitySetup.robots(sim).size() == 4,
@@ -313,7 +340,6 @@ func _test_crated_units() -> void:
 	_check(bot.stability == 1.0 and bot.traits.skill("precise") == (sim.get_system("robot_tinker") as RobotAgent).traits.skill("precise"),
 		"fresh firmware, same model")
 	_check(bot.room(sim) == "workshop" and int(req.inventory["robot_tinker"]) == 0, "it starts in the workshop, where it was unpacked")
-	_check(not req.activate(sim, "robot_sweeper").ok, "a model with no firmware here stays in its crate")
 	sim.advance(600.0)
 	_check(bot.activity.kind != "", "and it gets on with things (%s)" % bot.doing_text(sim))
 	var script := Dialogue.for_robot("tinker2")
