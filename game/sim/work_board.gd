@@ -83,7 +83,7 @@ func post(sim: FacilitySim, title: String, skill: String, station: String, work:
 	var st: Dictionary = _layout(sim).station(station)
 	sim.note("work", "Job #%d posted: %s at %s (%s, %s priority)" % [job.id, title,
 		st.get("name", station), skill, PRIORITY_NAMES[job.priority]])
-	if AUTO_SOURCES.any(func(p): return source.begins_with(p)) or (autopilot(sim) and missing_part(sim, job).is_empty()):
+	if AUTO_SOURCES.any(func(p): return source.begins_with(p)) or (autopilot(sim) and missing_part(sim, job).is_empty() and not FacilityPlant.is_chore(sim, job)):
 		request(sim, job.id)
 	return job.id
 
@@ -337,8 +337,8 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 	if not autopilot(sim):
 		return
 	for j in jobs:
-		if j.status == "open" and not j.get("requested", false) and missing_part(sim, j).is_empty():
-			request(sim, int(j.id))
+		if j.status == "open" and not j.get("requested", false) and missing_part(sim, j).is_empty() and not FacilityPlant.is_chore(sim, j):
+			request(sim, int(j.id))   # (chores wait for the supervisor)
 
 
 ## Is the night autopilot running (nobody on duty to give orders)?

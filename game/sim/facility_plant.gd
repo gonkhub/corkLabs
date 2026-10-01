@@ -26,7 +26,12 @@
 #            "Clean the rails" (Hauler).
 #   compactor  The hangar's waste compactor. Pod waste and cleared debris go
 #            in it; full, nobody can take out waste or clear debris until Ogre
-#            empties it in bulk ("Empty the waste compactor").
+#            empties it in bulk ("Empty the waste compactor"). It starts nearly
+#            empty: hauling the waste once a day, it fills on day 2.
+#
+# CHORES (pod waste, the compactor, the rails: "chore" below) wait for the
+# supervisor: the night autopilot only keeps the facility alive (breakdowns,
+# pods, filters), it doesn't do the rounds.
 #
 # Most of the work is ROUTINE: pods, filters, waste, rails, the compactor,
 # freight. No parts, just the units' time and a little wear. Parts are for
@@ -81,20 +86,25 @@ const KINDS := {
 	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.015, "priority": 1, "part": "camera_module", "units": ["tinker"]},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3, "units": ["tinker"]},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1, "units": ["ogre"]},
-	"compactor": {"job": "Empty the waste compactor", "skill": "heavy", "work": 600.0, "drift": 0.01,
-		"levels": [0.4, 0.2, 0.05], "units": ["ogre"]},
-	"waste": {"job": "Take out the pod waste", "skill": "heavy", "work": 420.0, "drift": 0.07,
-		"levels": [0.5, 0.3, 0.12], "units": ["hauler"]},
+	"compactor": {"job": "Empty the waste compactor", "skill": "heavy", "work": 600.0, "drift": 0.004,
+		"levels": [0.25, 0.12, 0.03], "units": ["ogre"], "chore": true},
+	"waste": {"job": "Take out the pod waste", "skill": "heavy", "work": 420.0, "drift": 0.025,
+		"levels": [0.5, 0.3, 0.12], "units": ["hauler"], "chore": true},
 	"rails": {"job": "Clean the rails", "skill": "general", "work": 540.0, "drift": 0.04,
-		"levels": [0.6, 0.4, 0.2], "start_priority": 0, "units": ["hauler"]},
+		"levels": [0.6, 0.4, 0.2], "start_priority": 0, "units": ["hauler"], "chore": true},
 	"feed": {"job": "Feed a coolant canister", "skill": "heavy", "work": 300.0, "part": "coolant_canister", "units": ["ogre"]},
 }
 ## Who does the work that isn't a device's: job source prefix -> units.
 const SOURCE_UNITS := {"crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
 	"part:refit": ["hauler"], "unit:": ["tinker"], "service:": ["tinker"], "freight_stacks": ["ogre"]}
 ## How much one load of cleared debris, or of pod waste, fills the compactor.
-const DEBRIS_LOAD := 0.2
-const WASTE_LOAD := 0.25
+const DEBRIS_LOAD := 0.1
+const WASTE_LOAD := 0.3
+## On top of the waste bins' slow drift, the pods dump a batch now and then:
+## this many batches an hour on average, each this big. (About one full set
+## of bins a day, unevenly.)
+const WASTE_BATCHES := 0.2
+const WASTE_BATCH := Vector2(0.04, 0.09)
 ## Pod waste bins this full and the units start to mind; full, they lose
 ## this much software stability an hour (every unit).
 const WASTE_COMPLAINS := 0.75
@@ -229,6 +239,8 @@ func sim_start(sim: FacilitySim) -> void:
 		elif d.kind == "filter":
 			d.value = sim.rng.randf_range(0.55, 1.0)
 	devices[_ids.filter(func(i): return devices[i].kind == "pod")[sim.rng.randi() % 4]].value = 0.7
+	devices.pod_waste.value = sim.rng.randf_range(0.5, 0.65)   # the first run comes up on day 1
+	devices.compactor.value = 0.95                              # room for day 1; full by day 2
 	for id in _ids:
 		if KINDS[devices[id].kind].has("rate"):
 			_book_fault(sim, id)
@@ -307,6 +319,8 @@ func _drift(sim: FacilitySim, seconds: float) -> void:
 		var was: float = d.value
 		var rate: float = k.drift * (h if d.kind == "pod" else 1.0) * sim.rng.randf_range(0.5, 1.5)
 		d.value = maxf(was - rate * hours, 0.0)
+		if d.kind == "waste" and sim.rng.randf() < WASTE_BATCHES * hours:
+			d.value = maxf(float(d.value) - sim.rng.randf_range(WASTE_BATCH.x, WASTE_BATCH.y), 0.0)   # a batch from the pods
 		if d.kind == "pod" and was > 0.0 and d.value <= 0.0:
 			sim.note("alarm", "%s has DESYNCED: no output until recalibrated" % d.name)
 	if leaks > 0:
@@ -594,6 +608,13 @@ func request_blocker(job: Dictionary) -> String:
 	if devices.has(src) and devices[src].kind in ["bay", "waste"] and float(devices.compactor.value) <= 0.02:
 		return "The waste compactor in the hangar is full: Ogre has to empty it first."
 	return ""
+
+
+## Is this job a chore the night autopilot leaves for the supervisor?
+static func is_chore(sim: FacilitySim, job: Dictionary) -> bool:
+	var plant := sim.get_system("plant") as FacilityPlant
+	var src := str(job.get("source", ""))
+	return plant != null and plant.devices.has(src) and KINDS[plant.devices[src].kind].get("chore", false)
 
 
 ## Which units may do a job (empty = anyone).

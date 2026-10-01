@@ -205,6 +205,36 @@ func _test_routine_work() -> void:
 	plant.devices["rails"].value = 0.0
 	_check(plant.rail_factor() < clean and is_equal_approx(plant.rail_factor(), FacilityPlant.GRIME_SLOW), "grimy rails slow the units down")
 	_check(FacilityPlant.KINDS.rails.units == ["hauler"], "cleaning them is Hauler's job")
+	# How fast the bins fill: about once a day (unevenly), averaged over seeds.
+	var fills := []
+	for seed_value in [11, 12, 13, 14, 15, 16]:
+		var t := _facility(false, seed_value)
+		var w := _plant(t).device("pod_waste")
+		w.value = 1.0
+		t.advance(24.0 * 3600.0)
+		fills.append(1.0 - float(w.value))
+	var avg := float(fills.reduce(func(a, b): return a + b, 0.0)) / fills.size()
+	_check(avg > 0.7 and avg < 1.2, "the bins fill about once a day (%d%% on average, %s)" % [roundi(avg * 100.0), str(fills.map(func(f): return roundi(f * 100.0)))])
+	# Chores wait for the supervisor: the night autopilot leaves them.
+	var night := _facility(false, 17)
+	var nboard: WorkBoard = night.get_system("work")
+	var nplant := _plant(night)
+	nplant.devices.pod_waste.value = 0.2
+	night.advance(30.0)
+	var wjob := nboard.get_job(int(nplant.device("pod_waste").job))
+	night.advance(120.0)
+	_check(not wjob.is_empty() and not wjob.get("requested", false), "the night autopilot leaves the pod waste for you")
+	# The compactor: room on day 1, full by day 2 with a load a day (plus debris).
+	var day := _facility(false, 18)
+	var dcomp := _plant(day).device("compactor")
+	_check(float(dcomp.value) >= 0.9, "the compactor starts nearly empty")
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_plant(day)._repaired(day, "bay_1", "robot_hauler")
+	_check(float(dcomp.value) > 0.4, "one load of waste and some debris on day 1: plenty of room (%d%% full)" % roundi((1.0 - float(dcomp.value)) * 100.0))
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_plant(day)._repaired(day, "bay_2", "robot_hauler")
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_check(float(dcomp.value) <= 0.05, "by day 2 it's full (%d%%): Ogre's turn" % roundi((1.0 - float(dcomp.value)) * 100.0))
 
 
 func _test_shift_report() -> void:

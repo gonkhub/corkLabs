@@ -245,7 +245,7 @@ func _test_roles() -> void:
 	for id in plant.device_ids():
 		if plant.devices[id].kind == "filter":
 			plant.devices[id].value = 0.5   # filters want sweeping...
-	plant.devices["compactor"].value = 0.6   # ...and the compactor's filling
+	plant.devices["compactor"].value = 0.4   # ...and the compactor's getting full
 	plant.devices["compactor"].job = -1
 	ogre.activity = {"kind": "idle"}
 	ogre.stability = 0.65

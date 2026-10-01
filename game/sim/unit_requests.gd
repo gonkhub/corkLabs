@@ -227,6 +227,9 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 				var units: Array = k.get("units", [])
 				if not k.has("drift") or int(dv.job) >= 0 or float(dv.value) >= worst_v:
 					continue
+				var levels: Array = k.get("levels", [0.7])
+				if float(dv.value) >= minf(float(levels[0]) + 0.25, 0.95):
+					continue   # not close to needing it yet
 				if (not units.is_empty() and not bot.robot_id in units) or bot.route_length(sim, str(dv.station)) < 0.0:
 					continue
 				worst_v = float(dv.value)
