@@ -219,6 +219,7 @@ static func talk_begin(bot: RobotAgent) -> Dictionary:
 	if o:
 		o.violate(sim, "conversation with unit %s" % bot.display_name(), TALK_VIOLATION, 0.0, bot.room(sim))
 	var runner := Dialogue.Runner.new(d, bot.robot_id)
+	bot.link_open(sim)   # it stops, and faces the camera
 	var lines := runner.begin(sim)
 	if k and not runner.done:
 		var tkey := "trusted:" + bot.robot_id
@@ -228,6 +229,12 @@ static func talk_begin(bot: RobotAgent) -> Dictionary:
 			k.add_value("trust:" + bot.robot_id)
 	_spend_lines(bot, lines, "")
 	return {"runner": runner, "lines": lines, "error": ""}
+
+
+## Closes the unit link: it gets on with things.
+static func talk_end(bot: RobotAgent) -> void:
+	if bot and Facility.running:
+		bot.link_close(Facility.sim)
 
 
 ## Opens a reply to Liaison Pell (the corkHQ panel). Lines and answers cost

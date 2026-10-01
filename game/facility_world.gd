@@ -117,6 +117,20 @@ func _process(_delta: float) -> void:
 		cameras[i].target_in_view = robot_room(_trackers[i]) == camera_rooms[i]
 
 
+## The camera nearest a point in a room (-1 if the room has none).
+func nearest_camera(at: Vector3, room: String) -> int:
+	var best := -1
+	var best_d := INF
+	for i in cameras.size():
+		if camera_rooms[i] != room:
+			continue
+		var d := cameras[i].global_position.distance_to(at)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
 ## Display names for the security cameras, same order as `cameras`.
 func camera_names() -> PackedStringArray:
 	var out := PackedStringArray()

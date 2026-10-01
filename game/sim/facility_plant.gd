@@ -486,7 +486,11 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"relay": sim.note("plant", "%s fuse replaced by %s: docks back to full charge" % [d.name, who])
 		"gate": sim.note("plant", "%s unjammed by %s" % [d.name, who])
 		"door": sim.note("plant", "%s freed by %s" % [d.name, who])
-		"camera": sim.note("plant", "%s repaired by %s: signal back" % [d.name, who])
+		"camera":
+			sim.note("plant", "%s repaired by %s: signal back" % [d.name, who])
+			var fixer := sim.get_system(by) as RobotAgent
+			if fixer:   # the first thing the camera sees: its face, close up, then a wave
+				fixer.request_clip("act_wave_camera", {"cam": int(id.trim_prefix("cam_")) - 1})
 		"uplink": sim.note("plant", "%s restored by %s: corkHQ is listening again" % [d.name, who])
 		"compactor": sim.note("plant", "%s emptied by %s" % [d.name, who])
 		"waste":

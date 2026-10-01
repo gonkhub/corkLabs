@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_packages()
 	_test_cameras_are_eyes()
 	_test_trust_from_treatment()
+	_test_link_and_greeting()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -165,6 +166,34 @@ func _test_trust_from_treatment() -> void:
 	k.values["trust:hauler"] = 4.9
 	Knowledge.nudge_trust(sim, "hauler", 1.0, "test")
 	_check(k.value("trust:hauler") == Knowledge.TRUST_MAX, "trust tops out at %d" % int(Knowledge.TRUST_MAX))
+
+
+# On the link a unit stops and waits (and faces the camera, in 3D); a unit
+# that fixes a camera is asked to greet it.
+func _test_link_and_greeting() -> void:
+	var sim := _new_sim(47)
+	var tinker := sim.get_system("robot_tinker") as RobotAgent
+	var board := sim.get_system("work") as WorkBoard
+	var id := board.post(sim, "Recalibrate", "precise", "pods_a", 600.0, 3, "dev")
+	sim.advance(20.0)
+	_check(tinker.activity.kind == "work", "Tinker's at work")
+	tinker.link_open(sim)
+	sim.advance(300.0)
+	_check(tinker.activity.kind == "link" and tinker.doing_text(sim).contains("on the link"), "on the link it stops and waits (%s)" % tinker.doing_text(sim))
+	tinker.link_close(sim)
+	sim.advance(30.0)
+	_check(tinker.activity.kind != "link", "closed: it gets on with things (%s)" % tinker.doing_text(sim))
+	tinker.link_open(sim)
+	sim.advance(RobotAgent.LINK_MAX + 30.0)
+	_check(tinker.activity.kind != "link", "and it won't wait forever")
+	_check(board.get_job(id).status != "cancelled", "(the job it put down is still there)")
+	# Fixing a camera: the camera's first sight is its face (RobotView plays it).
+	var plant := sim.get_system("plant") as FacilityPlant
+	var n := int(tinker.perform.n)
+	plant.devices.cam_4.fault = true
+	plant._repaired(sim, "cam_4", "robot_tinker")
+	_check(int(tinker.perform.n) == n + 1 and int(tinker.perform.get("cam", -1)) == 3 and str(tinker.perform.clip) == "act_wave_camera",
+		"fixing camera 4: it's cued to greet it (and wave)")
 
 
 func _test_fs() -> void:

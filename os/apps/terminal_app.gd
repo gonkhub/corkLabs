@@ -800,6 +800,7 @@ func _show_lines(lines: Array) -> void:
 func _end_talk() -> void:
 	if talk_bot and sim():
 		sim().note("supervisor", "Closes the unit link to %s" % talk_bot.display_name())
+		Supervisor.talk_end(talk_bot)
 	talk_runner = null
 	talk_bot = null
 	if mode == "talk":

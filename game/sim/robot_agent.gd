@@ -111,6 +111,8 @@ const TRUST_SERVICED := 0.5
 const TRUST_PER_JOB := 0.02
 const TRUST_OVERRULED := -0.1
 const TRUST_LEFT_SEIZED := -0.5
+## Longest a unit waits on an open link before it gets on with things.
+const LINK_MAX := 1800.0
 ## The overclock package: faster, at a price (wear, and software drift).
 const OVERCLOCK_SPEED := 1.3
 const OVERCLOCK_WEAR := 1.5
@@ -171,8 +173,28 @@ func _init(id: String, robot_traits: RobotTraits = null, start_seg := "", start_
 	off = start_off
 
 
-func request_clip(clip: String) -> void:
+func request_clip(clip: String, extra := {}) -> void:
 	perform = {"clip": clip, "n": int(perform.n) + 1}
+	perform.merge(extra, true)
+
+
+## The supervisor opened the unit link: it stops where it is and faces the
+## camera (RobotView) until the link closes (or LINK_MAX passes).
+func link_open(sim: FacilitySim) -> void:
+	if offline():
+		return
+	var board := _board(sim)
+	if activity.kind == "work" and board:
+		board.release(int(activity.job), sim_id)   # it puts the job down (progress kept)
+	route = []
+	_route_goal = ""
+	activity = {"kind": "link", "until": sim.time() + LINK_MAX}
+
+
+func link_close(sim: FacilitySim) -> void:
+	if activity.kind == "link":
+		activity = {"kind": "idle"}
+		_think_left = 0.0
 
 
 func display_name() -> String:
@@ -446,7 +468,7 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 ## Re-scores and switches to the best option if it isn't already doing it.
 func think(sim: FacilitySim) -> void:
 	_think_left = traits.think_interval
-	if offline() or activity.kind == "glitch":
+	if offline() or activity.kind == "glitch" or activity.kind == "link":
 		return
 	scores = evaluate(sim)
 	if scores.is_empty():
@@ -799,6 +821,10 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 			return
 		"broken":
 			return   # nothing until it's repaired
+		"link":
+			if sim.time() >= float(activity.get("until", 0.0)):
+				link_close(sim)
+			return
 		"seized":
 			# Frozen until someone reboots it by hand, or (slowly) it works itself free.
 			if sim.time() >= float(activity.get("until", INF)):
@@ -1205,6 +1231,8 @@ func doing_text(sim: FacilitySim) -> String:
 			return "SEIZED UP (needs a manual reboot)"
 		"broken":
 			return "OFFLINE: %s" % str(activity.get("why", "broken"))
+		"link":
+			return "on the link with you"
 		"accident":
 			return "heading to %s" % _layout(sim).station(activity.station).get("name", "?")
 	return "standing by (%s)" % _room_name(sim)

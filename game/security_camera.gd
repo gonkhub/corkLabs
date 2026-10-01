@@ -37,6 +37,11 @@ var auto_track := false
 ## sets it): the camera waits at its home view instead of staring at a wall.
 var target_in_view := true
 
+## How much faster the head turns while framing a moment.
+const FRAME_SNAP := 6.0
+## Framing a subject for a moment (frame()): seconds left, and what to put back.
+var _frame_left := 0.0
+var _frame_restore := {}
 var _home: Basis
 var _home_fov := 60.0
 var _pan_now := 0.0
@@ -52,13 +57,40 @@ func _ready() -> void:
 	auto_track = target != null
 
 
+## Points at `subject` and zooms to `fov_deg` for `seconds` (a moment worth
+## seeing: a unit that just fixed this camera, looking into it), then goes
+## back to how it was.
+func frame(subject: Node3D, fov_deg: float, seconds: float) -> void:
+	if _frame_left <= 0.0:
+		_frame_restore = {"target": target, "auto_track": auto_track, "zoom": zoom_fov}
+	target = subject
+	auto_track = true
+	target_in_view = true
+	zoom_fov = fov_deg
+	_frame_left = seconds
+
+
+func framing() -> bool:
+	return _frame_left > 0.0
+
+
 func _process(delta: float) -> void:
+	if _frame_left > 0.0:
+		_frame_left -= delta
+		if _frame_left <= 0.0:
+			target = _frame_restore.get("target")
+			auto_track = bool(_frame_restore.get("auto_track", false))
+			zoom_fov = float(_frame_restore.get("zoom", _home_fov))
+			if not auto_track:
+				pan = 0.0
+				tilt = 0.0
 	var k := clampf(motor_speed * delta, 0.0, 1.0)
 	fov = lerpf(fov, zoom_fov, k)
 	if auto_track and target and target_in_view:
 		_tracking = true
 		var want := global_transform.looking_at(target.global_position + Vector3(0, -0.6, 0), Vector3.UP)
-		global_transform.basis = global_transform.basis.slerp(want.basis, clampf(pan_speed * delta, 0.0, 1.0)).orthonormalized()
+		var speed := pan_speed * (FRAME_SNAP if _frame_left > 0.0 else 1.0)   # framing a moment: snap to it
+		global_transform.basis = global_transform.basis.slerp(want.basis, clampf(speed * delta, 0.0, 1.0)).orthonormalized()
 		return
 	if auto_track and not target_in_view:
 		if _tracking:
