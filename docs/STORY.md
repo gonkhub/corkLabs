@@ -1,149 +1,225 @@
 # corkLabs: the story so far (SPOILERS)
 
-Everything a player can find, how it's found, and where it lives, so it can
-be reviewed, rewritten and rebalanced. First pass, 2026-09-30: all of it is
-placeholder writing meant to be walked back or rewritten freely. Every piece
-is a plain text file; no code changes needed to rewrite a line.
+Everything a player can find, how it's found, what it costs, and where it
+lives, so it can be reviewed, rewritten and rebalanced. All of it is
+first-pass writing, meant to be rewritten freely: every piece is a plain
+text file, so no code changes are needed to change a line.
+
+*Updated 2026-09-30 (second pass: pacing, pushback, longer chains; endings
+archived).*
 
 ## The shape of a run
 
 One continuous timeline of **three shifts** (Day 1-3, 06:00-14:00). Each
 shift: a **brief** (what corporate wants, what happened overnight, today's
 duties) → **clock in** → play (time only moves when you act) → **14:00: end
-of shift** (review, standing, duties) → **clock out** (the night passes, the
-facility runs without you) → next brief. After shift 3, an **ending**.
+of shift** (review, standing, duties, directives, how you treated the
+units' requests) → **clock out** (the night passes, the units in standby)
+→ next brief. After shift 3: **the end of this build** (the endings are
+archived in `docs/archive/endings.txt` until they come back).
 
-You can be **dismissed** at any point:
+A shift is **480 facility minutes**, and everything costs time (table
+below). Between duties, corporate's directives, the units' requests and
+whatever breaks, a thorough supervisor has maybe an hour or two of their
+own per shift. Nobody sees everything in one day.
+
+| Shift | What it is |
+| --- | --- |
+| 1: Orientation | Tutorial duties walk you through the OS (onboarding, cameras, an order, an inspection, a requisition, answering a unit). Scripted incidents, one system at a time: a leak (07:10), a dead camera (09:00), the dock door sticking (10:20), Hauler seizing up (11:20), an output directive (12:30). Faults are gentler (pressure 0.65) |
+| 2: The Purge | Okafor's home and account are purged at 12:00 (or when you confirm it). The relay blows, a door sticks, Tinker seizes, a camera dies. Normal pressure |
+| 3: Audit | Compliance audits your terminal at 13:00 (strictness +25). The gate jams, a leak, a camera, Ogre seizes. Pressure 1.15 |
+
+## Getting fired
 
 | How | What triggers it |
 | --- | --- |
-| Performance | Standing reaches 0 (bad reviews, undone duties, crashed units) |
-| Misconduct | Two audits catch you (suspicion from violations; audits every hour on duty, a big one at 13:00 on shift 3) |
-| Catastrophe | Coolant empty for 30 facility minutes, or throughput under 30% for an hour, on your watch |
+| Performance | Standing reaches 0: bad reviews, undone duties, missed directives, Pell's Compliance, crashed units |
+| Misconduct | Two audits catch you (hourly on duty; targeted ones when Pell escalates; the big one on shift 3) |
+| Catastrophe | Coolant empty for 45 facility minutes, or throughput under 30% for an hour, on your watch |
 
-Dismissed: **retry the shift** (from its brief checkpoint) or **start over**
-on a new save. The **personnel file** (`user://supervisor_archive.json`)
-remembers every run: shifts worked, dismissals, secrets ever found, endings
-seen. It shows on the login screen and on the ending screen.
+Dismissed: **retry the shift** (from its brief) or **start over**. The
+**personnel file** (`user://supervisor_archive.json`) remembers every run.
+What carries between runs is what the player remembers: typed commands and
+passwords work on a new save.
 
-What carries between runs is **what the player remembers**: a new save still
-accepts `su maint` and the password, `talk tinker`, `decrypt ... lantern`...
-The game just doesn't list them in `help` until they're used again.
+## Corporate pushes back
 
-## Two ways to play (and everything between)
+- **Directives** (`directives.gd`): every hour or so on duty corkHQ demands
+  something with a deadline: inspect a device, diagnose a unit, get a job
+  done, reach a throughput figure, file a report. Met: standing up. Missed:
+  standing down (more than you gained).
+- **Pell escalates** per kind of violation within a shift: *files* (former
+  staff files, copies), *games* (Night Run), *talk* (unit conversations),
+  *maint* (the maintenance account and its tools).
+  1. a warning in the panel;
+  2. a directive to **explain yourself** within 45 minutes (Reply → "About
+     my activity": apologise, justify, or refuse);
+  3. Compliance: standing -6 and a **targeted audit** half an hour later.
 
-**The good supervisor**: do the Duties (reports, inspections, diagnostics,
-reading the Code of Conduct, confirming the purge, preparing for the audit),
-keep throughput up, don't open what you're told not to. Standing rises;
-suspicion stays low. Endings: *Contract Renewed*, *Promoted* (standing 85+,
-no warnings: you become a liaison yourself).
+  | Kind | Level 1 / 2 / 3 at |
+  | --- | --- |
+  | files | 1st / 3rd / 5th |
+  | games | 1st / 2nd / 4th |
+  | talk | 3rd / 6th / 10th |
+  | maint | 1st / 2nd / 3rd |
 
-**The rascal**: read the former supervisors' files, talk to the units, play
-the game, log in as maint, look in the pods. Every one of those is logged
-(suspicion); the audit trail can be read and purged, the corkHQ link muted.
-Endings: *Witness* (you know what's in the pods, and who), *Transferred*
-(you know, and they know you know), *Awake* (you open pod 3).
+## Avoiding corporate: the uplink
+
+corkHQ sees the facility through one **uplink relay** in the workshop
+(the facility map memo and `ps` both mention it). **While it's down:** no
+suspicion, no audit trail, no audits, no Pell, no new directives. The
+corkHQ panel shows UPLINK LOST and holds its messages.
+
+How it goes down:
+- Rarely on its own.
+- **Hauler**, with trust 2 and the uplink known: "The uplink relay in the
+  workshop. Could it have an... accident?" Hauler rides in through the
+  freight gate (if the gate's jammed, it can't) and knocks into it. To the
+  facility it's an ordinary fault, and Hauler won't be the one to fix it.
+
+What it costs: corporate posts a critical repair job and a directive to
+restore it within the hour. Tinker will go and fix it (about 30 minutes of
+work) unless you keep it busy, reprioritise, or block its way. Every outage
+after the first adds suspicion of its own (+5 per repeat).
+
+Other ways to deal with corporate, as maint: `auditctl purge` (once a shift),
+`hqctl mute` (noticed at the next audit), `kill 45` (auditd restarts in 0.3 s,
+and that's noticed).
+
+## The facility fights back
+
+- **Failures:** leaks (drain coolant), the relay (slow charging), debris,
+  the freight gate and three **passage doors** (pod bay, dock, hangar:
+  stuck = route blocked; a stuck dock door cuts the units off from their
+  chargers), seven **cameras** (NO SIGNAL), the **uplink**.
+- **Parts:** repairs use spare parts from stock (clamps, fuses, filter
+  cartridges, door actuators, camera modules). No part in stock = the job
+  **stops halfway** and waits. The starting stock covers the first morning.
+  Deliveries take hours (express: ~1/3 the time, +75% cost) and arrive as
+  crates the units bring in (Ogre → a rail unit → Tinker unpacks).
+- **Wear:** units wear with work. Worn units slow down; past 50% they can
+  **seize up** and need another unit to reboot them by hand (Tinker's work),
+  or they free themselves after two hours. A **service** at the dock uses a
+  servo bundle and brings wear back down. Units wear far less overnight and
+  never seize in standby.
+- **Requests:** the units ask for things: order a part, book a service, let
+  me go and reboot X, finish or recharge, clamp a live leak (faster, wears
+  the unit), can I sweep early. Unanswered ones expire, the unit decides,
+  and being ignored costs it stability.
 
 ## The cast
 
 | Who | Where | What |
 | --- | --- | --- |
 | **You** | the terminal room (no door) | Supervisor #6, probationary |
-| **Ms. Pell** | the corkHQ panel | Your liaison. "She is always in touch." Reply to her from the panel |
-| **Edwin Hollis** | `/home/ehollis`, pod 2 | Founding supervisor 1979-1994. Built the units, "built the dark". Found the wake sequence. Transferred |
-| **Ruth Marrow** | `/home/rmarrow`, pod 4 | 2003-2011. Made the maint account, wrote NIGHT RUN, talked to the units. Terminated, then transferred |
-| **T. Vance** | `/home/tvance` | 2014, three days. "They are breathing." |
-| **J. Kim** | `/home/jkim` | 2017, one shift. "the panel won't close" |
-| **Dele Okafor** | `/home/dokafor` (purged at 12:00 on shift 2), pod 3 | 2019 until two days ago. Talked to Tinker every morning. Looked in pod 3. Asked to "come to the hangar for a conversation" |
-| **Tinker** | everywhere on rails | Curious, lonely; a knowledge filter stops it knowing what the pods are |
-| **Hauler** | everywhere on rails | Patient; watches Ogre's light at night |
-| **Ogre** | the hangar ceiling | The oldest. No filter ("it already knows"). Keeps Hollis's word |
+| **Ms. Pell** | the corkHQ panel | Your liaison, logged in since 1979 (`who`). Reply to her from the panel |
+| **Edwin Hollis** | `/home/ehollis` (maint only), pod 2 | Founding supervisor 1979-1994. Built the units, "built the dark". Found the wake sequence |
+| **Ruth Marrow** | `/home/rmarrow` (maint only), pod 4 | 2003-2011. Made the maint account, wrote NIGHT RUN, talked to the units |
+| **T. Vance** | `/home/tvance` (open) | 2014, three days |
+| **J. Kim** | `/home/jkim` (open) | 2017, one shift |
+| **Dele Okafor** | `/home/dokafor` (account dokafor; purged at 12:00 on shift 2), pod 3 | 2019 until two days ago. Said good morning to Tinker every day |
+| **Tinker / Hauler / Ogre** | on the rails / the hangar ceiling | See their conversation scripts |
+| **Tinker 2, Hauler 2...** | crated units you activate | Fresh firmware, no history, their own blank conversation |
 
-## The secrets (15) and how to find them
+## The chains (how the deep stuff is reached)
 
-`game/story/secrets.txt` has the list (and the hints shown on the ending
-screen for the ones not found).
+1. **Surface (shift 1):** your onboarding, the Code of Conduct (every rule
+   is a hint: su, the maintenance account, the uplink, the pods), the memos
+   (transfers, the facility map and the uplink), `/var/log/sessions.log`,
+   `/sys/units/*.cfg`, Kim's and Vance's notes, the Recycle Bin, the Notes
+   app's leftovers ("say good morning to Tinker (talk tinker)"). `ls /home`
+   shows the locked homes.
+2. **Okafor's account:** talk to Tinker on three occasions at least two
+   facility hours apart (trust 3), having asked who was here before → ask
+   if Okafor told it anything private → "their password was my name,
+   backwards" → `su dokafor` / `reknit`. Only until the purge at 12:00 on
+   shift 2. Inside: the todo (talk, Night Run), shift notes, `.pod3` (the
+   maint account, "the password is Marrow's top score", podctl), `.history`.
+   `cp` keeps copies past the purge.
+3. **The maintenance account:** `su maint` / **709142** (Marrow's top score
+   in Night Run, `/opt/games`). Opens everything: Marrow's and Hollis's
+   homes, `/sys/pods`, the maint tools.
+4. **Hollis's diary:** the word comes from **Ogre** (trust 2, alone in the
+   hangar), asked about the lamp Hollis named; the hint is in Hollis's
+   `units.txt` or Night Run's wrong way. `decrypt /home/ehollis/diary.enc
+   lantern` → what the pods are, the wake sequence (`podctl wake` is refused
+   for now: the wake ending is archived).
+
+## The secrets (19)
+
+`game/story/secrets.txt` (with the hints shown on the end screen).
 
 | Secret | How |
 | --- | --- |
-| The ones before you | Read any file in a former supervisor's home (`cat /home/dokafor/todo.txt`). Each first read: suspicion +3 |
+| The ones before you | Read any former supervisor's file |
 | Transferred | `cat /corp/memos/recent-transfer-okafor.txt` |
-| Okafor's last note | `ls -a` in `/home/dokafor` shows `.pod3` (before the purge!) |
-| Night Run | `run nightrun` (from `/opt/games`, mentioned in Okafor's todo and Marrow's README), or open it in Files |
-| The wrong way | In Night Run, at the start of a run, **hold left** into the NO ENTRY sign until you slip through (1.6 s). Marrow's message: ask the one who never leaves about its light |
-| The maintenance account | `su maint`, password **709142**: Marrow's top score in Night Run ("the password is the top score") |
-| The audit trail | As maint: `auditctl list` |
-| Silence | As maint: `hqctl mute <minutes>` |
-| The first voice | `talk ogre` (only when no other unit is in the hangar), ask about the first supervisor |
-| Hollis's diary | `decrypt /home/ehollis/diary.enc lantern`. The word: ask Ogre gently about the lamp Hollis named (needs the hint from Night Run's wrong way or `/home/ehollis/units.txt`) |
-| What the pods are | Read the decrypted diary. Also teaches `podctl` and the wake sequence |
-| Pod 3 | As maint: `podctl inspect 3`. It's Okafor. (Pod 2 is Hollis, pod 4 is Marrow) |
-| Tinker's song | `talk tinker`, ask who was here before, then about pod 3 |
-| What Hauler watches | `talk hauler`, ask why it stands at the dock door at night |
-| Awake | As maint, having read the diary: `podctl wake 3`, then confirm. Ends the game |
-
-Other things to find: `whoami`, `ls -l` (dates, owners), `/var/log/sessions.log`
-(every supervisor's last session: TRANSFER), `/sys/units/*.cfg` (the
-knowledge filters), `/corp/policy/conduct.txt` (every rule is a hint of what
-exists), `exit` when you're not maint ("There is no door.").
-
-## The Terminal as a thing you learn
-
-A new supervisor's `help` lists: help, status, clear, ls, cd, cat, pwd.
-Reading `~/welcome.txt` adds the job commands (units, jobs, order, priority,
-plant, log, open, duties). Typing any real command teaches it ("new command
-noted"). `help` ends with "There are more. There are always more." while
-there are. Maintenance commands are real but answer "permission denied"
-until you're maint. `sound` is a dev tool: it works but never shows in help.
+| Tinker, backwards | Tinker (trust 3, after asking about Okafor), "anything private?" |
+| Okafor's account | `su dokafor` / `reknit` |
+| Okafor's last note | As dokafor, `ls -a`, `.pod3` |
+| Kept | `cp` one of Okafor's files before the purge |
+| Night Run | `run nightrun` |
+| The wrong way | Night Run: hold left into the NO ENTRY sign at the start of a run |
+| The maintenance account | `su maint` / 709142 |
+| The audit trail | maint: `auditctl list` |
+| Silence | maint: `hqctl mute <minutes>` |
+| A deaf ear | Hauler (trust 2) has an "accident" with the uplink |
+| The first voice | Ogre (alone in the hangar): the first supervisor |
+| Hollis's diary | decrypt it with Ogre's word |
+| What the pods are | read the diary |
+| Pod 3 | maint: `podctl inspect 3` |
+| Tinker's song | Tinker (trust 2, after asking about Okafor): pod 3 |
+| What Hauler watches | Hauler: why it stands at the dock door at night |
+| Estimated tenure | Recycle Bin, from shift 2: `.misdelivered` (hidden) |
 
 ## What costs time (and what corporate logs)
 
-| Action | Facility time | Logged as a violation? |
+| Action | Facility time | Logged? |
 | --- | --- | --- |
-| Reading a file (first time) | 1 min per 15 lines, or its `minutes:` | Former staff files: +3 each (Night Run folder +2) |
-| Talking to a unit | 1 min a line, 2 min a reply | +1.5 per conversation (conduct rule 2); steadies the unit |
-| Replying to Pell | same | No, but what you say can be |
-| Duties | their minutes (5-30) | No: standing up when done, down when not |
-| Orders, priorities, requisitions, maintenance requests, spare parts | 2 min | No |
-| Inspect a device, Diagnose a unit | 10 min | No |
-| A run of Night Run | 10 min | +3 the first run each time it's opened |
-| `su maint` | 1 min | +10 (+3 for a wrong password) |
-| Root commands | 2 min | +4 to +15; forced installs can be caught on the spot (35%) |
-| Clock in / the night | to 06:00 / to 05:55 next day | No |
+| Reading a file (first time) | 1 min per 5 lines, at least 5 (or its `minutes:` x3) | Former staff: +3 (files) |
+| `grep` | 15 min | Matching former staff files: +2 |
+| Talking to a unit | 3 min a line, 5 a reply | +1.5 a conversation (talk); builds trust every 2 h |
+| Replying to Pell | the same | No (what you say can be) |
+| Orders, priorities, requisitions, answering requests, booking services, maintenance requests | 5 min | No |
+| Inspect a device, diagnose a unit | 30 min | No |
+| Duties | 10-60 min | Undone at 14:00: standing down |
+| Interim report (directive) | 20 min | No |
+| A run of Night Run | 30 min | +3 first run each time it's opened (games) |
+| `su dokafor` / `su maint` | 3 min | +6 / +10 (files / maint) |
+| Root commands | 5 min | +4 to +15 (maint) |
+| Activating a crated unit | 90 min | No |
 
-Audits: every facility hour on duty, chance = (suspicion - 25) %. A muted
-corkHQ link at audit time is itself logged (+12). Suspicion fades 2 an hour.
+Audits: hourly on duty, chance = (suspicion - 25)%. Suspicion fades 2 an hour.
 
 ## Clips to perform (the VR acting pass)
 
-Story moments ask a unit to perform a clip by name. Until it's recorded,
-nothing happens (the robot keeps doing what it was doing), so these can be
-performed in any order. Record them in the recorder like any `act_*` clip,
-name them exactly this, and they play.
+Story moments ask a unit to perform a clip by name; until it's recorded,
+nothing happens. Record them in the recorder like any `act_*` clip.
 
 | Clip | Unit | Moment |
 | --- | --- | --- |
-| `act_hum_pod3` | Tinker | Humming pod 3's rhythm (4 beats, pause, 3) at the pod row. Shift 2 08:40; the "song" conversation |
-| `act_shocked_still` | Tinker | Told the truth about the pods: freezes, arms pulled in, a slow look around |
-| `act_glitch_shiver` | Tinker | Rattled / unstable: jittery, twitchy, arms not quite under control |
+| `act_hum_pod3` | Tinker | Humming pod 3's rhythm (4 beats, pause, 3). Shift 2 08:40; the "song" conversation |
+| `act_shocked_still` | Tinker | Told the truth about the pods: freezes, arms pulled in |
+| `act_glitch_shiver` | Tinker | Rattled / unstable: jittery, twitchy |
 | `act_look_at_camera` | Hauler | Turns its head up to the camera and holds. Shift 2 13:00; the "night" conversation |
-| `act_lamp_to_camera` | Ogre | Swings the great eye slowly toward the camera (remembering Hollis) |
-| `act_lamp_dim` | Ogre | The eye/lamp lowers, like a bow ("...lantern.") |
-| `act_lamp_to_pods` | Ogre | The lamp sweeps slowly toward the pod bay side and stops. Shift 3 13:45 |
+| `act_lamp_to_camera` | Ogre | Swings the great eye slowly toward the camera |
+| `act_lamp_dim` | Ogre | The lamp lowers, like a bow ("...lantern.") |
+| `act_lamp_to_pods` | Ogre | The lamp sweeps toward the pod bay side and stops. Shift 3 13:45 |
 
-Add more with `perform | robot | clip` in `events.txt`, or `~ perform clip`
-in a conversation.
+Worth adding for the new systems (not yet cued): a seize (a joint locking
+mid-reach), a manual reboot (Tinker working at another unit's back panel),
+Hauler's "accident" (a clumsy swing into the relay), unpacking a crate.
 
 ## Where it all lives
 
 | File | What |
 | --- | --- |
-| `game/story/fs/` | The OS file system: one .txt per file, folders are folders. `#!` headers: name, date, owner, learn, restricted, password, requires, gone_if, shift, minutes, exec (see `virtual_fs.gd`) |
+| `game/story/fs/` | The OS file system. `#!` headers: name, date, owner, learn, restricted, password, requires, gone_if, shift, minutes, exec, access (see `virtual_fs.gd`) |
 | `game/story/shifts.txt` | Each shift's title and brief |
-| `game/story/duties.txt` | Corporate's checklist per shift |
-| `game/story/events.txt` | Scripted moments per shift (corkHQ lines, robot lines, faults, audits, clips) |
-| `game/story/endings.txt` | Endings, first match wins |
+| `game/story/duties.txt` | Corporate's checklist per shift (shift 1's is the tutorial) |
+| `game/story/events.txt` | Scripted moments per shift (corkHQ lines, robot lines, faults, seizes, directives, audits, clips) |
 | `game/story/secrets.txt` | The secrets and their hints |
-| `game/story/pods.txt` | Who's in the pods (maintenance view) |
-| `game/story/dialogue/*.txt` | Conversations: tinker, hauler, ogre, pell |
-| `game/corporate/hq_lines.txt` | corkHQ's regular lines (reviews, nags) |
+| `game/story/pods.txt` | Who's in the pods |
+| `game/story/dialogue/*.txt` | Conversations: tinker, hauler, ogre, pell, new_unit |
+| `game/corporate/hq_lines.txt` | corkHQ's lines, including Pell's escalation (`pell_<kind>_<level>`) |
+| `game/corporate/catalog.txt` | What you can order (parts say what uses them) |
+| `docs/archive/endings.txt` | The six endings, parked |

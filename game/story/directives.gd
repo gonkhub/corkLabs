@@ -30,6 +30,9 @@ var sim_id := "directives"
 var active: Array[Dictionary] = []
 var next_id := 1
 var posted := 0
+## This shift: directives met and missed.
+var met := 0
+var missed := 0
 var rng := RandomNumberGenerator.new()
 var _acc := 0.0
 var _next_at := -1.0
@@ -67,6 +70,7 @@ func get_directive(id: int) -> Dictionary:
 
 func _complete(sim: FacilitySim, d: Dictionary) -> void:
 	active.erase(d)
+	met += 1
 	var o := sim.get_system("oversight") as Oversight
 	if o:
 		o.commend(sim, "directive met: " + str(d.text), float(d.reward))
@@ -77,6 +81,7 @@ func _complete(sim: FacilitySim, d: Dictionary) -> void:
 
 func _miss(sim: FacilitySim, d: Dictionary) -> void:
 	active.erase(d)
+	missed += 1
 	var hq := sim.get_system("hq") as CorkHQ
 	if hq:
 		hq.post(sim, "Directorate of Output", "warning", "DIRECTIVE MISSED: %s This is on your record." % d.text)
@@ -169,6 +174,9 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 
 
 func sim_event(sim: FacilitySim, event_name: String, _data: Dictionary) -> void:
+	if event_name == "shift_start":
+		met = 0
+		missed = 0
 	if event_name == "shift_close":
 		# Whatever's outstanding at the end of the shift is missed.
 		for d in active.duplicate():
@@ -176,7 +184,7 @@ func sim_event(sim: FacilitySim, event_name: String, _data: Dictionary) -> void:
 
 
 func sim_save() -> Dictionary:
-	return {"active": active.duplicate(true), "next_id": next_id, "posted": posted, "acc": _acc, "next_at": _next_at,
+	return {"active": active.duplicate(true), "next_id": next_id, "posted": posted, "acc": _acc, "next_at": _next_at, "met": met, "missed": missed,
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state)}
 
 
@@ -189,6 +197,8 @@ func sim_load(d: Dictionary) -> void:
 		active.append(x)
 	next_id = int(d.get("next_id", 1))
 	posted = int(d.get("posted", 0))
+	met = int(d.get("met", 0))
+	missed = int(d.get("missed", 0))
 	_acc = float(d.get("acc", 0.0))
 	_next_at = float(d.get("next_at", -1.0))
 	rng.seed = int(str(d.get("rng_seed", "0")))

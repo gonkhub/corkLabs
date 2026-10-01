@@ -129,6 +129,16 @@ func _build_end(camp: Campaign) -> void:
 	if o:
 		_text("Standing with the Directorate: %d/100%s" % [roundi(o.standing), ("   Formal warnings: %d" % o.strikes) if o.strikes > 0 else ""])
 	_text("Duties done: %d of %d" % [camp.duties_done(), camp.duties.size()])
+	var dirs := sim.get_system("directives") as Directives
+	if dirs and dirs.met + dirs.missed > 0:
+		_text("Corporate's directives: %d met, %d missed" % [dirs.met, dirs.missed], OSTheme.TEXT if dirs.missed == 0 else OSTheme.WARN)
+	var reqs := sim.get_system("requests") as UnitRequests
+	if reqs and reqs.answered + reqs.ignored > 0:
+		_text("The units asked you %d time%s; you answered %d%s" % [reqs.answered + reqs.ignored, "" if reqs.answered + reqs.ignored == 1 else "s",
+			reqs.answered, (", and ignored %d" % reqs.ignored) if reqs.ignored > 0 else ""], OSTheme.TEXT if reqs.ignored == 0 else OSTheme.WARN)
+	var waiting := (sim.get_system("work") as WorkBoard).waiting_jobs().size()
+	if waiting > 0:
+		_text("%d job%s still waiting for parts. Order before you clock out: the night won't." % [waiting, "" if waiting == 1 else "s"], OSTheme.WARN)
 	var k := Story.knowledge(sim)
 	if k:
 		var found := k.with_prefix("secret:").size()

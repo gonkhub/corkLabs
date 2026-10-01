@@ -122,6 +122,17 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | A **personnel file** across runs (secrets, endings, dismissals), shown at login and on the ending screen; it never changes a run's rules | Encourages replays; carrying knowledge stays the player's job |
 | 2026-09-30 | Story beats can ask a unit to **perform a named clip**; nothing happens until it's recorded | Robot story moments get acted in VR later, without blocking the writing |
 | 2026-09-30 | Plant actions (inspect, request maintenance, spare parts from stock) and unit diagnostics | More to do inside the OS's systems; makes Requisitions matter |
+| 2026-09-30 | **Pacing x3-6**: dialogue line 3 min, choice 5, interaction 15, task 45; reading x3; inspect/diagnose 30; Night Run 30 a run | User: one shift showed nearly the whole game. A shift should hold a couple of dozen real actions |
+| 2026-09-30 | **Longer chains, not shift locks**: former staff homes are locked by account (`#! access:`); Okafor's account needs his password, which Tinker only gives after trust 3 (one conversation every 2 h); Marrow, Hollis and the pods need maint | User's choice (costs + knowledge chains). A new player can't know the way; a returning one still has to earn it |
+| 2026-09-30 | **The facility fights back**: doors stick (block routes), cameras die, the uplink can fail; fault rates up; per-shift pressure (orientation 0.65, audit day 1.15, nights 0.4) | User: the player should be sucked back into work by the facility's ineptitude |
+| 2026-09-30 | **Repairs use parts**; no part = the job stops halfway. Small starting stock, express shipping | User: Requisitions must matter |
+| 2026-09-30 | **Unit wear**: slows units; past 50% they seize and need a manual reboot by another unit (or free themselves after 2 h); services use servo bundles | User: bots need more to do and must demand attention (also: mechanical failures needing a manual reboot by Tinker) |
+| 2026-09-30 | **Units ask for things** (requests with answers and a deadline); ignoring them hurts their stability | User: robots ask for things |
+| 2026-09-30 | **Directives**: corporate's timed demands; **Pell escalates** per kind of violation (warning, explain yourself, Compliance + targeted audit) | User: Escalating Pell + demands that interrupt |
+| 2026-09-30 | **The uplink**: while down, nothing is recorded and no audits run; Hauler (trust 2) can be talked into an "accident"; corporate wants it back within the hour; repeat outages are suspicious | User's pick for dodging audits (uplink blackout) |
+| 2026-09-30 | Shift 1 is **orientation**: tutorial duties that tick off as you use each system, and scripted incidents that introduce them one at a time | User: day 1 as a tutorial on the OS, the bots, surface files and terminal |
+| 2026-09-30 | **Endings scrapped for now**, archived in docs/archive/endings.txt; the run ends with "the end of this build" | User's direction |
+| 2026-09-30 | Nights: units in standby (stability drifts 15%, wear 30%, no seizing); corkHQ doesn't post to an empty desk | Unattended nights shouldn't wreck a decently run facility; what you leave undone still shows in the morning |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
 
 ## Gameplay directions (approved long-term, not started)

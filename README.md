@@ -137,7 +137,8 @@ Facility.spend(900.0, "Hauler clears the jam")            # or any exact amount
 
 and the facility (robots, scheduled events, shifts) plays out through exactly
 that much time. Costs live in `Facility.COST` (`game/sim/facility.gd`):
-dialogue line 1 min, choice 2 min, interaction 5 min, task 15 min.
+dialogue line 3 min, choice 5 min, interaction 15 min, task 45 min (a shift is
+480 minutes: a couple of dozen real actions, so nobody sees everything in a day).
 Animations keep running in real time; the facility's *state* waits for you.
 
 There is **no Wait**: the player can't just let time pass. Time moves when
@@ -156,7 +157,9 @@ starts at Day 1 05:55, at the first shift's brief (the shift starts at 06:00).
 | `FacilityLog` | `game/sim/facility_log.gd` | The journal: a timestamped line for everything that happens |
 | `Facility` (autoload) | `game/sim/facility.gd` | Session start/save, `spend()` / `act()`, `clock_text()` |
 | `ShiftSchedule` | `game/sim/shift_schedule.gd` | Books shift start/end events. The game uses one shift a day (Day, 06:00-14:00); a template for new systems |
-| `Campaign` | `game/story/campaign.gd` | The supervisor's three shifts: brief, duties, scripted events, end of shift, the night, endings (see below) |
+| `Campaign` | `game/story/campaign.gd` | The supervisor's three shifts: brief, duties, scripted events, end of shift, the night, how hard the facility pushes (see below) |
+| `Directives` | `game/story/directives.gd` | Corporate's timed demands |
+| `UnitRequests` | `game/sim/unit_requests.gd` | What the units ask the supervisor |
 
 **Writing a system** (robots, pipes, pods...): any object with `sim_id`,
 `sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
@@ -439,7 +442,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
   **Shut down** quits.
 - **Shift screens** cover the desktop between shifts: the **brief** (Clock
   in), **end of shift** (Clock out: the night passes), **dismissal** (retry
-  the shift, or start over), and the **ending**. See "Shifts and the story".
+  the shift, or start over), and the **end of this build**. See "Shifts and the story".
 - **Windows**: open apps from the desktop icons (double-click), the
   **corkLabs** start menu, or a right-click on the desktop. Drag the title
   bar to move; drag to the left/right screen edge to snap to half the screen,
@@ -450,7 +453,8 @@ other flat scenes it restarts itself without VR. The VR recorder is now
   Settings.
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
   broken (click: Plant), throughput, and the **facility clock** with the
-  shift (never the real clock). No Wait button, on purpose.
+  shift (never the real clock). No Wait button, on purpose. **REQUESTS n**
+  lights up when the units are asking you something (click: Units).
 - **Discoveries** (a secret, a new program) pop up as a toast. Some apps
   aren't on the desktop until you find them (Night Run); the start menu shows
   them as "???".
@@ -463,20 +467,20 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 | --- | --- | --- |
 | **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, **N night vision**, F filter, M mute. You hear the facility through the open camera (grid: the one under the mouse). Feeds run at a locked 30 fps. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
 | **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
-| **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **Diagnose** (10 min, steadies it a little); **Talk** (once you know you can: opens the unit link in the Terminal); **remote reboot** (needs the remote-reboot package) |
-| **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
-| **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
-| **Plant** | Throughput, coolant, heat, dock power, every device's state and job | Pick a device: **Inspect** (10 min: wear rate, when it needs work, who's on it), **Request maintenance** (post the job early, 2 min), **Use spare part** from Requisitions stock (shrinks the repair, 2 min) |
+| **Units** | The units' **requests** on top (answer them, 5 min each, or they decide for themselves and it hurts them). Each robot: what it's doing, power, software stability, **wear**, standing order, what it's weighing up and why; crated units to activate | Order: recharge, stand by, cancel (5 min); **Diagnose** (30 min); **Book service** (5 min; uses a servo bundle); **Talk** (once you know you can); **remote reboot** (needs the remote-reboot package); **Activate** a crated unit (90 min) |
+| **Requisitions** | The catalogue with what's in stock, WAITING FOR PARTS (jobs stopped for a part), your budget, your orders | Order items (5 min), **Express** (+75%, about a third of the time); deliveries arrive as crates the units bring in |
+| **Work Orders** | The job board (open, waiting for a part, or all with finished) | Order a robot onto a job; raise/lower priority (5 min) |
+| **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs), **Request maintenance** (post the job early, 5 min) |
 | **Files** | The OS file system (the same files as the Terminal) | Read files (the first read costs time), decrypt, run programs; hidden files once you know they exist (`ls -a`) |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | The command line you **learn**: `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `decrypt`, `run`), `talk <unit>` (numbered replies, 0 closes), `duties`/`duty <id>`, `whoami`, and the maintenance account (`su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`). Up/down for history, Esc cancels |
+| **Terminal** | The command line you **learn**: `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `talk <unit>` (numbered replies, 0 closes), `requests`/`answer`, `service <unit>`, `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
 | **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
 
 Robots answer orders out loud, on camera; the apps just say the order was sent.
 
 Every supervisor action goes through `Supervisor` (`game/supervisor.gd`),
-which journals it and spends the time (an order or priority change: 2 min;
+which journals it and spends the time (an order or priority change: 5 min;
 reading, talking, duties, inspecting, playing: see docs/STORY.md). Opening
 apps and looking through cameras is free.
 
@@ -509,7 +513,19 @@ timeline, run by `Campaign` (`game/story/campaign.gd`). Each shift has a
 brief, **duties** (corporate's checklist), **scripted events** (corkHQ
 messages, robot lines, faults, audits, clips to perform) and ends at 14:00
 with a review. Clocking out runs the night (the facility carries on without
-you) up to the next brief. After shift 3: an ending, picked from what you did.
+you) up to the next brief. After shift 3: the end of this build (the endings
+are archived in `docs/archive/endings.txt` for now).
+
+The facility **fights back**: leaks, the relay, debris, the freight gate,
+three passage doors (stuck = route blocked), seven cameras (NO SIGNAL), the
+corkHQ uplink. **Repairs use spare parts** from stock (a job with no part
+stops halfway). **Units wear out**: worn units slow down and seize up
+(another unit reboots them by hand), and need services (servo bundles).
+The **units ask** for things (UnitRequests); corporate issues **directives**
+with deadlines (Directives); **Pell escalates** as you break rules; and the
+**uplink** relay, while it's down, blinds corkHQ entirely (talk Hauler into
+an accident). How hard the facility pushes depends on the shift
+(`Campaign.PRESSURE`: orientation is gentler; nights are quiet).
 
 `Oversight` (`game/story/oversight.gd`) is how corporate judges you:
 **standing** (0-100; reviews, duties, crashes; 0 = dismissed for
@@ -521,7 +537,8 @@ save is checkpointed at every brief: `facility_save_checkpoint.json`) or
 
 `Knowledge` (`game/story/knowledge.gd`) is what this supervisor has found:
 commands, files read, secrets, story flags. Conditions everywhere (files,
-events, duties, dialogue, endings) check it.
+events, duties, dialogue) check it. It also holds a few numbers: trust
+("trust:tinker"), built one conversation every two facility hours.
 
 The OS has a **file system** (`game/story/fs/`, one text file per file, with
 `#!` headers for hidden, encrypted, restricted, appearing, disappearing
@@ -530,7 +547,7 @@ Units can be **talked to** (`game/story/dialogue/*.txt`: a small script
 format with choices, conditions and effects).
 
 Everything's data: rewrite any line without touching code. The full map of
-secrets, chains and endings, and the list of clips to perform in VR, is in
+secrets, chains, costs and pushback, and the list of clips to perform in VR, is in
 **[docs/STORY.md](docs/STORY.md)** (spoilers).
 
 ## Corporate: corkHQ, requisitions, software

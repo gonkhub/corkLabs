@@ -108,8 +108,10 @@ func build() -> void:
 	stock.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(stock)
 	if req and not req.categories().is_empty():
-		cat_buttons[0].button_pressed = true
-		_show_category(req.categories()[0])
+		var first := req.categories().find("Parts")   # what you'll need most
+		first = maxi(first, 0)
+		cat_buttons[first].button_pressed = true
+		_show_category(req.categories()[first])
 
 
 func _tree(cols: Array, widths: Array) -> Tree:
@@ -140,7 +142,7 @@ func _show_category(c: String) -> void:
 		row.set_text(0, it.name)
 		var have := int(_req().inventory.get(it.id, 0))
 		row.set_text(1, str(have) if str(it.effect) == "inventory" or str(it.effect).begins_with("robot:") else "-")
-		if have == 0 and str(it.effect) == "inventory":
+		if have == 0 and Requisitions.used_for_repairs(it.id):
 			row.set_custom_color(1, OSTheme.ALARM)
 		row.set_text(2, "%d cr" % it.price)
 		row.set_text(3, "%s h" % str(it.hours))

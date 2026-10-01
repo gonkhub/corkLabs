@@ -301,9 +301,9 @@ func _test_corporate() -> void:
 	duties.refresh()
 	_check(duties.rows.get_children().any(func(r): return r.find_children("*", "Label", true, false).any(func(l): return l.text.begins_with("DIRECTIVE"))),
 		"directives sit at the top of Duties")
+	var met := dirs.met
 	sup.file_report()
-	_check(not dirs.active.any(func(d): return d.kind == "report") and sim().journal.entries.any(func(e): return str(e.text).contains("directive met")),
-		"filing the report meets it")
+	_check(dirs.met > met, "filing the report meets it")
 	dirs.issue(sim(), "diagnose", "tinker", 30.0, "Diagnose Tinker.")
 	o.standing = 50.0
 	facility.spend(31.0 * 60.0, "test")

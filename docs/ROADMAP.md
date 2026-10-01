@@ -27,12 +27,15 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Camera audio**: Feed/Voices/World/UI buses, one listening camera, room-aware 3D sounds, robot motor hum, Cameras mute, Terminal `sound` auditions | **New framework, needs a listen** | Automated tests + screenshot (not checked by ear) |
 | **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 | **Ogre**: massive stationary crane core in a new hangar (light cone eye, one crane arm), `stationary`/`reach` traits, freight jobs, two hangar cameras | **New, needs a look** | Automated tests (`test_ogre.gd`) + screenshots; not tried in VR |
-| **Shifts campaign**: three shifts as one timeline (brief, clock in, duties, scripted events, end of shift, the night, endings); **no Wait** | **New, needs a play** | `test_story.gd`, `test_secrets.gd` + screenshots |
+| **Shifts campaign**: three shifts as one timeline (brief, clock in, duties, scripted events, end of shift, the night); shift 1 is a tutorial; **no Wait**; endings archived ("end of this build") | **Reworked, needs a play** | `test_story.gd`, `test_secrets.gd` + screenshots |
+| **Pushback**: corporate directives with deadlines; Pell escalating (warning, explain yourself, Compliance + targeted audit); the uplink blind spot (Hauler's "accident") | **New, needs a play** | Automated tests + screenshots |
+| **A facility that fights back**: stuck doors, dead cameras, the uplink; repairs need parts (jobs stop without them); unit wear, seizing, manual reboots, services; units' requests; per-shift pressure | **New, needs a play and tuning** | Automated tests, unattended balance runs, screenshots |
 | **Getting fired**: standing, suspicion, audits, strikes, catastrophes; retry the shift from its checkpoint or start over; personnel file across runs | **New, needs a play** | Automated tests |
 | **Terminal you learn** + OS file system (former supervisors' homes, memos, logs; hidden/encrypted/purged files) + Files app | **New, needs a play** | Automated tests + screenshots |
 | **Talking**: conversation scripts for Tinker, Hauler, Ogre (Terminal `talk`, Units Talk) and Liaison Pell (corkHQ Reply) | **New, first-pass writing** | Automated tests + screenshots |
 | **Night Run** (hidden arcade game with two secrets), the **maintenance account** (auditctl, hqctl, unitctl, pkgctl, podctl), **pods** | **New, needs a play** | Automated tests + screenshots |
-| **More actions**: Duties app, Plant inspect / request maintenance / spare parts, Units diagnose | **New** | Automated tests |
+| **More actions**: Duties app, Plant inspect / request maintenance, Units diagnose / book service / answer requests, express shipping, Recycle Bin, Notes, cp/grep/find/who/ps | **New** | Automated tests |
+| **Ogre hand-off chain** (deliveries arrive as crates), **crated robots** (activate a new unit), **GitHub Actions** CI | **New** | Automated tests; CI runs once pushed |
 
 ## Branches and pull requests
 
@@ -43,55 +46,57 @@ be deleted.
 
 | Branch | What | Needs from you |
 | --- | --- | --- |
-| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files apps; Plant and Units actions; Reply to Pell; perform cues for VR clips; test runner fix | Push it; Claude opens the PR. Then play a shift (see below) and read [STORY.md](STORY.md) |
+| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
 
 All tests pass (`tools\run_tests.ps1`; 19 test files).
 
-## Things to try first (about 30 minutes)
+## Things to try first (about 45 minutes)
 
-1. Delete the old save first if you like (it's an older version and will be
-   replaced anyway): F5, **Log on**. You're at **Shift 1's brief**. Read it,
-   **Clock in**.
-2. Open the **Terminal**: `help` (only a handful of commands), `ls`,
-   `cat welcome.txt`, `help` again. Open **Duties** and do one.
-3. Poke around: `cd /home`, `ls`. You're told not to. Try it anyway, and
-   watch corkHQ. `talk tinker`. The Units app now has Talk.
-4. Open **Files** and browse. Find the game. Play a round (arrow keys).
-   Read the NO ENTRY sign.
-5. Try to get fired (dev: F6 with Shift passes an hour; a pile of violations
-   + a few hours of audits will do it). Retry the shift.
-6. Do a whole shift, then **Clock out** and watch the night pass.
-7. The spoiler map is [STORY.md](STORY.md): every secret, how it chains, what
-   everything costs, and the clips to perform in VR.
+1. F5, **Log on** (an older save is replaced). Read **Shift 1's brief**,
+   **Clock in**. Open **Duties**: it's your orientation checklist.
+2. Work through it: `cat welcome.txt` in the Terminal, look in Cameras, give
+   an order, inspect something in Plant, order parts in Requisitions,
+   answer a unit's request (REQUESTS on the taskbar).
+3. Let the morning happen: a leak (07:10) with too few clamps, a dead camera
+   (09:00), the dock door sticking (10:20), Hauler seizing (11:20). Watch
+   corkHQ's **directives** pile on (Duties shows them, with deadlines).
+4. Snoop and see what happens: `ls /home` (locked), `cat` the open ones, play
+   Night Run, talk to Tinker more than once. Pell notices, then wants an
+   explanation (Reply), then calls Compliance.
+5. Clock out, and see the night summary in the next brief. Notice what the
+   end-of-shift screen says about directives and the units' requests.
+6. The spoiler map is [STORY.md](STORY.md): the chains, the costs, the
+   pushback, the uplink trick, and the clips to perform in VR.
 
 ## Decisions waiting for you
 
-New this session (shifts and secrets):
+From the second pass:
 
-- **Pacing**: a shift is 480 facility minutes. Duties fill about 80-110,
-  reading all the files about 45, a conversation 5-15, orders 2 each, Night
-  Run 10 a run. A thorough player still has hours left; a quick one will lean
-  on Night Run. Options: raise costs (`Facility.COST`, per-action minutes),
-  shorten shifts (`ShiftSchedule.shift_hours`), more duties, or keep Night
-  Run as the "sanctioned" time sink.
-- **Firing thresholds**: standing starts 60 (reviews A +15 ... F -25, duties
-  +3..6 / -5 undone); audits find something at (suspicion - 25)% an hour; two
-  catches = dismissed. All constants in `oversight.gd` / `campaign.gd`. Too
-  harsh? Too soft?
-- **The lore**: names (Hollis, Marrow, Vance, Kim, Okafor, Pell), the "pods
-  hold people / transferred = put in a pod" reveal, the tone of the files.
-  All in `game/story/`; rewrite freely. Is it too dark / too early?
-- **Three shifts** enough? Should the night be simulated (it is: things can
-  go wrong overnight) or skipped?
-- **The endings** (Awake, Transferred, Witness, Promoted, Contract Renewed,
-  Probation): which ones do you want, and what should Awake lead to?
-- **What carries across runs**: only the player's memory (and the personnel
-  file). Should anything else carry (e.g. Night Run high scores already do)?
-- **The Terminal's starting commands**: help, status, clear, ls, cd, cat, pwd.
-  Too few? Too many?
-- **Pell**: her voice, and whether replying to her should cost standing when
-  you push her.
-- **Clips to perform**: seven named in STORY.md. More moments worth acting?
+- **Is the pressure right?** Shift 1 orientation pressure 0.65, shift 2 1.0,
+  shift 3 1.15 (`Campaign.PRESSURE`); fault rates in `FacilityPlant.KINDS`;
+  starting stock in `Requisitions.START_STOCK`. In unattended test runs the
+  clamps run out mid-morning and coolant dries up by midday without orders;
+  a supervisor who never books services sees seizures pile up by shift 2-3.
+- **Costs**: `Facility.COST` (3/5/15/45 min), reading x3, inspect/diagnose 30,
+  Night Run 30. Enough that a shift can't hold everything?
+- **Pell's thresholds** (`Oversight.ESCALATE`) and how much each level costs.
+- **The uplink trick**: strong (a blind window of 30-60 min). Too strong? Should
+  the repair need a part so blackouts can last longer (riskier)?
+- **Trust**: 3 conversations two hours apart for Okafor's password; Ogre 2,
+  Hauler 2. Too slow / too fast?
+- **Wear**: seizing from 50% wear; units free themselves after 2 h; services
+  reset to 8%. Servo bundles are 200 cr for two.
+- **Rail lubricant** in the catalogue does nothing yet. A use, or cut it?
+- **Endings** are parked in `docs/archive/endings.txt` (memory note too).
+
+From the first pass (still open):
+
+- **The lore**: names (Hollis, Marrow, Vance, Kim, Okafor, Pell), "the pods
+  hold people / transferred = put in a pod", the tone of the files.
+- **Three shifts** enough? **What carries across runs** (only the player's
+  memory, the personnel file, Night Run scores and the Notes app)?
+- **The Terminal's starting commands** (help, status, clear, ls, cd, cat, pwd).
+- **Clips to perform**: seven named in STORY.md, plus ideas for the new systems.
 
 Earlier:
 
@@ -137,16 +142,15 @@ Earlier:
 
 ## Next up
 
-1. **Play the new branch** (a shift or two, try to get fired, try to find
-   things), then decide the pacing and firing numbers above.
-2. **The acting pass**: record the seven story clips (STORY.md), and any
-   idles/work clips the conversations make you want.
-3. **Shift 2 and 3 content**: more events, more files that appear later
-   (`#! shift: 2`), more conversation branches; the overnight summary could
-   become its own little report.
-4. **Robots reacting to each other** more directly (a robot noticing another
-   stalled or overloaded; asking for help across rails).
-5. **Sound for the story**: Night Run blips, the corkHQ mute, pod hum.
+1. **Play shift 1** as a new supervisor, then a snooping run, and set the
+   pressure/costs/thresholds above.
+2. **The acting pass**: the seven story clips, plus a seize, a manual
+   reboot, Hauler's "accident", unpacking a crate.
+3. **More shift 2/3 content**: events, files that appear later, conversation
+   branches that use trust; what the overnight summary should say.
+4. **Endings**, when the loop feels right (start from the archive).
+5. **Sound for the systems**: alarms per failure, Night Run, the uplink going
+   dark, a seized unit.
 
 ## Backlog
 

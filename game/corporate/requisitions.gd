@@ -163,6 +163,16 @@ func _deliver(sim: FacilitySim, o: Dictionary, it: Dictionary) -> void:
 		unpacked(sim, int(o.id))
 
 
+## Is this a part that repairs or services use up (FacilityPlant.KINDS, services)?
+static func used_for_repairs(item_id: String) -> bool:
+	if item_id == "servo_bundle":
+		return true
+	for k in FacilityPlant.KINDS:
+		if str(FacilityPlant.KINDS[k].get("part", "")) == item_id:
+			return true
+	return false
+
+
 ## Crated units in stock that can be activated: [{"item", "name", "model", "count"}].
 func crated_units() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

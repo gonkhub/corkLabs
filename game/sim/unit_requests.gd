@@ -30,6 +30,9 @@ var requests: Array[Dictionary] = []
 var next_id := 1
 ## How many requests have ever been asked (the desktop watches this).
 var asked := 0
+## This shift: requests answered by the supervisor, and left to expire.
+var answered := 0
+var ignored := 0
 var _acc := 0.0
 var _last := {}   # "robot:kind" -> facility time asked
 
@@ -74,6 +77,7 @@ func answer(sim: FacilitySim, id: int, i: int, by_default := false) -> String:
 	var name := bot.display_name() if bot else str(r.robot)
 	var out := _apply(sim, r, i, bot)
 	if not by_default:
+		answered += 1
 		sim.note("request", "Supervisor to %s: %s" % [name, r.options[i]])
 	return out
 
@@ -153,6 +157,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 			var bot := sim.get_system("robot_" + str(r.robot)) as RobotAgent
 			answer(sim, int(r.id), int(r.default), true)
 			if bot and on:
+				ignored += 1
 				bot.stability = maxf(bot.stability - IGNORED, 0.0)
 				sim.note("request", "%s got no answer and decided for itself" % bot.display_name())
 				var chatter := sim.get_system("chatter") as RobotChatter
@@ -190,6 +195,9 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 
 
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
+	if event_name == "shift_start":
+		answered = 0
+		ignored = 0
 	var camp := sim.get_system("campaign") as Campaign
 	if camp and not camp.on_duty():
 		return
@@ -205,8 +213,10 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 		"alarm":
 			if data.has("robot"):
 				var seized := sim.get_system("robot_" + str(data.robot)) as RobotAgent
-				if seized and seized.activity.kind == "seized":
-					# Someone who could reboot it asks to go.
+				var board := sim.get_system("work") as WorkBoard
+				var taken := board != null and board.jobs.any(func(j): return str(j.source) == "unit:" + str(data.robot) and j.status == "claimed")
+				if seized and seized.activity.kind == "seized" and not taken:
+					# Someone who could reboot it asks to go (unless someone already is).
 					for bot in FacilitySetup.robots(sim):
 						if bot != seized and not bot.offline() and not bot.traits.stationary and bot.traits.skill("precise") >= 0.5:
 							ask(sim, bot.robot_id, "help", "%s has seized up in %s. Can I go and reboot it?" % [seized.display_name(), seized._room_name(sim)],
@@ -224,7 +234,8 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 
 
 func sim_save() -> Dictionary:
-	return {"requests": requests.duplicate(true), "next_id": next_id, "asked": asked, "acc": _acc, "last": _last.duplicate()}
+	return {"requests": requests.duplicate(true), "next_id": next_id, "asked": asked, "acc": _acc, "last": _last.duplicate(),
+		"answered": answered, "ignored": ignored}
 
 
 func sim_load(d: Dictionary) -> void:
@@ -237,6 +248,8 @@ func sim_load(d: Dictionary) -> void:
 		requests.append(req)
 	next_id = int(d.get("next_id", 1))
 	asked = int(d.get("asked", 0))
+	answered = int(d.get("answered", 0))
+	ignored = int(d.get("ignored", 0))
 	_acc = float(d.get("acc", 0.0))
 	_last = {}
 	var l: Dictionary = d.get("last", {})
