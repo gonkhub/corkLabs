@@ -174,3 +174,11 @@ unanswered | tinker | | I asked. Nobody said anything. I'll just... decide, then
 unanswered | hauler | | No answer. Fine.
 worn | any | | Joints are grinding.
 worn | hauler | | Everything aches. Is that the word? Aches.
+
+# --- Pod waste piling up (FacilityPlant) ------------------------------------------
+waste | any !ogre |  | The pod bay smells. I don't have a nose and it smells.
+waste | tinker |  | Bins are full. Somebody should take the bins out. Not me. I'm small.
+waste | tinker |  | It's getting into my joints. The waste. It's everywhere.
+waste | hauler |  | Bins are full. Say the word.
+waste | hauler |  | Can't think with that in the air.
+waste | ogre |  | ...the... bins... are... full...

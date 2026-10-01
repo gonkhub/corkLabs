@@ -18,7 +18,7 @@ const CATALOG_PATH := "res://game/corporate/catalog.txt"
 const START_FUNDS := 1000
 ## Spare parts on the shelf when a new supervisor arrives: an order or two of
 ## each (and two coolant canisters to pump in when it runs low); not the week.
-const START_STOCK := {"pipe_clamps": 6, "fuse_pack": 4, "filter_cartridges": 6, "actuator_kit": 2,
+const START_STOCK := {"pipe_clamps": 6, "fuse_pack": 4, "actuator_kit": 2,
 	"camera_module": 2, "servo_bundle": 2, "coolant_canister": 2}
 ## Budget allocated per shift for each grade.
 const ALLOCATION := {"A": 900, "B": 700, "C": 500, "D": 300, "F": 100}

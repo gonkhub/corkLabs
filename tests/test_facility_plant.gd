@@ -14,6 +14,7 @@ func _initialize() -> void:
 	_test_relay_slows_charging()
 	_test_relay_takes_the_uplink()
 	_test_proper_repairs_hold()
+	_test_routine_work()
 	_test_repair_and_salvage_chain()
 	_test_shift_report()
 	_test_save_load()
@@ -171,6 +172,39 @@ func _test_proper_repairs_hold() -> void:
 	var next := sim.scheduler.peek(400).filter(func(e): return e.name == "plant_fault" and str(e.data.get("device", "")) == "pipe_1")
 	_check(not next.is_empty() and float(next.back().time) - sim.time() >= FacilityPlant.REPAIR_GRACE,
 		"after a proper repair the pipe holds at least %d hours" % int(FacilityPlant.REPAIR_GRACE / 3600.0))
+
+
+# Most work is routine: pod waste (Hauler -> the compactor -> Ogre), rail
+# grime (Tinker). No parts.
+func _test_routine_work() -> void:
+	var sim := _facility(true, 9)
+	var plant := _plant(sim)
+	var board: WorkBoard = sim.get_system("work")
+	var waste := plant.device("pod_waste")
+	var before := float(waste.value)
+	sim.advance(3600.0)
+	_check(float(waste.value) < before, "the pods fill their waste bins as they run (%d%% full)" % roundi((1.0 - float(waste.value)) * 100.0))
+	waste.value = 0.4
+	sim.advance(20.0)
+	var job := board.get_job(int(waste.job))
+	_check(not job.is_empty() and job.get("units", []) == ["hauler"] and not job.has("part"), "taking out the pod waste: Hauler's job, no parts")
+	var comp := plant.device("compactor")
+	comp.value = 1.0
+	plant._repaired(sim, "pod_waste", "robot_hauler")
+	_check(is_equal_approx(float(comp.value), 1.0 - FacilityPlant.WASTE_LOAD), "it goes into the hangar compactor (for Ogre)")
+	# Overflowing bins wear on every unit's software.
+	var tinker := sim.get_system("robot_tinker") as RobotAgent
+	tinker.stability = 0.9
+	waste.value = 0.0
+	plant._waste_stress(sim)
+	_check(tinker.stability < 0.9, "overflowing pod waste wears on the units' software")
+	_check(FacilityPlant.KINDS.filter.get("part", "") == "", "sweeping filters takes no parts any more")
+	# Rail grime slows everyone.
+	plant.devices["rails"].value = 1.0
+	var clean := plant.rail_factor()
+	plant.devices["rails"].value = 0.0
+	_check(plant.rail_factor() < clean and is_equal_approx(plant.rail_factor(), FacilityPlant.GRIME_SLOW), "grimy rails slow the units down")
+	_check(FacilityPlant.KINDS.rails.units == ["hauler"], "cleaning them is Hauler's job")
 
 
 func _test_shift_report() -> void:

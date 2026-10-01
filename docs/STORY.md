@@ -83,7 +83,7 @@ work) unless you keep it busy, reprioritise, or block its way. Every outage
 after the first adds suspicion of its own (+5 per repeat).
 
 Other ways to deal with corporate, as maint: `auditctl purge` (once a shift),
-`hqctl mute` (noticed at the next audit), `kill 45` (auditd restarts in 0.3 s,
+`hqctl disable` (cut the uplink by hand: to corporate, an outage, with the same blind window and the same "restore it within the hour"), `kill 45` (auditd restarts in 0.3 s,
 and that's noticed).
 
 ## The facility fights back
@@ -171,7 +171,7 @@ and that's noticed).
 | The wrong way | Night Run: hold left into the NO ENTRY sign at the start of a run |
 | The maintenance account | `su maint` / 709142 |
 | The audit trail | maint: `auditctl list` |
-| Silence | maint: `hqctl mute <minutes>` |
+| Silence | maint: `hqctl disable` |
 | A deaf ear | Hauler (trust 2) has an "accident" with the uplink |
 | The first voice | Ogre (alone in the hangar): the first supervisor |
 | Hollis's diary | decrypt it with Ogre's word |

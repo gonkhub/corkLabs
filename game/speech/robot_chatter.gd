@@ -43,7 +43,7 @@ const ALWAYS := ["order_reply", "stalled", "route_blocked", "low_power", "restar
 ## Base chance (before chattiness) for the rest.
 const CHANCE := {"start_job": 0.5, "job_done": 0.6, "recharge": 0.5, "charged": 0.5, "wander": 0.6,
 	"stability_drifting": 0.8, "stability_unstable": 0.9, "stability_stable": 0.4, "idle": 0.15, "alarm": 0.8,
-	"fixate": 0.6, "sabotage": 0.5, "order_ignored": 0.9,
+	"fixate": 0.6, "sabotage": 0.5, "order_ignored": 0.9, "waste": 0.7,
 	"route_closed": 0.7, "peer_greet": 0.6, "peer_info": 0.9}
 
 var sim_id := "chatter"

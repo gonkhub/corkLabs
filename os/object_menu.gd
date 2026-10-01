@@ -111,11 +111,13 @@ static func _robot(sim: FacilitySim, bot: RobotAgent) -> Array[Dictionary]:
 			var part := board.missing_part(sim, j)
 			if why.is_empty() and not part.is_empty():
 				why = "no %s in stock" % WorkBoard.part_name(sim, part)
+			if not why.is_empty():
+				continue   # only the jobs it can actually take
 			var jid := int(j.id)
-			jobs.append(_item("%s (%s)%s" % [j.title, _station_name(sim, str(j.station)), "" if why.is_empty() else ": " + why], why, "5 min",
+			jobs.append(_item("%s (%s)" % [j.title, _station_name(sim, str(j.station))], "", "It goes now; the time passes while it works.",
 				func(): return str(Supervisor.order(bot, "job", jid).reply)))
 		if jobs.is_empty():
-			jobs.append(_label("Nothing on the board."))
+			jobs.append(_label("Nothing it can take right now."))
 		out.append({"text": "Send to a job", "sub": jobs})
 		out.append(_item("Recharge", "", "5 min", func(): return str(Supervisor.order(bot, "recharge").reply)))
 		out.append(_item("Stand by", "", "5 min", func(): return str(Supervisor.order(bot, "standby").reply)))

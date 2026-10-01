@@ -75,7 +75,8 @@ func _test_requisitions() -> void:
 	var fuses_before := int(req.inventory.get("fuse_pack", 0))
 	var parts := req.place(sim, "fuse_pack", 2)
 	sim.advance(2.1 * 3600.0)
-	_check(parts.order.status == "crated" and plant.crates.size() + int(plant.device("freight_stacks").job >= 0) >= 1,
+	var hauling := (sim.get_system("work") as WorkBoard).jobs.any(func(j): return str(j.source) == "crate:haul:%d" % int(parts.order.id))
+	_check(parts.order.status == "crated" and (plant.crates.size() + int(plant.device("freight_stacks").job >= 0) >= 1 or hauling),
 		"parts arrive as a crate in the deep stacks (%s)" % parts.order.status)
 	# The hand-off chain: Ogre lifts it to the loading bay, a rail unit hauls it, Tinker unpacks it.
 	var hours := 0.0

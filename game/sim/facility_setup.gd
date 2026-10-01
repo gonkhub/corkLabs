@@ -102,6 +102,7 @@ static func layout() -> FacilityLayout:
 	l.add_station("h_dock", "maint", 4.5, "dock", "Hauler dock")
 	l.add_station("pods_a", "pod_n", 4.0, "work", "Pods 1-2")
 	l.add_station("pods_b", "pod_n", 12.0, "work", "Pods 3-4")
+	l.add_station("waste_bins", "pod_e", 5.0, "work", "Pod waste bins")
 	l.add_station("bay_1", "hall_s", 45.0, "work", "Bay 1")
 	l.add_station("bay_2", "hall_s", 30.0, "work", "Bay 2")
 	l.add_station("bay_3", "hall_s", 15.0, "work", "Bay 3")

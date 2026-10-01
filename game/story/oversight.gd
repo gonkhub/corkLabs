@@ -16,8 +16,8 @@
 #
 # Every violation is written to the AUDIT TRAIL, which corporate reads. With
 # the maintenance account, "auditctl" can read and purge it (itself a risk).
-# Muting corkHQ ("hqctl mute") silences the panel for a while; corporate
-# notices at the next audit.
+# The maintenance account can also cut the uplink by hand ("hqctl disable"):
+# to corporate that's just an outage (see THE UPLINK below).
 #
 # PELL ESCALATES. Violations come in kinds (files, games, talk, maint). As a
 # kind piles up in a shift, Liaison Pell says something (level 1), then
@@ -64,8 +64,6 @@ var trail: Array[Dictionary] = []
 ## "" while employed; otherwise why they were let go.
 var fired_reason := ""
 var fired_kind := ""
-## corkHQ's panel is silent until this facility time (hqctl mute).
-var hq_muted_until := -1.0
 var rng := RandomNumberGenerator.new()
 ## Audits only run while this is true (the Campaign sets it: on duty).
 var watching := true
@@ -86,10 +84,6 @@ var blind := 0
 
 func fired() -> bool:
 	return not fired_reason.is_empty()
-
-
-func hq_muted(sim: FacilitySim) -> bool:
-	return sim != null and sim.time() < hq_muted_until
 
 
 ## Is corkHQ's uplink down (nothing gets recorded)?
@@ -194,10 +188,6 @@ func audit(sim: FacilitySim, strictness := 0.0) -> String:
 	if uplink_down(sim):
 		sim.note("oversight", "Audit skipped: no uplink to corkHQ")
 		return ""
-	var hq := sim.get_system("hq") as CorkHQ
-	if hq_muted(sim) and not _warned.has("mute_%d" % int(hq_muted_until)):
-		_warned["mute_%d" % int(hq_muted_until)] = true
-		violate(sim, "corkHQ link suspended from the supervisor terminal", 12.0)
 	var odds := (suspicion - AUDIT_FLOOR + strictness) / 100.0
 	if trail.is_empty() or odds <= 0.0 or rng.randf() >= odds:
 		sim.note("oversight", "Hourly audit: nothing found (suspicion %d)" % roundi(suspicion))
@@ -336,7 +326,7 @@ func _uplink_lost(sim: FacilitySim) -> void:
 
 func sim_save() -> Dictionary:
 	return {"standing": standing, "counts": counts.duplicate(), "uplink_breaks": uplink_breaks, "uplink_since": _uplink_since, "blind": blind, "suspicion": suspicion, "strikes": strikes, "trail": trail.duplicate(true),
-		"fired_reason": fired_reason, "fired_kind": fired_kind, "hq_muted_until": hq_muted_until, "watching": watching,
+		"fired_reason": fired_reason, "fired_kind": fired_kind, "watching": watching,
 		"audit_acc": _audit_acc, "crisis_acc": _crisis_acc, "coolant_since": _coolant_since, "output_since": _output_since, "warned": _warned.duplicate(),
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state)}
 
@@ -350,7 +340,6 @@ func sim_load(d: Dictionary) -> void:
 		trail.append({"t": float(t.t), "what": str(t.what), "amount": float(t.amount)})
 	fired_reason = str(d.get("fired_reason", ""))
 	fired_kind = str(d.get("fired_kind", ""))
-	hq_muted_until = float(d.get("hq_muted_until", -1.0))
 	watching = bool(d.get("watching", true))
 	_audit_acc = float(d.get("audit_acc", 0.0))
 	_crisis_acc = float(d.get("crisis_acc", 0.0))

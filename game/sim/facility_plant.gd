@@ -18,16 +18,28 @@
 #            (Hauler's only way into the workshop) until it's unjammed.
 #   freight  Crates delivered to the hangar at random ("Stack freight"): at
 #            the loading bay and in the deep stacks. Ogre's work.
-#   compactor  The hangar's waste compactor. Cleared debris goes in it, and
-#            it fills slowly anyway; full, nobody can clear debris until Ogre
-#            empties it ("Empty the waste compactor").
+#   waste    The pods' waste bins (pod bay). They fill as the pods run.
+#            "Take out the pod waste" (Hauler) carries it to the hangar
+#            compactor. Bins near full and the units complain; overflowing,
+#            it wears on their software (stability, every unit).
+#   rails    Grime on the rail network. Dirty rails slow every unit down.
+#            "Clean the rails" (Hauler).
+#   compactor  The hangar's waste compactor. Pod waste and cleared debris go
+#            in it; full, nobody can take out waste or clear debris until Ogre
+#            empties it in bulk ("Empty the waste compactor").
+#
+# Most of the work is ROUTINE: pods, filters, waste, rails, the compactor,
+# freight. No parts, just the units' time and a little wear. Parts are for
+# real breakdowns (leaks, the relay, the gate, cameras).
 #   feed     The hangar's coolant feed: a canister from stock goes into the
 #            loop by Ogre's crane ("Feed a coolant canister", +50% coolant).
 #
 # ROLES. Every kind of work belongs to particular units ("units" below; the
 # board copies it onto the job, and nobody else will take it):
 #   Tinker  pods, the relay, cameras, the uplink (precision work)
-#   Hauler  leaks, filters, debris, the freight gate, stuck doors (heavy work)
+#   Hauler  leaks, filters, debris, the freight gate, pod waste, the rails
+#           (heavy work, and the routine rounds)
+#   either  stuck doors (whoever's on the right side of them)
 #   Ogre    everything in the hangar: freight, the compactor, the coolant feed
 # (and on the board: Hauler hauls crates and refits parts; Tinker unpacks,
 # repairs salvaged parts, and is the only one who services or reboots a unit).
@@ -56,28 +68,39 @@ const UPDATE := 10.0
 ## "part": the Requisitions stock item each repair uses up (WorkBoard stops
 ## the job halfway if there's none). "blocks": the passage a stuck door closes.
 const KINDS := {
-	"pod": {"job": "Recalibrate %s", "skill": "precise", "work": 600.0, "drift": 0.09,
+	"pod": {"job": "Recalibrate %s", "skill": "precise", "work": 600.0, "drift": 0.06,
 		"levels": [0.75, 0.5, 0.3], "units": ["tinker"]},
 	"filter": {"job": "Sweep filters", "skill": "general", "work": 400.0, "drift": 0.06,
-		"levels": [0.6, 0.35, 0.15], "start_priority": 0, "part": "filter_cartridges", "units": ["hauler"]},
+		"levels": [0.6, 0.35, 0.15], "start_priority": 0, "units": ["hauler"]},
 	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.05, "priority": 2, "part": "pipe_clamps", "units": ["hauler"]},
 	"relay": {"job": "Replace relay fuse", "skill": "precise", "work": 360.0, "rate": 0.08, "priority": 2, "part": "fuse_pack", "units": ["tinker"]},
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.12, "priority": 1, "units": ["hauler"]},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.06, "priority": 2,
 		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler"]},
-	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler"]},
+	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler", "tinker"]},
 	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.015, "priority": 1, "part": "camera_module", "units": ["tinker"]},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3, "units": ["tinker"]},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1, "units": ["ogre"]},
-	"compactor": {"job": "Empty the waste compactor", "skill": "heavy", "work": 600.0, "drift": 0.02,
+	"compactor": {"job": "Empty the waste compactor", "skill": "heavy", "work": 600.0, "drift": 0.01,
 		"levels": [0.4, 0.2, 0.05], "units": ["ogre"]},
+	"waste": {"job": "Take out the pod waste", "skill": "heavy", "work": 420.0, "drift": 0.07,
+		"levels": [0.5, 0.3, 0.12], "units": ["hauler"]},
+	"rails": {"job": "Clean the rails", "skill": "general", "work": 540.0, "drift": 0.04,
+		"levels": [0.6, 0.4, 0.2], "start_priority": 0, "units": ["hauler"]},
 	"feed": {"job": "Feed a coolant canister", "skill": "heavy", "work": 300.0, "part": "coolant_canister", "units": ["ogre"]},
 }
 ## Who does the work that isn't a device's: job source prefix -> units.
 const SOURCE_UNITS := {"crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
 	"part:refit": ["hauler"], "unit:": ["tinker"], "service:": ["tinker"], "freight_stacks": ["ogre"]}
-## How much one load of cleared debris fills the compactor.
+## How much one load of cleared debris, or of pod waste, fills the compactor.
 const DEBRIS_LOAD := 0.2
+const WASTE_LOAD := 0.25
+## Pod waste bins this full and the units start to mind; full, they lose
+## this much software stability an hour (every unit).
+const WASTE_COMPLAINS := 0.75
+const WASTE_STRESS := 0.025
+## Slowest the rails get when they're filthy (x normal speed).
+const GRIME_SLOW := 0.6
 ## Passage doors that can stick: device id -> [name, passage segment, hall-side
 ## controls, a station on the far side]. A stuck door can be freed from either
 ## side: the job goes wherever a working unit can actually get to (units
@@ -153,6 +176,8 @@ func _init() -> void:
 	_add("freight_bay", "freight", "Loading bay", "loading")
 	_add("freight_stacks", "freight", "Deep stacks", "stacks")
 	_add("compactor", "compactor", "Waste compactor", "compactor")
+	_add("pod_waste", "waste", "Pod waste bins", "waste_bins")
+	_add("rails", "rails", "Rails", "bay_2")
 	_add("coolant_feed", "feed", "Coolant feed", "coolant_feed")
 
 
@@ -169,6 +194,11 @@ func device(id: String) -> Dictionary:
 
 func device_ids() -> Array[String]:
 	return _ids.duplicate()
+
+
+## How fast units ride the rails right now (grime slows them).
+func rail_factor() -> float:
+	return lerpf(GRIME_SLOW, 1.0, clampf(float(devices.rails.value) / 0.6, 0.0, 1.0))
 
 
 ## How fast robot docks charge right now (1 = normal).
@@ -316,6 +346,23 @@ func _update(sim: FacilitySim) -> void:
 	throughput = sync / maxf(pods, 1)
 	shift_stats.output_sum += throughput
 	shift_stats.samples += 1
+	_waste_stress(sim)
+
+
+# Pod waste piling up: the units mind. Near full, they grumble about it;
+# overflowing, it wears on their software.
+func _waste_stress(sim: FacilitySim) -> void:
+	var fill := 1.0 - float(devices.pod_waste.value)
+	if fill < WASTE_COMPLAINS:
+		return
+	var k := clampf((fill - WASTE_COMPLAINS) / (1.0 - WASTE_COMPLAINS), 0.0, 1.0)
+	var chatter := sim.get_system("chatter") as RobotChatter
+	for bot in FacilitySetup.robots(sim):
+		if bot.offline():
+			continue
+		bot.stability = maxf(bot.stability - WASTE_STRESS * k * UPDATE / 3600.0, 0.0)
+		if chatter and sim.rng.randf() < 0.004:
+			chatter.trigger(sim, bot, "waste", {})
 
 
 func _fault(sim: FacilitySim, id: String) -> void:
@@ -410,6 +457,11 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		"camera": sim.note("plant", "%s repaired by %s: signal back" % [d.name, who])
 		"uplink": sim.note("plant", "%s restored by %s: corkHQ is listening again" % [d.name, who])
 		"compactor": sim.note("plant", "%s emptied by %s" % [d.name, who])
+		"waste":
+			var comp: Dictionary = devices["compactor"]
+			comp.value = maxf(float(comp.value) - WASTE_LOAD, 0.0)
+			sim.note("plant", "%s took the pod waste down to the hangar compactor (%d%% full)" % [who, _pct(1.0 - float(comp.value))])
+		"rails": sim.note("plant", "%s cleaned the rails" % who)
 		"feed":
 			coolant = minf(coolant + COOLANT_CANISTER, 1.0)
 			sim.note("plant", "%s fed a coolant canister into the loop: coolant %d%%" % [who, _pct(coolant)])
@@ -438,8 +490,11 @@ func _repaired(sim: FacilitySim, id: String, by: String) -> void:
 		var job := board.get_job(int(_last_job.get(id, -1))) if board else {}
 		if not job.get("makeshift", false):
 			_book_fault(sim, id, REPAIR_GRACE)   # fixed properly: it holds a good while
-	if id == "relay" and bool(devices.uplink.get("unpowered", false)):
+	var was_unpowered: bool = id == "relay" and bool(devices.uplink.get("unpowered", false))
+	if was_unpowered:
 		devices.uplink.unpowered = false
+	# Power's back: the uplink comes back too (unless it's been cut by hand, or it's broken as well).
+	if was_unpowered and devices.uplink.fault and not bool(devices.uplink.get("disabled", false)) and not _uplink_broken():
 		devices.uplink.fault = false
 		sim.note("plant", "corkHQ uplink back on mains power")
 		sim.schedule(sim.time(), "uplink_restored", {})
@@ -536,7 +591,7 @@ func _book_fault(sim: FacilitySim, id: String, after := 0.0) -> void:
 ## compactor full.
 func request_blocker(job: Dictionary) -> String:
 	var src := str(job.get("source", ""))
-	if devices.has(src) and devices[src].kind == "bay" and float(devices.compactor.value) <= 0.02:
+	if devices.has(src) and devices[src].kind in ["bay", "waste"] and float(devices.compactor.value) <= 0.02:
 		return "The waste compactor in the hangar is full: Ogre has to empty it first."
 	return ""
 
@@ -549,6 +604,34 @@ static func units_for(source: String, kind := "") -> Array:
 		if source.begins_with(p):
 			return SOURCE_UNITS[p]
 	return []
+
+
+# The uplink itself is broken (a fault with a repair job), not just unpowered.
+func _uplink_broken() -> bool:
+	return int(devices.uplink.job) >= 0
+
+
+## Cuts or restores the corkHQ uplink by hand (the maintenance account's
+## hqctl). To corporate a cut is just an outage. Returns "" or why not.
+func set_uplink_disabled(sim: FacilitySim, off: bool) -> String:
+	var u: Dictionary = devices.uplink
+	if off:
+		if u.fault:
+			return "the uplink is already down"
+		u.fault = true
+		u.disabled = true
+		sim.note("alarm", "corkHQ uplink DOWN: disabled from the supervisor terminal")
+		sim.schedule(sim.time(), "alarm", {"device": "uplink"})
+		return ""
+	if not u.get("disabled", false):
+		return "the link isn't disabled"
+	u.disabled = false
+	if u.get("unpowered", false):
+		return "enabled, but there's no power to it (the relay is out)"
+	u.fault = false
+	sim.note("plant", "corkHQ uplink enabled from the supervisor terminal")
+	sim.schedule(sim.time(), "uplink_restored", {})
+	return ""
 
 
 # A unit has looked at a device: its report.
@@ -665,10 +748,12 @@ func device_text(id: String) -> String:
 		"gate": state = "JAMMED" if d.fault else "open"
 		"door": state = "STUCK" if d.fault else "working"
 		"camera": state = "NO SIGNAL" if d.fault else "ok"
-		"uplink": state = ("NO POWER" if d.get("unpowered", false) else "DOWN") if d.fault else "linked"
+		"uplink": state = ("DISABLED" if d.get("disabled", false) else ("NO POWER" if d.get("unpowered", false) else "DOWN")) if d.fault else "linked"
 		"bay": state = "debris" if int(d.job) >= 0 else "clear"
 		"freight": state = "crates" if int(d.job) >= 0 else "clear"
 		"compactor": state = "FULL" if float(d.value) <= 0.02 else "%d%% full" % _pct(1.0 - float(d.value))
+		"waste": state = "OVERFLOWING" if float(d.value) <= 0.02 else "%d%% full" % _pct(1.0 - float(d.value))
+		"rails": state = "grime %d%%" % _pct(1.0 - float(d.value))
 		"feed": state = "feeding" if int(d.job) >= 0 else "ready"
 	return "%-20s %-10s%s" % [d.name, state, ("  job #%d" % int(d.job)) if int(d.job) >= 0 else ""]
 

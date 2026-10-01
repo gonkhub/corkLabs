@@ -67,6 +67,7 @@ func build(layout: FacilityLayout) -> void:
 	_build_uplink(_by_wall("uplink"))
 	_build_compactor(layout.station_world_pos("compactor"))
 	_build_feed(layout.station_world_pos("coolant_feed"))
+	_build_waste(_beside_rail("waste_bins", 0.0, 2.5))
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
 	for id in plant.device_ids():
@@ -125,6 +126,9 @@ func _process(delta: float) -> void:
 	(_lamps["compactor"][1] as StandardMaterial3D).emission = BAD if full else _health_color(1.0 - fill * 0.9)
 	(_lamps["compactor"][1] as StandardMaterial3D).emission_energy_multiplier = (0.5 + 1.5 * flash) if full else 0.8
 	(_lamps["coolant_feed"][1] as StandardMaterial3D).emission = _health_color(plant.coolant)
+	var waste := float(plant.device("pod_waste").value)
+	(_lamps["pod_waste"][1] as StandardMaterial3D).emission = BAD if waste <= 0.25 else _health_color(waste * 1.2)
+	(_lamps["pod_waste"][1] as StandardMaterial3D).emission_energy_multiplier = (0.5 + 1.5 * flash) if waste <= 0.25 else 0.8
 	var relay: Array = _lamps["relay"]
 	var out: bool = plant.device("relay").fault
 	(relay[0] as OmniLight3D).light_color = BAD if out else OK
@@ -345,6 +349,23 @@ func _build_compactor(at: Vector3) -> void:
 	for n in [body, lid, gauge]:
 		_pick("compactor", n)
 	_add_label("compactor", floor_at + Vector3(0, 4.6, 0))
+
+
+# The pod waste bins: three drums with a fill gauge (green: room, red: full).
+func _build_waste(at: Vector3) -> void:
+	var nodes: Array = []
+	for i in 3:
+		var drum := _mesh(_cyl(0.5, 1.2), _mat(Color(0.32, 0.36, 0.28), 0.4), self)
+		drum.position = at + Vector3((i - 1) * 1.2, 0.6, 0)
+		nodes.append(drum)
+	var gauge_mat := _mat(OK, 0.2, true)
+	var gauge := _mesh(_box(Vector3(0.1, 1.0, 0.1)), gauge_mat, self)
+	gauge.position = at + Vector3(2.0, 0.7, 0)
+	nodes.append(gauge)
+	_lamps["pod_waste"] = [null, gauge_mat]
+	for n in nodes:
+		_pick("pod_waste", n)
+	_add_label("pod_waste", at + Vector3(0, 2.0, 0))
 
 
 # The coolant feed: a squat tank with a hopper the crane drops canisters into.

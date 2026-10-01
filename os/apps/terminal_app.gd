@@ -7,14 +7,18 @@
 #
 # Also here:
 #   the file system    ls, cd, cat, pwd, decrypt, run (Story / VirtualFS)
-#   talk <unit>        opens the unit link (the conversation runs in Cameras)
+#   talk <unit>        opens the unit link: in Cameras if a working camera
+#                      can see the unit, otherwise here (numbered replies)
+#   the work           everything a camera's object menus do, by name, for
+#                      when the camera's out: maintain, patch, inspect,
+#                      calloff, urgent, order, diagnose, service, rescue,
+#                      reboot, feed, activate, requests, answer
 #   su maint           the "decommissioned" maintenance account, and its
 #                      commands (auditctl, hqctl, unitctl, pkgctl, podctl).
 #                      Every one of them is a policy violation.
 #
-# Units and jobs are read-only here (units, jobs): orders, requests and
-# conversations happen in Cameras (click the unit). Duties go through
-# Supervisor like everywhere else, so they cost the same facility time. Up/down arrows walk the command history.
+# Everything goes through Supervisor like the camera menus do, so it costs
+# the same facility time (and errands run the same way). Up/down arrows walk the command history.
 class_name TerminalApp
 extends OSApp
 
@@ -36,7 +40,21 @@ const COMMANDS := {
 	"log": ["log [lines] [category]", "the facility journal (category: alarm, work, plant, tinker...)", "shift"],
 	"units": ["units", "what each unit is doing, its needs and order", "units"],
 	"jobs": ["jobs", "open jobs on the work board", "units"],
-	"talk": ["talk <unit>", "open the unit link (it opens in Cameras: 3 min a line)", "units"],
+	"talk": ["talk <unit>", "open the unit link (in Cameras if a camera can see it, else here; 3 min a line)", "units"],
+	"order": ["order <unit> <job#|recharge|standby|cancel>", "send a unit to a job, or to charge / stand by / drop its order", "units"],
+	"diagnose": ["diagnose <unit>", "run diagnostics on a unit (30 min)", "units"],
+	"service": ["service <unit>", "book a service (Tinker does it; uses a servo bundle)", "units"],
+	"rescue": ["rescue <unit>", "send Tinker to reboot a seized unit by hand", "units"],
+	"reboot": ["reboot <unit>", "remote reboot (needs remote-reboot)", "units"],
+	"requests": ["requests", "what the units are asking you", "units"],
+	"answer": ["answer <request#> <option#>", "answer a unit's request (5 min)", "units"],
+	"maintain": ["maintain <thing> [unit]", "order maintenance on a machine (the best free unit, or the one you name)", "plant"],
+	"patch": ["patch <thing> [unit]", "repair it without the part it needs (it won't hold long)", "plant"],
+	"inspect": ["inspect <thing> [unit]", "send a unit to look at a machine and report", "plant"],
+	"calloff": ["calloff <job#>", "take a job off the queue (its unit stands down)", "plant"],
+	"urgent": ["urgent <job#>", "make a job critical (units put it first)", "plant"],
+	"feed": ["feed", "have Ogre feed a coolant canister into the loop", "plant"],
+	"activate": ["activate <model>", "activate a crated unit at the workbench (90 min)", "units"],
 	"plant": ["plant", "every device and its state", "plant"],
 	"routes": ["routes", "passages between rooms: clearance, open or blocked", "plant"],
 	"block": ["block <route> [reason]", "close a passage (needs route-control)", "plant"],
@@ -56,7 +74,7 @@ const COMMANDS := {
 	"su": ["su <account>", "switch account", "maintenance"],
 	"exit": ["exit", "leave the maintenance account", "maintenance"],
 	"auditctl": ["auditctl list | purge", "corporate's audit trail of this terminal", "maintenance"],
-	"hqctl": ["hqctl status | mute <minutes> | unmute", "the corkHQ link", "maintenance"],
+	"hqctl": ["hqctl status | disable | enable", "the corkHQ link (disable: cut it, like a power cut)", "maintenance"],
 	"unitctl": ["unitctl <unit> reset", "reset a unit's software stability", "maintenance"],
 	"pkgctl": ["pkgctl force <package>", "install a package without approval", "maintenance"],
 	"podctl": ["podctl list | inspect <pod>", "the pods", "maintenance"],
@@ -95,8 +113,10 @@ var connected := false
 ## Logged in as the maintenance account (this terminal session only).
 var root := false
 var cwd := VirtualFS.HOME
-## "" or "password" (su)
+## "", "password" (su) or "talk" (a conversation, when no camera can see the unit)
 var mode := ""
+var talk_runner: Dialogue.Runner
+var talk_bot: RobotAgent
 var _pending := ""
 var _history_pos := 0
 
@@ -154,6 +174,9 @@ func _submit(line: String) -> void:
 		_finish_su(line)
 		return
 	line = line.strip_edges()
+	if mode == "talk":
+		_talk_input(line)
+		return
 	if line.is_empty():
 		return
 	history.append(line)
@@ -187,6 +210,20 @@ func _submit(line: String) -> void:
 		"units": _units()
 		"jobs": _jobs()
 		"talk": _talk(args)
+		"order": _order(args)
+		"diagnose": _unit_cmd(args, "diagnose")
+		"service": _unit_cmd(args, "service")
+		"rescue": _unit_cmd(args, "rescue")
+		"reboot": _unit_cmd(args, "reboot")
+		"requests": _requests()
+		"answer": _answer(args)
+		"maintain": _device_cmd(args, "maintain")
+		"patch": _device_cmd(args, "patch")
+		"inspect": _device_cmd(args, "inspect")
+		"calloff": _job_cmd(args, "calloff")
+		"urgent": _job_cmd(args, "urgent")
+		"feed": _print("  " + _esc(str(Supervisor.pump_coolant().text)))
+		"activate": _activate(args)
 		"plant": _plant()
 		"routes": _routes()
 		"block": _block(args, true)
@@ -223,8 +260,11 @@ func _on_input_key(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed):
 		return
 	if event.keycode == KEY_ESCAPE and mode != "":
-		_print("  (cancelled)")
-		_set_mode("")
+		if mode == "talk":
+			_end_talk()
+		else:
+			_print("  (cancelled)")
+			_set_mode("")
 		input.accept_event()
 		return
 	if history.is_empty() or mode != "":
@@ -249,6 +289,7 @@ func _set_mode(m: String) -> void:
 func _prompt_text() -> String:
 	match mode:
 		"password": return "Password:"
+		"talk": return "reply [1-%d, 0 closes] >" % (talk_runner.choices.size() if talk_runner else 0)
 	var where := cwd
 	if where == VirtualFS.HOME or where.begins_with(VirtualFS.HOME + "/"):
 		where = "~" + where.substr(VirtualFS.HOME.length())
@@ -256,6 +297,8 @@ func _prompt_text() -> String:
 
 
 func _prompt_color() -> Color:
+	if mode == "talk" and talk_bot:
+		return OSTheme.category_color(talk_bot.robot_id)
 	return OSTheme.WARN if root else OSTheme.ACCENT
 
 
@@ -376,7 +419,8 @@ func _jobs() -> void:
 func _plant() -> void:
 	var plant := sim().get_system("plant") as FacilityPlant
 	for id in plant.device_ids():
-		_print("  " + _esc(plant.device_text(id)))
+		_print("  %-15s %s" % [id, _esc(plant.device_text(id))])
+	_print("  [color=#%s](maintain / patch / inspect <id> [unit])[/color]" % _hex(OSTheme.TEXT_DIM))
 
 
 func _routes() -> void:
@@ -688,12 +732,225 @@ func start_talk(robot_id: String) -> void:
 	if bot == null:
 		_error("talk: no unit called '%s'" % robot_id)
 		return
-	var cams = desktop.open_app("cameras") if desktop else null
-	if cams == null:
-		_error("talk: the unit link needs the Cameras")
+	if _camera_sees(robot_id):
+		var cams = desktop.open_app("cameras") if desktop else null
+		if cams:
+			_print("  Opening the unit link to %s in Cameras..." % bot.display_name().to_upper())
+			cams.start_talk(robot_id)
+			return
+	# No camera on it: the link runs here, as text.
+	_end_talk()
+	var r: Dictionary = Supervisor.talk_begin(bot)
+	if r.runner == null:
+		_error(str(r.get("error", "")))
 		return
-	_print("  Opening the unit link to %s in Cameras..." % bot.display_name().to_upper())
-	cams.start_talk(robot_id)
+	_print("  [color=#%s](no camera on %s: the link runs here)[/color]" % [_hex(OSTheme.TEXT_DIM), bot.display_name().to_upper()])
+	talk_runner = r.runner
+	talk_bot = bot
+	_show_lines(r.lines)
+
+
+# Is there a working camera in the room the unit's in?
+func _camera_sees(robot_id: String) -> bool:
+	var w: FacilityWorld = desktop.world if desktop else null
+	var plant := sim().get_system("plant") as FacilityPlant
+	if w == null or plant == null:
+		return false
+	var room := w.robot_room(robot_id)
+	for i in w.cameras.size():
+		if w.camera_rooms[i] == room and not bool(plant.device("cam_%d" % (i + 1)).get("fault", false)):
+			return true
+	return false
+
+
+func _talk_input(line: String) -> void:
+	if line == "0" or line.is_empty():
+		_print("  [color=#%s](link closed)[/color]" % _hex(OSTheme.TEXT_DIM))
+		_end_talk()
+		return
+	if not line.is_valid_int() or int(line) < 1 or int(line) > talk_runner.choices.size():
+		_error("Pick a reply: 1-%d (0 closes the link)." % talk_runner.choices.size())
+		return
+	var i := int(line) - 1
+	_print("  [color=#%s]> %s[/color]" % [_hex(OSTheme.ACCENT), _esc(talk_runner.choices[i].text)])
+	_show_lines(Supervisor.talk_choose(talk_runner, talk_bot, i))
+
+
+func _show_lines(lines: Array) -> void:
+	for l in lines:
+		var speaker := str(l.speaker)
+		if speaker == "sys":
+			_print("  [color=#%s]%s[/color]" % [_hex(OSTheme.TEXT_DIM), _esc(str(l.text))])
+		else:
+			if speaker == "unit" and talk_bot:
+				speaker = talk_bot.robot_id
+			var who: String = "YOU" if speaker == "you" else (talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper())
+			_print("  [color=#%s]%s:[/color] %s" % [_hex(OSTheme.category_color(speaker)), who, _esc(str(l.text))])
+	if talk_runner == null or talk_runner.done or talk_runner.choices.is_empty():
+		_print("  [color=#%s](link closed)[/color]" % _hex(OSTheme.TEXT_DIM))
+		_end_talk()
+		return
+	for i in talk_runner.choices.size():
+		_print("    [color=#%s]%d)[/color] %s" % [_hex(OSTheme.ACCENT), i + 1, _esc(talk_runner.choices[i].text)])
+	_set_mode("talk")
+
+
+func _end_talk() -> void:
+	if talk_bot and sim():
+		sim().note("supervisor", "Closes the unit link to %s" % talk_bot.display_name())
+	talk_runner = null
+	talk_bot = null
+	if mode == "talk":
+		_set_mode("")
+
+
+# --- The work, by name (everything the camera menus do) -------------------------------------
+
+# A unit by name, or an error.
+func _unit_arg(args: PackedStringArray, usage: String) -> RobotAgent:
+	if args.is_empty() or _bot(args[0]) == null:
+		_error("Usage: %s   (units: %s)" % [usage, ", ".join(FacilitySetup.robots(sim()).map(func(b): return b.robot_id))])
+		return null
+	return _bot(args[0])
+
+
+# A device by id ("pipe_2") or by name ("bay 2 coolant pipe"); "" if none.
+func _device_arg(word: String) -> String:
+	var plant := sim().get_system("plant") as FacilityPlant
+	var w := word.to_lower().replace(" ", "_")
+	if plant.devices.has(w):
+		return w
+	for id in plant.device_ids():
+		if str(plant.device(id).name).to_lower().replace(" ", "_") == w:
+			return id
+	return ""
+
+
+func _order(args: PackedStringArray) -> void:
+	var bot := _unit_arg(args, "order <unit> <job#|recharge|standby|cancel>")
+	if bot == null:
+		return
+	var what := args[1].to_lower().trim_prefix("#") if args.size() > 1 else ""
+	var r: Dictionary
+	if what.is_valid_int():
+		var board := sim().get_system("work") as WorkBoard
+		var why := Dispatch.unfit(sim(), bot, board.get_job(int(what)))
+		if not why.is_empty() and why != "busy" and why != "needs to charge":
+			_error("order: %s can't take job #%s: %s" % [bot.display_name(), what, why])
+			return
+		r = Supervisor.order(bot, "job", int(what))
+	elif what in ["recharge", "standby", "cancel"]:
+		r = Supervisor.order(bot, what)
+	else:
+		_error("Usage: order <unit> <job#|recharge|standby|cancel>")
+		return
+	_print("  [color=#%s]%s:[/color] \"%s\"" % [_hex(OSTheme.category_color(bot.robot_id)), bot.display_name().to_upper(), _esc(str(r.reply))])
+
+
+func _unit_cmd(args: PackedStringArray, what: String) -> void:
+	var bot := _unit_arg(args, "%s <unit>" % what)
+	if bot == null:
+		return
+	match what:
+		"diagnose":
+			_print("  " + _esc(Supervisor.diagnose(bot)))
+		"service":
+			var id := Supervisor.book_service(bot)
+			_print("  " + ("Service booked: job #%d (Tinker)." % id if id >= 0 else ("No servo bundles in stock." if id == -2 else "A service is already booked.")))
+		"rescue":
+			var board := sim().get_system("work") as WorkBoard
+			var jobs := board.open_jobs().filter(func(j): return str(j.source) == "unit:" + bot.robot_id)
+			if bot.activity.kind != "seized" or jobs.is_empty():
+				_error("rescue: %s isn't seized up" % bot.display_name())
+				return
+			_print("  " + _esc(str(Supervisor.request_job(int(jobs[0].id)).text)))
+		"reboot":
+			if not Supervisor.has_software("remote-reboot"):
+				_error("reboot: needs the remote-reboot package")
+			elif Supervisor.reboot(bot):
+				_print("  Reboot sent. %s is offline for %d minutes." % [bot.display_name(), int(RobotAgent.REBOOT_TIME / 60.0)])
+			else:
+				_error("reboot: %s can't be rebooted now" % bot.display_name())
+
+
+func _device_cmd(args: PackedStringArray, what: String) -> void:
+	if args.is_empty():
+		_error("Usage: %s <thing> [unit]   (plant lists the things)" % what)
+		return
+	var unit_id := ""
+	var words := Array(args)
+	if words.size() > 1 and _bot(str(words.back())) != null:
+		unit_id = str(words.pop_back()).to_lower()
+	var id := _device_arg(" ".join(words))
+	if id.is_empty():
+		_error("%s: no such thing: %s   (plant lists them)" % [what, " ".join(words)])
+		return
+	var r: Dictionary
+	match what:
+		"maintain": r = Supervisor.order_maintenance(id, false, unit_id)
+		"patch": r = Supervisor.order_maintenance(id, true, unit_id)
+		"inspect": r = Supervisor.order_inspection(id, unit_id)
+	if r.ok:
+		_print("  " + _esc(str(r.text)))
+	else:
+		_error("%s: %s" % [what, r.text])
+
+
+func _job_cmd(args: PackedStringArray, what: String) -> void:
+	var board := sim().get_system("work") as WorkBoard
+	if args.is_empty() or not args[0].trim_prefix("#").is_valid_int() or not WorkBoard.active(board.get_job(int(args[0].trim_prefix("#")))):
+		_error("Usage: %s <job#>   (jobs lists them)" % what)
+		return
+	var id := int(args[0].trim_prefix("#"))
+	if what == "calloff":
+		Supervisor.cancel_request(id)
+		_print("  Job #%d called off." % id)
+	else:
+		Supervisor.set_priority(id, 3)
+		_print("  Job #%d is critical now." % id)
+
+
+func _requests() -> void:
+	var reqs := sim().get_system("requests") as UnitRequests
+	if reqs:
+		reqs.prune(sim())
+	if reqs == null or reqs.requests.is_empty():
+		_print("  Nobody's asking for anything.")
+		return
+	for q in reqs.requests:
+		_print("  [color=#%s]#%d %s[/color] (until %s): %s" % [_hex(OSTheme.WARN), q.id, str(q.robot).to_upper(),
+			FacilitySim.format_clock(float(q.expires)), _esc(str(q.text))])
+		for i in (q.options as Array).size():
+			_print("      %d) %s" % [i + 1, q.options[i]])
+	_print("  [color=#%s]answer <request#> <option#>[/color]" % _hex(OSTheme.TEXT_DIM))
+
+
+func _answer(args: PackedStringArray) -> void:
+	if args.size() < 2 or not args[0].trim_prefix("#").is_valid_int() or not args[1].is_valid_int():
+		_error("Usage: answer <request#> <option#>   (see: requests)")
+		return
+	var out: String = Supervisor.answer_request(int(args[0].trim_prefix("#")), int(args[1]) - 1)
+	if out.is_empty():
+		_error("answer: no such request or option")
+	else:
+		_print("  " + _esc(out))
+
+
+func _activate(args: PackedStringArray) -> void:
+	var req := sim().get_system("requisitions") as Requisitions
+	var crated: Array = req.crated_units() if req else []
+	if crated.is_empty():
+		_error("activate: no crated units in stock")
+		return
+	var pick: Dictionary = crated[0]
+	if not args.is_empty():
+		var found := crated.filter(func(c): return str(c.model) == args[0].to_lower() or str(c.item) == args[0].to_lower())
+		if found.is_empty():
+			_error("activate: no crated %s (crated: %s)" % [args[0], ", ".join(crated.map(func(c): return str(c.model)))])
+			return
+		pick = found[0]
+	var r: Dictionary = Supervisor.activate_unit(str(pick.item))
+	_print("  " + _esc(str(r.text)))
 
 
 func _talk(args: PackedStringArray) -> void:
@@ -809,26 +1066,37 @@ func _auditctl(args: PackedStringArray) -> void:
 
 
 func _hqctl(args: PackedStringArray) -> void:
-	var o := Story.oversight(sim())
+	var plant := sim().get_system("plant") as FacilityPlant
+	var up := plant.device("uplink")
 	var sub := args[0].to_lower() if not args.is_empty() else "status"
 	match sub:
 		"status":
-			_print("  corkHQ link: %s" % ("SUSPENDED until %s" % FacilitySim.format_clock(o.hq_muted_until) if o.hq_muted(sim()) else "open"))
-		"mute":
-			var minutes := clampf(float(args[1]) if args.size() > 1 and args[1].is_valid_float() else 60.0, 5.0, 180.0)
-			o.hq_muted_until = sim().time() + minutes * 60.0
-			Story.learn(sim(), "secret:hq_silence")
-			_root_act("corkHQ link suspended", 4.0)
-			_print("  corkHQ link suspended for %d minutes." % int(minutes))
-			if desktop and desktop.hq_panel:
-				desktop.hq_panel.refresh_now()
-		"unmute":
-			o.hq_muted_until = -1.0
-			_print("  corkHQ link restored.")
+			var state := "linked"
+			if up.get("disabled", false):
+				state = "DISABLED (from this terminal)"
+			elif up.get("unpowered", false):
+				state = "DOWN (no power: the relay is out)"
+			elif up.fault:
+				state = "DOWN (relay fault)"
+			_print("  corkHQ uplink: %s" % state)
+		"disable", "enable":
+			var why := plant.set_uplink_disabled(sim(), sub == "disable")
+			if sub == "disable" and not why.is_empty():
+				_error("hqctl: " + why)
+				return
+			if sub == "enable" and why == "the link isn't disabled":
+				_error("hqctl: " + why)
+				return
+			if sub == "disable":
+				Story.learn(sim(), "secret:hq_silence")
+				_print("  corkHQ uplink disabled. Nothing leaves this facility now. Corporate will see an outage.")
+			else:
+				_print("  corkHQ uplink enabled." if why.is_empty() else "  " + why.capitalize() + ".")
+			Facility.act("choice", "Maintenance: corkHQ uplink " + sub + "d")
 			if desktop and desktop.hq_panel:
 				desktop.hq_panel.refresh_now()
 		_:
-			_error("Usage: hqctl status | mute <minutes> | unmute")
+			_error("Usage: hqctl status | disable | enable")
 
 
 func _unitctl(args: PackedStringArray) -> void:

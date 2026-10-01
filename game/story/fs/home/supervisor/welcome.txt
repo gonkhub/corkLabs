@@ -1,6 +1,6 @@
 #! date: today
 #! owner: supervisor
-#! learn: cmd:units cmd:jobs cmd:plant cmd:log cmd:open cmd:duties
+#! learn: cmd:units cmd:jobs cmd:plant cmd:log cmd:open cmd:duties cmd:maintain cmd:inspect cmd:order cmd:requests
 #! minutes: 3
 WELCOME TO corkLabs
 Supervisor onboarding, facility C-7 ("the Compound")
@@ -33,6 +33,13 @@ YOUR TERMINAL
   units                         what each unit is doing
   jobs                          open work orders
   plant                         every device and its state
+
+  Cameras fail. Units don't stop working when they do. Anything you can do
+  by clicking on camera, you can do here:
+  maintain <thing> [unit]       order maintenance on it
+  inspect <thing> [unit]        send a unit to look at it
+  order <unit> <job#>           send a unit to a job (or recharge, standby)
+  requests                      what the units are asking you
   log [lines] [category]        the facility journal
   open <app>                    open an app by name
 

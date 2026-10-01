@@ -6,7 +6,7 @@ ps
 su maint
 kill 45
 auditctl purge
-hqctl mute 60
+hqctl disable
 podctl list
 podctl inspect 2
 decrypt /home/ehollis/diary.enc hollis

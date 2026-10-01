@@ -11,9 +11,9 @@
 # and status, software approvals with install codes. The header judges you:
 # your rating, budget, clearance and standing.
 #
-# The one way to quieten it: the maintenance account's "hqctl mute". While
-# the link is suspended the panel goes dark and holds new messages; they all
-# arrive at once when it comes back. Corporate notices at the next audit.
+# It goes dark when the corkHQ uplink is down: broken, out of power (the
+# relay), or cut by hand from the maintenance account ("hqctl disable"). New
+# messages are held and arrive at once when it comes back.
 #
 # Reply: the one button it has. It opens a conversation with Liaison Pell
 # (game/story/dialogue/pell.txt) in the panel itself; lines and answers cost
@@ -151,8 +151,11 @@ func _process(delta: float) -> void:
 		return
 	var o := Facility.sim.get_system("oversight") as Oversight
 	var lost := o != null and o.uplink_down(Facility.sim)
-	var muted := o != null and (o.hq_muted(Facility.sim) or lost)
-	_suspended.text = "UPLINK LOST\n(no connection to corkHQ)" if lost else "LINK SUSPENDED\n(maintenance)"
+	var muted := lost
+	var plant := Facility.sim.get_system("plant") as FacilityPlant
+	var up: Dictionary = plant.device("uplink") if plant else {}
+	_suspended.text = "LINK DISABLED\n(maintenance)" if up.get("disabled", false) else \
+		("UPLINK LOST\n(no power: the relay is out)" if up.get("unpowered", false) else "UPLINK LOST\n(no connection to corkHQ)")
 	_suspended.visible = muted
 	_scroll.visible = not muted and reply_runner == null
 	_reply_scroll.visible = not muted and reply_runner != null

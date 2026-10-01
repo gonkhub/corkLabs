@@ -406,6 +406,7 @@ func _test_uplink() -> void:
 	for id in FacilityPlant.DOORS:   # (whatever this random facility has stuck)
 		plant.devices[id].fault = false
 		layout.set_blocked(sim(), FacilityPlant.DOORS[id][1], false)
+	_uplink_up()
 	var k := Story.knowledge(sim())
 	k.values["trust:hauler"] = 2.0
 	var hauler := sim().get_system("robot_hauler") as RobotAgent
@@ -452,6 +453,9 @@ func _test_uplink() -> void:
 func _uplink_up() -> void:
 	var plant := sim().get_system("plant") as FacilityPlant
 	plant.devices["uplink"].fault = false
+	plant.devices["uplink"].unpowered = false
+	plant.devices["uplink"].disabled = false
+	plant.devices["relay"].fault = false
 
 
 func _test_nightrun() -> void:
@@ -513,12 +517,19 @@ func _test_maint() -> void:
 	term.run("auditctl purge")
 	_check(Story.oversight(sim()).trail.size() == 1 and trail > 1, "a purge empties the trail (except the gap it leaves)")
 	_check(term.run("auditctl purge").contains("already"), "once a shift")
-	term.run("hqctl mute 30")
+	_uplink_up()
+	term.run("hqctl disable")
 	await process_frame
-	_check(Story.oversight(sim()).hq_muted(sim()) and desk.hq_panel._suspended.visible, "hqctl mute suspends the corkHQ panel")
-	term.run("hqctl unmute")
+	var o2 := Story.oversight(sim())
+	_check(o2.uplink_down(sim()) and desk.hq_panel._suspended.visible and desk.hq_panel._suspended.text.begins_with("LINK DISABLED"),
+		"hqctl disable cuts the corkHQ uplink (like a power cut)")
+	var sus2 := o2.suspicion
+	o2.violate(sim(), "read /home/whatever", 5.0)
+	_check(is_equal_approx(o2.suspicion, sus2), "while it's cut, nothing is recorded")
+	_check((sim().get_system("directives") as Directives).active.any(func(d): return d.kind == "uplink"), "and corporate sees an outage")
+	term.run("hqctl enable")
 	await process_frame
-	_check(not desk.hq_panel._suspended.visible, "and unmute brings it back")
+	_check(not o2.uplink_down(sim()) and not desk.hq_panel._suspended.visible, "hqctl enable brings it back")
 	_check(term.run("podctl wake 3").contains("sequence unknown"), "waking a pod needs Hollis's diary")
 	_check(term.run("decrypt /home/ehollis/diary.enc lantern").contains("decrypted"), "Hollis's diary opens with Ogre's word")
 	term.run("cat /home/ehollis/diary.enc")

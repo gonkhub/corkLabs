@@ -20,11 +20,17 @@
 #
 # PICKING. Camera feeds let the supervisor point at things: a robot, a device
 # (FacilityProps.pick_nodes), a passage door, a camera's housing, the
-# workbench. pick() casts a ray from a feed's camera against the bounding
-# boxes of each thing's meshes (things in other rooms don't count: walls)
-# and returns its id ("robot:tinker", "pipe_2", "door_dock", "cam_3",
-# "bench"); highlight() outlines it (an inverted-hull silhouette plus a faint
-# tint, drawn as each mesh's material_overlay).
+# workbench, the rails. pick() returns its id ("robot:tinker", "pipe_2",
+# "door_dock", "cam_3", "bench", "rails"), in three tiers:
+#   1. UNITS, in screen space: each unit's on-screen outline, grown to at
+#      least UNIT_TARGET pixels square (plus UNIT_PAD), so even a small,
+#      distant Tinker is easy to click. Units win over everything else.
+#   2. Things, by the ray: the ray from the camera through the cursor
+#      against each mesh's own (rotated) box; the nearest hit wins.
+#   3. The rails, only if nothing else is under the cursor.
+# Things in other rooms don't count (walls). highlight() outlines the pick
+# (an inverted-hull silhouette plus a faint tint, as each mesh's
+# material_overlay).
 class_name FacilityWorld
 extends Node3D
 
@@ -48,6 +54,12 @@ var _pick_nodes := {}
 var _pick_rooms := {}      # id -> room ("" = seen from either side)
 var _highlighted := ""
 static var _outline: StandardMaterial3D
+## Picked only when nothing else is under the cursor (they run under everything).
+const LOW_PRIORITY := ["rails"]
+## A unit's click target on a feed: at least this many feed pixels square,
+## and this much bigger than its outline all round.
+const UNIT_TARGET := 44.0
+const UNIT_PAD := 8.0
 ## Each camera's housing is on its own render layer, so its own feed doesn't see it.
 const HOUSING_LAYER := 10
 ## The camera you're listening through (its feed is the 3D audio listener),
@@ -72,6 +84,9 @@ func _ready() -> void:
 	props.build(layout)
 	_build_cameras()
 	_link_doors()
+	# The rail network itself: point at any rail for its grime ("Clean the rails").
+	_pick_nodes["rails"] = [get_node("Rails")]
+	_pick_rooms["rails"] = ""
 
 
 func _add_view(id: String) -> void:
@@ -379,26 +394,83 @@ func _link_doors() -> void:
 ## What's under a point of a feed (`eye` is the feed's camera; `room` the
 ## camera's room). Returns an id ("robot:hauler", "pipe_2", "bench") or "".
 func pick(eye: Camera3D, screen_pos: Vector2, room: String) -> String:
+	var unit := _pick_unit(eye, screen_pos, room)
+	if not unit.is_empty():
+		return unit
 	var from := eye.project_ray_origin(screen_pos)
 	var dir := eye.project_ray_normal(screen_pos)
 	var best := ""
 	var best_d := INF
+	var fallback := ""   # the rails: only if nothing else is under the cursor
+	var fallback_d := INF
 	for id in pickable_ids():
 		var r := pick_room(id)
 		if not r.is_empty() and not room.is_empty() and r != room:
 			continue
+		if id.begins_with("robot:"):
+			continue   # (tier 1)
 		for mi in pick_meshes(id):
 			if not mi.is_visible_in_tree() or (mi.layers & eye.cull_mask) == 0:
 				continue
-			var box: AABB = (mi.global_transform * mi.get_aabb()).grow(0.06)
-			var hit: Variant = box.intersects_ray(from, dir)
-			if hit == null:
+			# Test the ray against the mesh's own (rotated) box, in its local
+			# space: a world-aligned box round a long diagonal beam would
+			# swallow half the room.
+			var inv := mi.global_transform.affine_inverse()
+			var local_hit: Variant = mi.get_aabb().grow(0.04).intersects_ray(inv * from, (inv.basis * dir).normalized())
+			if local_hit == null:
 				continue
-			var d := from.distance_to(hit as Vector3)
-			if d < best_d:
+			var d := from.distance_to(mi.global_transform * (local_hit as Vector3))
+			if id in LOW_PRIORITY:
+				if d < fallback_d:
+					fallback_d = d
+					fallback = id
+			elif d < best_d:
 				best_d = d
 				best = id
+	return best if not best.is_empty() else fallback
+
+
+# Tier 1: the nearest unit whose (generous) on-screen target holds the point.
+func _pick_unit(eye: Camera3D, screen_pos: Vector2, room: String) -> String:
+	var best := ""
+	var best_d := INF
+	for rid in views:
+		if not room.is_empty() and robot_room(str(rid)) != room:
+			continue
+		var rect := unit_screen_rect(eye, str(rid))
+		if rect.size == Vector2.ZERO or not rect.has_point(screen_pos):
+			continue
+		var d := eye.global_position.distance_to((views[rid] as Node3D).global_position)
+		if d < best_d:
+			best_d = d
+			best = "robot:" + str(rid)
 	return best
+
+
+## A unit's click target on a feed, in the feed's pixels (zero size: off screen).
+func unit_screen_rect(eye: Camera3D, robot_id: String) -> Rect2:
+	var rect := Rect2()
+	var any := false
+	for mi in pick_meshes("robot:" + robot_id):
+		if not mi.is_visible_in_tree():
+			continue
+		var box := mi.get_aabb()
+		for i in 8:
+			var corner := mi.global_transform * box.get_endpoint(i)
+			if eye.is_position_behind(corner) or eye.global_position.distance_to(corner) < 0.3:
+				continue   # behind the lens, or right on it: no sensible screen position
+			var p := eye.unproject_position(corner)
+			if not any:
+				rect = Rect2(p, Vector2.ZERO)
+				any = true
+			else:
+				rect = rect.expand(p)
+	if not any:
+		return Rect2()
+	rect = rect.grow(UNIT_PAD)
+	var c := rect.get_center()
+	var size := Vector2(maxf(rect.size.x, UNIT_TARGET), maxf(rect.size.y, UNIT_TARGET))
+	return Rect2(c - size * 0.5, size)
 
 
 func pickable_ids() -> Array[String]:

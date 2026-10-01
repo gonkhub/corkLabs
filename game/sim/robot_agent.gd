@@ -106,6 +106,9 @@ const NIGHT_DRIFT := 0.15
 ## How much slower a stable unit's software drifts while it stands by
 ## waiting for orders (on duty: that's its job now, but it still frets).
 const WAITING_DRIFT := 0.4
+## A unit that went to charge because it was low stays on the dock until
+## it's this far above its reserve (no dithering between dock and job).
+const LOW_MARGIN := 0.25
 ## Independence at which errant fixations start.
 const FIXATE_FROM := 0.35
 
@@ -357,6 +360,9 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 		if power < traits.power_reserve:
 			s = 1.6
 			why += ", below reserve"
+		elif current == "recharge" and power < traits.power_reserve + LOW_MARGIN:
+			s = 1.6   # it came in low: it charges to a safe margin before anything else
+			why += ", charging to a safe %d%%" % _pct(traits.power_reserve + LOW_MARGIN)
 		elif current == "recharge" and power < traits.charge_until:
 			s = maxf(s, 0.9)
 			why += ", charging to %d%%" % _pct(traits.charge_until)
@@ -863,7 +869,7 @@ func _travel(sim: FacilitySim, goal: String, to_seg: String, to_off: float, dt: 
 			return false
 		route = r.legs.duplicate(true)
 		_route_goal = goal
-	var budget := traits.rail_speed * wear_factor() * dt   # meters at speed 1
+	var budget := traits.rail_speed * wear_factor() * (_plant_ref.rail_factor() if _plant_ref else 1.0) * dt   # meters at speed 1 (grime slows the rails)
 	wear = minf(wear + WEAR_MOVE * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
 	while budget > 0.0001 and not route.is_empty():
 		var leg: Dictionary = route[0]

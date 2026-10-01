@@ -195,6 +195,9 @@ func _test_campaign() -> void:
 			req.inventory[part] = 4
 		for b in FacilitySetup.robots(sim):
 			b.wear = minf(b.wear, 0.3)   # (a supervisor who books services)
+		for pid in plant.device_ids():   # (and keeps the pods calibrated)
+			if plant.devices[pid].kind == "pod":
+				plant.devices[pid].value = 1.0
 		o.standing = maxf(o.standing, 60.0)
 		sim.advance(minf(1800.0, camp.shift_start_time() + 8 * 3600.0 + 2.0 - sim.time()))
 	_check(camp.state == "off_duty", "at 14:00 the shift is over (%s)" % camp.state)
@@ -218,6 +221,9 @@ func _test_campaign() -> void:
 			req.inventory[part] = 4
 		for b in FacilitySetup.robots(sim):
 			b.wear = minf(b.wear, 0.3)   # (a supervisor who books services)
+		for pid in plant.device_ids():   # (and keeps the pods calibrated)
+			if plant.devices[pid].kind == "pod":
+				plant.devices[pid].value = 1.0
 		o.standing = maxf(o.standing, 60.0)
 		sim.advance(1800.0)
 	sim.advance(60.0)
@@ -231,6 +237,9 @@ func _test_campaign() -> void:
 			req.inventory[part] = 4
 		for b in FacilitySetup.robots(sim):
 			b.wear = minf(b.wear, 0.3)   # (a supervisor who books services)
+		for pid in plant.device_ids():   # (and keeps the pods calibrated)
+			if plant.devices[pid].kind == "pod":
+				plant.devices[pid].value = 1.0
 		sim.advance(minf(1800.0, 86400.0 + 14 * 3600.0 + 2.0 - sim.time()))
 	_check(camp.state == "complete" and camp.ending_info().title == "End of this build", "the last shift ends the run (%s %s)" % [camp.state, o.fired_reason])
 	_check(SupervisorArchive.summary().contains("reached the end"), "the personnel file remembers it across runs")

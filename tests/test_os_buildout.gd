@@ -170,7 +170,44 @@ func _test_terminal() -> void:
 	_check(term.run("status").contains("throughput"), "Terminal: status")
 	_check(term.run("units").contains("HAULER"), "Terminal: units")
 	_check(term.run("jobs").contains("Clamp coolant leak"), "Terminal: jobs shows the leak")
-	_check(term.run("order hauler 1").contains("command not found"), "Terminal: no orders here any more (Cameras)")
+	# Everything the camera menus do, by name (for when a camera's out).
+	var sim: FacilitySim = facility.sim
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var hauler: RobotAgent = sim.get_system("robot_hauler")
+	hauler.activity = {"kind": "idle"}
+	hauler.power = 1.0
+	_check(term.run("plant").contains("pipe_3"), "Terminal: plant lists the things by id")
+	var out: String = term.run("maintain pipe_3 tinker")
+	_check(out.contains("Hauler's work"), "Terminal: maintain names who can't (%s)" % out.strip_edges())
+	out = term.run("maintain pipe_3 hauler")
+	var leak := board.get_job(int(plant.device("pipe_3").job))
+	_check(leak.get("requested", false) and (out.contains("on its way") or out.contains("on it")), "Terminal: maintain <thing> <unit> sends that unit (%s)" % out.strip_edges())
+	facility.finish_errands()
+	out = term.run("inspect filter_2")
+	facility.finish_errands()
+	_check(plant.reports.has("filter_2"), "Terminal: inspect sends a unit to look (%s)" % out.strip_edges())
+	_check(term.run("order hauler recharge").contains("HAULER:"), "Terminal: order <unit> recharge (the unit answers)")
+	_check(term.run("diagnose tinker").contains("DIAG"), "Terminal: diagnose")
+	var reqs: UnitRequests = sim.get_system("requests")
+	reqs.requests.clear()
+	reqs._last.clear()
+	hauler.wear = 0.7
+	var rid := reqs.ask(sim, "hauler", "service", "Book me a service?", ["Book a service", "Not now"], 1)
+	_check(term.run("requests").contains("#%d HAULER" % rid), "Terminal: requests lists what the units ask")
+	_check(not term.run("answer %d 2" % rid).contains("no such") and reqs.get_request(rid).is_empty(), "Terminal: answer")
+	# Talking with no camera on the unit: the link runs here.
+	var room: String = desk.world.robot_room("tinker")
+	for i in desk.world.cameras.size():
+		if desk.world.camera_rooms[i] == room:
+			plant.devices["cam_%d" % (i + 1)].fault = true
+	(sim.get_system("robot_tinker") as RobotAgent).activity = {"kind": "idle"}
+	out = term.run("talk tinker")
+	_check(out.contains("no camera on TINKER") and out.contains("TINKER:") and term.mode == "talk", "Terminal: with its camera out, talk runs in the Terminal")
+	term.run("0")
+	_check(term.mode == "", "and 0 closes the link")
+	for i in desk.world.cameras.size():
+		plant.devices["cam_%d" % (i + 1)].fault = false
 	_check(term.run("routes").contains("freight_gate"), "Terminal: routes lists the passages")
 	_check(term.run("block pod_door testing").contains("needs the route-control package"), "Terminal: block needs the route-control package")
 	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("route-control")
