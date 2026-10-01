@@ -212,6 +212,26 @@ func _test_terminal() -> void:
 	_check(term.mode == "", "and 0 closes the link")
 	for i in desk.world.cameras.size():
 		plant.devices["cam_%d" % (i + 1)].fault = false
+	# The secret "dev": DevTools on the desktop.
+	_check(not desk.app_available("devtools") and not term.run("help").contains("dev "), "DevTools is hidden, and dev isn't in help")
+	term.run("dev")
+	await process_frame
+	_check(desk.app_available("devtools") and desk.is_open("devtools"), "dev puts DevTools on the desktop and opens it")
+	var dev = desk._windows["devtools"].app
+	dev.device_pick.select(dev._devices.find("relay"))
+	dev._break_device()
+	_check(plant.device("relay").fault, "DevTools: break a device")
+	dev._heal()
+	_check(not plant.device("relay").fault and plant.coolant >= 1.0, "DevTools: heal the facility")
+	dev._set_immune(true)
+	Story.oversight(sim).fire(sim, "performance", "dev test")
+	_check(not Story.oversight(sim).fired(), "DevTools: never fired")
+	dev._set_immune(false)
+	var t_dev := sim.time()
+	dev._spend(3600.0)
+	_check(sim.time() - t_dev >= 3599.0, "DevTools: pass time")
+	term.run("dev off")
+	_check(not desk.app_available("devtools"), "dev off takes it away")
 	_check(term.run("routes").contains("freight_gate"), "Terminal: routes lists the passages")
 	_check(term.run("block pod_door testing").contains("needs the route-control package"), "Terminal: block needs the route-control package")
 	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("route-control")

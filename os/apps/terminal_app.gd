@@ -79,6 +79,7 @@ const COMMANDS := {
 	"pkgctl": ["pkgctl force <package>", "install a package without approval", "maintenance"],
 	"podctl": ["podctl list | inspect <pod>", "the pods", "maintenance"],
 	"sound": ["sound [play|loop|stop|mute|unmute] ...", "audition a sound through the camera you're listening to", "dev"],
+	"dev": ["dev [off]", "put DevTools on the desktop (or take it away)", "dev"],
 }
 const GROUPS := ["basics", "system", "shift", "units", "plant", "files", "network", "maintenance"]
 const ROOT_ONLY := ["auditctl", "hqctl", "unitctl", "pkgctl", "podctl", "kill"]
@@ -254,6 +255,7 @@ func _submit(line: String) -> void:
 		"pkgctl": _pkgctl(args)
 		"podctl": _podctl(args)
 		"sound": _sound(args)
+		"dev": _dev(args)
 
 
 func _on_input_key(event: InputEvent) -> void:
@@ -802,6 +804,20 @@ func _end_talk() -> void:
 	talk_bot = null
 	if mode == "talk":
 		_set_mode("")
+
+
+# The secret "dev": DevTools on the desktop (kept with the OS settings).
+func _dev(args: PackedStringArray) -> void:
+	var on := args.is_empty() or args[0].to_lower() != "off"
+	OSSettings.set_value("devtools", on)
+	if desktop and desktop.has_method("_rebuild_icons"):
+		desktop._rebuild_icons()
+	if on:
+		_print("  [color=#ff6ad5]DevTools is on the desktop.[/color]")
+		if desktop:
+			desktop.open_app("devtools")
+	else:
+		_print("  DevTools removed.")
 
 
 # --- The work, by name (everything the camera menus do) -------------------------------------

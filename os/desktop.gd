@@ -51,10 +51,11 @@ const APPS := [
 	["nightrun", preload("res://os/apps/nightrun_app.gd")],
 	["settings", preload("res://os/apps/settings_app.gd")],
 	["bin", preload("res://os/apps/bin_app.gd")],
+	["devtools", preload("res://os/apps/devtools_app.gd")],
 ]
 ## Apps that aren't on the desktop until the supervisor finds them
 ## (Knowledge "app:<id>"): a program in the file system, say.
-const HIDDEN_APPS := ["nightrun"]
+const HIDDEN_APPS := ["nightrun", "devtools"]
 
 const BOOT_LINES := [
 	"corkLabs firmware 3.1.4  (c) corkLabs Organic Computing",
@@ -420,6 +421,8 @@ static func app_title(id: String) -> String:
 
 ## Is this app on the desktop yet? (Hidden apps have to be found first.)
 func app_available(id: String) -> bool:
+	if id == "devtools":
+		return bool(OSSettings.get_value("devtools"))   # the Terminal's secret "dev"
 	return not HIDDEN_APPS.has(id) or (Facility.running and Story.knows(Facility.sim, "app:" + id))
 
 

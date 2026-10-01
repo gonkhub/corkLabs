@@ -23,6 +23,7 @@ the desk keeps what you write here. the facility doesn't.
 --- your notes ---
 """
 const DEFAULTS := {
+	"devtools": false,
 	"ui_scale": 1.0,
 	"fullscreen": false,
 	"boot_animation": true,

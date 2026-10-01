@@ -64,6 +64,8 @@ var trail: Array[Dictionary] = []
 ## "" while employed; otherwise why they were let go.
 var fired_reason := ""
 var fired_kind := ""
+## DevTools: never dismissed (not saved).
+var immune := false
 var rng := RandomNumberGenerator.new()
 ## Audits only run while this is true (the Campaign sets it: on duty).
 var watching := true
@@ -160,6 +162,9 @@ func penalise(sim: FacilitySim, what: String, amount: float) -> void:
 
 func fire(sim: FacilitySim, kind: String, reason: String) -> void:
 	if fired():
+		return
+	if immune:
+		sim.note("oversight", "(dev) would have been dismissed: %s" % reason)
 		return
 	fired_kind = kind
 	fired_reason = reason
