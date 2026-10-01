@@ -65,6 +65,26 @@ func value(key: String) -> float:
 	return float(values.get(key, 0.0))
 
 
+## TRUST ("trust:<unit>", 0-5) grows when you talk to a unit (a conversation
+## every two facility hours) and with how you treat it: answering its
+## requests, getting it serviced, keeping it working; it falls when you
+## ignore it, overrule it, or leave it seized. Story gates read it
+## (Okafor's password at trust 3...).
+const TRUST_MAX := 5.0
+
+
+## Nudges a unit's trust (how you treat it). Notable changes are journaled.
+static func nudge_trust(sim: FacilitySim, robot_id: String, amount: float, why: String) -> void:
+	var k := sim.get_system("knowledge") as Knowledge if sim else null
+	if k == null:
+		return
+	var key := "trust:" + robot_id
+	var was := k.value(key)
+	k.values[key] = clampf(was + amount, 0.0, TRUST_MAX)
+	if absf(amount) >= 0.2:
+		sim.note("trust", "%s's trust %s (%s): %.1f" % [robot_id.capitalize(), "up" if amount > 0.0 else "down", why, float(k.values[key])])
+
+
 func add_value(key: String, amount := 1.0) -> float:
 	values[key] = value(key) + amount
 	return float(values[key])

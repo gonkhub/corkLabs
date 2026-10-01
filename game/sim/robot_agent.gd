@@ -106,6 +106,11 @@ const NIGHT_DRIFT := 0.15
 ## How much slower a stable unit's software drifts while it stands by
 ## waiting for orders (on duty: that's its job now, but it still frets).
 const WAITING_DRIFT := 0.4
+## Trust (Knowledge.nudge_trust): how being treated moves it.
+const TRUST_SERVICED := 0.5
+const TRUST_PER_JOB := 0.02
+const TRUST_OVERRULED := -0.1
+const TRUST_LEFT_SEIZED := -0.5
 ## The overclock package: faster, at a price (wear, and software drift).
 const OVERCLOCK_SPEED := 1.3
 const OVERCLOCK_WEAR := 1.5
@@ -276,6 +281,7 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 				_say(sim, "restarted", {})
 			elif event_name == "job_done" and src == "service:" + robot_id:
 				wear = WEAR_SERVICED
+				Knowledge.nudge_trust(sim, robot_id, TRUST_SERVICED, "serviced")
 				sim.note(robot_id, "%s serviced: joints like new (wear %d%%)" % [display_name(), _pct(wear)])
 			var id := int(data.get("job", -1))
 			if order.get("kind", "") == "job" and int(order.get("job", -1)) == id:
@@ -702,6 +708,7 @@ func give_order(sim: FacilitySim, kind: String, job_id := -1, device := "") -> D
 	elif wanted_before != "" and wanted_before != want:
 		# Overruled: it complies, but it wears on its software.
 		stability = maxf(stability - traits.order_stress, 0.0)
+		Knowledge.nudge_trust(sim, robot_id, TRUST_OVERRULED, "overruled")
 	var result := _reply(sim, ok, reply)
 	think(sim)
 	return result
@@ -775,6 +782,7 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				activity = {"kind": "idle"}
 				_think_left = 0.0
 				sim.note(robot_id, "%s worked itself free after %d minutes seized" % [display_name(), roundi(SELF_FREE / 60.0)])
+				Knowledge.nudge_trust(sim, robot_id, TRUST_LEFT_SEIZED, "left seized")
 				_say(sim, "restarted", {})
 			return
 		"glitch":
@@ -847,6 +855,7 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 					_think_left = 0.0
 				elif board.add_progress(sim, int(activity.job), sim_id, amount):
 					jobs_done += 1
+					Knowledge.nudge_trust(sim, robot_id, TRUST_PER_JOB, "kept working")
 					if j.get("hot", false):
 						wear = minf(wear + 0.15, 1.0)   # clamped live: it cost its joints
 					stability = minf(stability + traits.stability_per_job, 1.0)

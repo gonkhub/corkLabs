@@ -382,9 +382,9 @@ static func diagnose(bot: RobotAgent) -> String:
 	if not bot.offline():
 		bot.stability = minf(bot.stability + DIAGNOSE_STEADY, 1.0)
 	Facility.spend(DIAGNOSE_MINUTES * 60.0, "Supervisor runs diagnostics on %s" % bot.display_name())
-	return "DIAG %s: power %d%%, stability %d%% (%s), independence %d%%, wear %d%%, jobs done %d. %s" % [
+	return "DIAG %s: power %d%%, stability %d%% (%s), independence %d%%, wear %d%%, jobs done %d, trust %.1f. %s" % [
 		bot.display_name().to_upper(), roundi(bot.power * 100.0), roundi(bot.stability * 100.0), bot.stability_state,
-		roundi(bot.independence() * 100.0), roundi(bot.wear * 100.0), bot.jobs_done,
+		roundi(bot.independence() * 100.0), roundi(bot.wear * 100.0), bot.jobs_done, Story.knowledge(sim).value("trust:" + bot.robot_id),
 		"Firmware: knowledge filter active." if bot.robot_id != "ogre" else "Firmware: no knowledge filter installed."]
 
 

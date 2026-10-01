@@ -158,6 +158,7 @@ func _test_terminal() -> void:
 	tinker.stability = 0.5
 	tinker.activity = {"kind": "idle"}   # (online, whatever this random facility did to it)
 	t0 = sim().time()
+	var trust0: float = Story.knowledge(sim()).value("trust:tinker")
 	out = term.run("talk tinker")
 	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
 	_check(cams != null and out.contains("unit link") and cams.talk_runner != null and "\n".join(cams.talk_heard).contains("TINKER:")
@@ -166,7 +167,8 @@ func _test_terminal() -> void:
 		return
 	_check(desk.speech.active.has("tinker") or desk.speech._queued.has("tinker"), "its words go to the camera feed (no transcript)")
 	_check(tinker.stability > 0.5, "a conversation steadies the unit")
-	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "and counts toward its trust")
+	var trust1: float = Story.knowledge(sim()).value("trust:tinker")
+	_check(trust1 >= trust0 + 1.0, "and counts toward its trust (%.2f -> %.2f)" % [trust0, trust1])
 	cams._talk_choose(1)   # "Who was here before me?"
 	_check("\n".join(cams.talk_heard).contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
 	_check(cams.talk_runner == null or not cams.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "(nothing private yet: trust 1)")
@@ -174,7 +176,7 @@ func _test_terminal() -> void:
 	_check(cams.talk_runner == null and not cams.talk_box.visible, "closing the link")
 	cams.start_talk("tinker")
 	cams.end_talk()
-	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "talking again straight away doesn't build trust")
+	_check(Story.knowledge(sim()).value("trust:tinker") < trust1 + 0.5, "talking again straight away doesn't build trust")
 	Story.knowledge(sim()).values["trust:tinker"] = 3.0
 	cams.start_talk("tinker")
 	_check(cams.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "with trust, Tinker can be asked something private")

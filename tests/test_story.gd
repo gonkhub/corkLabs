@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_policy_and_directives()
 	_test_packages()
 	_test_cameras_are_eyes()
+	_test_trust_from_treatment()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -134,6 +135,36 @@ func _test_cameras_are_eyes() -> void:
 	var sus := o.suspicion
 	plant.accident(sim, "uplink", hauler)
 	_check(o.suspicion > sus + 10.0, "a unit wrecking the uplink on camera is noticed (suspicion +%d)" % roundi(o.suspicion - sus))
+
+
+# Trust grows with how you treat a unit, not only with talking.
+func _test_trust_from_treatment() -> void:
+	var sim := _new_sim(43)
+	var camp := sim.get_system("campaign") as Campaign
+	sim.advance(camp.shift_start_time() - sim.time() + 1.0)
+	var k := sim.get_system("knowledge") as Knowledge
+	var reqs := sim.get_system("requests") as UnitRequests
+	var hauler := sim.get_system("robot_hauler") as RobotAgent
+	hauler.wear = 0.7
+	var t0 := k.value("trust:hauler")
+	var id := reqs.ask(sim, "hauler", "service", "Book me a service?", ["Book a service", "Not now"], 1)
+	reqs.answer(sim, id, 0)
+	_check(k.value("trust:hauler") > t0 + 0.15, "answering a unit's request (yes) builds its trust (%.2f)" % k.value("trust:hauler"))
+	reqs._last.clear()
+	hauler.wear = 0.7
+	var t1 := k.value("trust:hauler")
+	id = reqs.ask(sim, "hauler", "test", "(test) Can I go?", ["Yes", "No"], 1)
+	reqs.requests[reqs.requests.size() - 1].expires = sim.time()
+	reqs._acc = 999.0
+	reqs.sim_tick(sim, 1.0)
+	_check(k.value("trust:hauler") < t1, "ignoring one costs it (%.2f)" % k.value("trust:hauler"))
+	var t2 := k.value("trust:hauler")
+	sim.schedule_in(0.0, "job_done", {"job": -1, "source": "service:hauler", "by": "robot_tinker"})
+	sim.advance(1.0)
+	_check(k.value("trust:hauler") >= t2 + 0.49, "a service builds it")
+	k.values["trust:hauler"] = 4.9
+	Knowledge.nudge_trust(sim, "hauler", 1.0, "test")
+	_check(k.value("trust:hauler") == Knowledge.TRUST_MAX, "trust tops out at %d" % int(Knowledge.TRUST_MAX))
 
 
 func _test_fs() -> void:

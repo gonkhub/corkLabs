@@ -30,6 +30,8 @@ static func describe(sim: FacilitySim, id: String) -> String:
 			return ""
 		var text := "%s: %s\npower %d%%   stability %d%% %s   wear %d%%" % [bot.display_name().to_upper(), bot.doing_text(sim),
 			_pct(bot.power), _pct(bot.stability), bot.stability_state, _pct(bot.wear)]
+		if Story.knows(sim, "met:" + RobotTraits.model_of(bot.robot_id)) or Story.knows(sim, "met:" + bot.robot_id):
+			text += "\ntrust " + trust_pips(Story.knowledge(sim).value("trust:" + bot.robot_id))
 		var r := _request_of(sim, bot)
 		if not r.is_empty():
 			text += "\nwants a word (it'll ask while you watch it)"
@@ -53,6 +55,14 @@ static func describe(sim: FacilitySim, id: String) -> String:
 	if d.kind == "pipe":
 		text += "\ncoolant %d%%" % _pct(plant.coolant)
 	return text
+
+
+## Trust as pips: one per point, a half for a half.
+static func trust_pips(t: float) -> String:
+	var out := ""
+	for i in int(Knowledge.TRUST_MAX):
+		out += "●" if t >= i + 1.0 else ("◐" if t >= i + 0.5 else "○")
+	return out
 
 
 ## "Hauler on it, 40%" / "queued" / "nobody asked" / "needs a part".

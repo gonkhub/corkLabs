@@ -23,6 +23,10 @@ const IGNORED := 0.08
 ## The same unit doesn't ask the same kind of thing again for this long.
 const REPEAT_GAP := 7200.0
 const SERVICE_AT := 0.55
+## Trust: answering a request (and saying yes), or leaving it to expire.
+const TRUST_ANSWERED := 0.15
+const TRUST_YES := 0.05
+const TRUST_IGNORED := -0.4
 
 var sim_id := "requests"
 var requests: Array[Dictionary] = []
@@ -114,6 +118,7 @@ func answer(sim: FacilitySim, id: int, i: int, by_default := false) -> String:
 	if not by_default:
 		answered += 1
 		sim.note("request", "Supervisor to %s: %s" % [name, r.options[i]])
+		Knowledge.nudge_trust(sim, str(r.robot), TRUST_ANSWERED + (TRUST_YES if i == 0 else 0.0), "you answered it")
 	return out
 
 
@@ -195,6 +200,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 			if bot and on:
 				ignored += 1
 				bot.stability = maxf(bot.stability - IGNORED, 0.0)
+				Knowledge.nudge_trust(sim, bot.robot_id, TRUST_IGNORED, "you ignored it")
 				sim.note("request", "%s got no answer and decided for itself" % bot.display_name())
 				var chatter := sim.get_system("chatter") as RobotChatter
 				if chatter:
