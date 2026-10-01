@@ -159,6 +159,10 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-10-01 | A script's "close the link" choice must end the link (checked by `test_dialogue.gd`); the UI's own close button only shows when the script has none | Ogre had two, only one worked |
 | 2026-10-01 | On the link a unit **stops and faces the nearest camera**; a repaired camera's first sight is the unit, close, looking in, then a wave | User |
 | 2026-10-01 | **Units' lives**: props (wrench, radio, crate), habits when idle, contextual exchanges with repeat rules; player-only interactions (Hauler cut off from its wrench asks for Tinker) | User: units need personality between jobs |
+| 2026-10-01 | **Units never give each other orders** (job tips between units cut); passive topics have a cooldown per unit | User: Tinker told Ogre to take out the trash ten times |
+| 2026-10-01 | **Lines that matter aren't interrupted** (questions, story, exchanges, order replies queue; chatter waits); a unit asking about its job holds, and errands pause, until you answer | User: a request was overwritten; Tinker finished a job mid-question |
+| 2026-10-01 | Dead cameras aren't alarms; cameras are repaired from the nearest rail point (no zoom on the greeting); Tinker can free the freight gate; no "Make it urgent"; `order` known from the start; talking to Pell never escalates as a terminal violation | User play notes |
+| 2026-10-01 | DevTools skips never dismiss you: chunked, stop at a crisis, restart crisis clocks | User: a skip froze, then fired them for coolant |
 | 2026-10-01 | Camera **hover cards** (state chips + bars) and **pop-out** feeds in their own windows | User: better information on camera; watch a room while working elsewhere |
 
 ## Gameplay directions (approved long-term, not started)

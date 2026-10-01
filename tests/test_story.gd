@@ -219,7 +219,7 @@ func _test_reading() -> void:
 	var sim := _new_sim()
 	var k := Story.knowledge(sim)
 	var o := Story.oversight(sim)
-	_check(k.has("cmd:ls") and not k.has("cmd:order") and not k.has("cmd:talk"), "a new supervisor knows only the basics")
+	_check(k.has("cmd:ls") and k.has("cmd:order") and not k.has("cmd:talk"), "a new supervisor knows only the basics (and order)")
 	var r := Story.read_file(sim, "/home/supervisor/welcome.txt")
 	_check(r.ok and r.first and float(r.minutes) == 3.0 * VirtualFS.READ_SCALE, "reading onboarding takes its time (%s min)" % r.get("minutes", "?"))
 	_check(k.has("cmd:jobs") and k.has("cmd:duties") and k.has("read:/home/supervisor/welcome.txt"), "and teaches the commands it mentions")

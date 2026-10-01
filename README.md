@@ -279,8 +279,17 @@ In 3D it slowly turns on the spot to bring its crane round over its work.
   3, visits Ogre; Ogre swings its crate, sweeps its lamp). Each plays an
   `idle_*` clip once it's recorded.
 - **On the link**, a unit stops and turns to face the nearest camera.
-- **A camera a unit repairs** comes back on with the unit right in front of
-  it, looking in; it backs off and waves (`act_wave_camera`, to record).
+- **A camera a unit repairs** is repaired from the point on the rail closest
+  to it; the camera comes back on looking at the unit (no zoom), which
+  backs off and waves (`act_wave_camera`, to record).
+- **Units never give each other orders.** Who does what is the supervisor's
+  call. A unit doesn't bring up the same passive topic twice in half an hour
+  (waste: 2 h).
+- **Lines that matter aren't talked over:** a unit's question, story lines,
+  exchanges and answers to orders queue one after another; idle chatter
+  waits. A question is also written under the picture.
+- **A unit that asks about its job** ("finish it, or go and charge?") holds
+  still until you answer, and an errand's clock waits for you.
 
 ## Rooms and routes
 
@@ -492,7 +501,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Desktop right-click**: show desktop (minimise all), cascade, close all,
   Settings.
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
-  broken (click: Plant), throughput, and the **facility clock** with the
+  broken (click: Plant; a dead camera doesn't count), throughput, and the **facility clock** with the
   shift (never the real clock). No Wait button, on purpose. **REQUESTS n**
   lights up when the units are asking you something (click: Cameras, on the
   unit that's asking, with its menu open).
@@ -506,7 +515,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined, and a **card** shows what it is and how it's doing (a unit: its state, ON THE LINK / ASKING / HOLDING, what it's doing, power, stability, condition, trust; a machine: FAULT / IN HAND / NO PART..., its sync or room, the job's progress, coolant, the last inspection). **Pop out** (or P) opens the current camera in a window of its own (as many as you like; remembered with the layout; requests and the unit link stay in the main Cameras window). **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off, make it urgent; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
+| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined, and a **card** shows what it is and how it's doing (a unit: its state, ON THE LINK / ASKING / HOLDING, what it's doing, power, stability, condition, trust; a machine: FAULT / IN HAND / NO PART..., its sync or room, the job's progress, coolant, the last inspection). **Pop out** (or P) opens the current camera in a window of its own (as many as you like; remembered with the layout; requests and the unit link stay in the main Cameras window). **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
 | **Forms** | corkHQ's paperwork, once someone tells you which form to file (Form C-9: a replacement core for Ogre) | Fill in the fields (from what you've found: `/sys/units/ogre.cfg`, `diagnose`, your Notes) and **File it** (75 min). HQ reviews it 30-60 min later; a wrong field comes back saying which. Paperwork is how big things are paced |
 | **Notes** | Your notebook: kept on your desk (OS settings), across runs; HQ never reads it | **Pages** (+ adds, the first line names it), **Ctrl+F** finds across pages (F3 next), select text and pick a **colour**, a font and size per page |
 | **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
@@ -514,7 +523,7 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 | **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs). Fixing things is done in Cameras |
 | **Files** | The OS file system (the same files as the Terminal) | Read files (the first read costs time), decrypt, run programs; hidden files once you know they exist (`ls -a`) |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | The command line you **learn** (no orders here: that's Cameras): `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `units` and `jobs` (read-only), `talk <unit>` (opens the unit link in Cameras), `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
+| **Terminal** | The command line you **learn** (orders are mostly given in Cameras): `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`, `order`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `units` and `jobs` (read-only), `talk <unit>` (opens the unit link in Cameras), `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
 | **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
 | **DevTools** (hidden) | Typing `dev` in the Terminal puts it on the desktop (`dev off` removes it; kept with the OS settings) | Testing: pass time, end the shift, skip the night (a chunk per frame; a skip never gets you dismissed, stops early when a crisis starts, and restarts the crisis clocks, or tick **Keep it alive** to top up coolant and skip right through); standing, suspicion, funds, never fired; break or fix any device, heal the facility; seize, free, power, stability, wear and trust per unit; stock, packages, commands, secrets; run any scripted event now |
@@ -527,7 +536,9 @@ reading, talking, duties, inspecting, playing: see docs/STORY.md). Opening
 apps and looking through cameras is free.
 
 The **corkHQ panel** has one button: **Reply**, a conversation with Liaison
-Pell inside the panel (it costs time; what you say is noted).
+Pell inside the panel (it costs time; what you say is noted). While it's
+open the button reads **Close**. If the uplink drops mid-conversation, the
+line goes dead and the reply closes.
 
 OS preferences and the window layout are saved in `user://os_settings.json`
 (`OSSettings`), separate from the facility save: they're the player's

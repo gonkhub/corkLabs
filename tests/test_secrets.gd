@@ -105,7 +105,7 @@ func _test_terminal() -> void:
 	var term = desk.open_app("terminal")
 	await process_frame
 	var help: String = term.run("help")
-	_check(help.contains("ls") and not help.contains("order") and not help.contains("podctl"), "help lists only what a new supervisor knows")
+	_check(help.contains("ls") and help.contains("order") and not help.contains("podctl"), "help lists only what a new supervisor knows (order included)")
 	_check(term.run("ls").contains("welcome.txt"), "ls in the home folder shows the onboarding file")
 	var t0 := sim().time()
 	var out: String = term.run("cat welcome.txt")

@@ -131,6 +131,9 @@ shift), `kill 45` (auditd restarts in 0.3 s, and that's noticed).
   `rescue`, `reboot`, `feed`, `requests`, `answer`, `talk` (in Cameras if a
   camera sees the unit, otherwise in the Terminal).
 - **Night vision** needs the `ir-vision` package.
+- **Dead cameras** are a nuisance, not an alarm (no ALARM light or toast).
+- **The freight gate** (the workshop's way in): Hauler or Tinker can free
+  it, so Hauler shut in the workshop isn't a dead end.
 - **Ogre starts dead** (core fault E-417; its eye is dark). Until it's
   fixed, Hauler loads the coolant feed (heavy wear, and it says so) and
   very heavy crates (gate actuators, crated units) sit in the hangar.

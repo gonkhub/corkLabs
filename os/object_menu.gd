@@ -7,7 +7,7 @@
 #                unit: send someone to reboot it by hand
 #   <device>     a pipe, filter, pod, the relay, a door, a camera, the
 #                uplink...: order maintenance (Dispatch picks the unit), call
-#                it off, make it urgent; with no part in stock: order one,
+#                it off; with no part in stock: order one,
 #                express one, or patch it without; inspect; pipes: pump in
 #                a coolant canister (hangar: the coolant feed, the compactor);
 #                send a unit to inspect it (it reports back)
@@ -277,10 +277,6 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 					maxi(roundi(float(it.get("hours", 0)) * Requisitions.EXPRESS_TIME), 1)], "", "Couriered straight into stock. 5 min",
 					func(): return str(Supervisor.requisition(part, 1, true).text)))
 				out.append({"text": "Patch it without the part (won't hold long)", "sub": _units_for(sim, job, id, true)})
-			if int(job.priority) < 3:
-				out.append(_item("Make it urgent", "", "Critical priority: units put it first. 5 min", func():
-					Supervisor.set_priority(jid, 3)
-					return "Job #%d is critical now." % jid))
 	elif d.kind == "feed":
 		var cans := int(req.inventory.get("coolant_canister", 0)) if req else 0
 		out.append(_item("Feed a coolant canister (%d in stock, coolant %d%%)" % [cans, _pct(plant.coolant)],

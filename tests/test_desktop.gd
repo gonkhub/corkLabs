@@ -131,9 +131,45 @@ func _initialize() -> void:
 	cams.refresh()
 	_check(cams.asking == rid and cams.talk_box.visible and cams.talk_choices.get_child_count() == 2, "watching its feed: it asks, answers under the picture")
 	_check(desk.speech.active.has("hauler") or desk.speech._queued.has("hauler"), "out loud, on camera")
+	_check(cams.talk_said.visible and cams.talk_said.text.contains("Book me a service"), "and written under the picture too")
+	# Passive chatter can't talk over a line that matters (a question, a story line).
+	var sd = desk.speech
+	sd.active.erase("ogre")
+	sd._queued.erase("ogre")
+	sd.queue_line("ogre", "...will... you... order... my... core...?")
+	await process_frame
+	await process_frame
+	var chat: RobotChatter = sim.get_system("chatter")
+	chat._speak(sim, sim.get_system("robot_ogre"), "...the... bins... are... full...", "waste", "")
+	await process_frame
+	_check(str(sd.active.get("ogre", {}).get("text", "")).contains("my... core"),
+		"idle chatter doesn't replace a unit's question (%s)" % str(sd.active.get("ogre", {}).get("text", "")))
+	chat._speak(sim, sim.get_system("robot_ogre"), "...lantern.", "story", "")
+	await process_frame
+	_check(str(sd.active.get("ogre", {}).get("text", "")).contains("my... core") and (sd._queued.get("ogre", []) as Array).has("...lantern."),
+		"and a story line waits its turn behind it")
+	sd.active.erase("ogre")
+	sd._queued.erase("ogre")
 	var t2: float = sim.time()
 	cams.answer_request(1)
 	_check(reqs.get_request(rid).is_empty() and sim.time() - t2 >= 299.0 and not cams.talk_box.visible, "answering takes 5 minutes and closes it")
+	_check(not cams.talk_said.visible, "the written question goes with it")
+	# No "make it urgent" on a job.
+	var urgent := false
+	for id in plant.device_ids():
+		if load("res://os/object_menu.gd").entries(sim, id).any(func(e): return str(e.get("text", "")).contains("urgent")):
+			urgent = true
+	_check(not urgent, "no 'Make it urgent' in any machine's menu")
+	# The corkHQ Reply: losing the uplink mid-conversation ends it (no getting stuck).
+	desk.hq_panel.open_reply()
+	_check(desk.hq_panel.reply_runner != null, "Reply opens a conversation with Pell")
+	desk.hq_panel.refresh_now()
+	_check(desk.hq_panel._reply_button.text == "Close", "while it's open, the panel's button closes it")
+	plant.devices.uplink.fault = true
+	desk.hq_panel.refresh_now()
+	_check(desk.hq_panel.reply_runner == null and desk.hq_panel._reply_button.text == "Reply", "the uplink drops: the line goes dead, the reply closes")
+	plant.devices.uplink.fault = false
+	desk.hq_panel.refresh_now()
 	var log_app = desk._windows["log"].app
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
 

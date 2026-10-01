@@ -22,7 +22,7 @@ class_name Knowledge
 extends RefCounted
 
 ## What every new supervisor starts knowing.
-const START := ["cmd:help", "cmd:status", "cmd:ls", "cmd:cd", "cmd:cat", "cmd:pwd", "cmd:clear"]
+const START := ["cmd:help", "cmd:status", "cmd:ls", "cmd:cd", "cmd:cat", "cmd:pwd", "cmd:clear", "cmd:order"]
 const SECRETS_PATH := "res://game/story/secrets.txt"
 
 var sim_id := "knowledge"
@@ -163,6 +163,9 @@ func sim_load(d: Dictionary) -> void:
 	for k in f:
 		flags[str(k)] = float(f[k])
 	learned_count = int(d.get("learned", flags.size()))
+	for k in START:   # (a save from before a command joined the starting set)
+		if not flags.has(k):
+			flags[k] = 0.0
 	values = {}
 	var v: Dictionary = d.get("values", {})
 	for k in v:

@@ -89,7 +89,7 @@ func _ready() -> void:
 	_reply_button.focus_mode = Control.FOCUS_NONE
 	_reply_button.add_theme_color_override("font_color", Color(1, 0.9, 0.85))
 	_reply_button.tooltip_text = "Reply to your liaison"
-	_reply_button.pressed.connect(open_reply)
+	_reply_button.pressed.connect(func(): close_reply() if reply_runner != null else open_reply())
 	row.add_child(_reply_button)
 	row.add_child(OSTheme.mono_label("● LIVE", 11, Color(1, 0.85, 0.8)))
 	var body := MarginContainer.new()
@@ -157,9 +157,13 @@ func _process(delta: float) -> void:
 	_suspended.text = "LINK DISABLED\n(maintenance)" if up.get("disabled", false) else \
 		("UPLINK LOST\n(no power: the relay is out)" if up.get("unpowered", false) else "UPLINK LOST\n(no connection to corkHQ)")
 	_suspended.visible = muted
+	if muted and reply_runner != null:
+		Facility.sim.note("hq", "The line to Liaison Pell went dead (uplink lost)")
+		close_reply()
 	_scroll.visible = not muted and reply_runner == null
 	_reply_scroll.visible = not muted and reply_runner != null
 	_reply_button.disabled = muted
+	_reply_button.text = "Close" if reply_runner != null else "Reply"
 	if hq.posted != _mark and not muted:
 		var hard := hq.since(_mark).any(func(m): return m.kind == "reprimand")
 		_mark = hq.posted

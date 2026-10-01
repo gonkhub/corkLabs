@@ -137,13 +137,15 @@ func violate(sim: FacilitySim, what: String, amount: float, catch_chance := 0.0,
 
 ## Which kind of violation this is (for Pell).
 static func category(what: String) -> String:
+	if what.contains("liaison"):
+		return ""   # said to Pell herself: she answers it there and then
 	if what.begins_with("read /home") or what.begins_with("copied /home") or what.contains("former staff"):
 		return "files"
 	if what.contains("recreational"):
 		return "games"
 	if what.begins_with("conversation with unit") or what.ends_with("on camera"):
 		return "talk"
-	if what.contains("maintenance account") or what.contains("pod ") or what.contains("audit") or what.contains("corkHQ link") \
+	if what.contains("maintenance account") or what.begins_with("pod ") or what.contains("audit") or what.contains("corkHQ link") \
 			or what.contains("override") or what.contains("unapproved") or what.contains("decommissioned"):
 		return "maint"
 	return ""
