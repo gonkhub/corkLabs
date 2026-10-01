@@ -192,6 +192,21 @@ func route_length(sim: FacilitySim, station_id: String) -> float:
 	return -1.0 if r.is_empty() else float(r.length)
 
 
+## Where it is with a job it was sent on (Facility errands): {"phase":
+## "travel" / "work" / "other", "left": facility seconds that phase still needs}.
+func errand_estimate(sim: FacilitySim, job_id: int) -> Dictionary:
+	var board := _board(sim)
+	var j: Dictionary = board.get_job(job_id) if board else {}
+	if j.is_empty() or activity.get("kind", "") != "work" or int(activity.get("job", -1)) != job_id:
+		return {"phase": "other", "left": 600.0}
+	var st := _layout(sim).station(str(j.station))
+	var there: bool = not st.is_empty() and seg == st.segment and absf(off - float(st.offset)) < 0.01
+	if not there and not traits.stationary:
+		return {"phase": "travel", "left": maxf(route_length(sim, str(j.station)), 0.0) / maxf(traits.rail_speed * wear_factor() * 0.8, 0.05)}
+	var speed := traits.skill(str(j.get("skill", "general"))) * traits.work_speed * wear_factor()
+	return {"phase": "work", "left": maxf(float(j.work) - float(j.progress), 0.0) / maxf(speed, 0.01)}
+
+
 ## Out of action (crashed, rebooting, stalled, seized): it can't think or take orders.
 func offline() -> bool:
 	return activity.kind in ["crashed", "rebooting", "stalled", "seized"]

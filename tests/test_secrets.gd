@@ -254,7 +254,7 @@ func _test_parts_and_wear() -> void:
 	var order: Dictionary = menu.filter(func(e): return str(e.get("text", "")) == "Order maintenance")[0]
 	var buy: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order Pipe clamp"))
 	var patch: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Patch it"))
-	_check(order.disabled and buy.size() == 1 and patch.size() == 1, "its menu: Order maintenance greyed out, Order a clamp set, Patch it")
+	_check(order.disabled and buy.size() == 1 and patch.size() == 1 and patch[0].has("sub"), "its menu: Order maintenance greyed out, Order a clamp set, Patch it (pick a unit)")
 	var funds := req.funds
 	var t0 := sim().time()
 	var out: String = buy[0].act.call()
@@ -264,10 +264,25 @@ func _test_parts_and_wear() -> void:
 	var clamps := int(req.inventory["pipe_clamps"])
 	menu = load("res://os/object_menu.gd").entries(sim(), "pipe_2")
 	order = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))[0]
-	_check(not order.disabled, "with clamps in stock, Order maintenance is there")
-	out = order.act.call()
+	var pick: Array = order.get("sub", []).filter(func(u): return not u.disabled)
+	_check(not pick.is_empty(), "with clamps in stock, Order maintenance is there, with units to pick")
+	out = pick[0].act.call() if not pick.is_empty() else ""
 	_check(job.get("requested", false) and int(req.inventory["pipe_clamps"]) == clamps - 1 and (out.contains("on its way") or out.contains("Queued") or out.contains("on it")),
 		"ordering maintenance takes a clamp and sends a unit: " + out)
+	facility.finish_errands()
+	_check(job.status == "done" or out.contains("Queued"), "and the leak gets clamped on its own (%s)" % job.status)
+	# A question about something you've already dealt with is withdrawn, not asked.
+	plant.devices["pipe_1"].job = -1
+	plant.devices["pipe_1"].fault = false
+	sim().schedule_in(0.0, "plant_fault", {"device": "pipe_1"})
+	facility.spend(1.0, "test")
+	var leak := board.get_job(int(plant.device("pipe_1").job))
+	reqs.requests.clear()
+	reqs._last.clear()
+	reqs.ask(sim(), "hauler", "hot", "Clamp it live?", ["Clamp it live", "Wait for it to cool"], 1, {"job": leak.id})
+	board.request(sim(), int(leak.id), true)
+	reqs.prune(sim())
+	_check(reqs.requests.is_empty(), "a unit's 'clamp it live?' is withdrawn once you've ordered that repair")
 	# Express shipping: dearer, faster.
 	var normal := req.place(sim(), "fuse_pack", 1)
 	var fast := req.place(sim(), "fuse_pack", 1, true)
@@ -283,11 +298,13 @@ func _test_parts_and_wear() -> void:
 	if send.size() == 1:
 		send[0].act.call()
 	_check(reboot[0].get("requested", false), "and that requests the reboot")
-	var tinker := sim().get_system("robot_tinker") as RobotAgent
-	board.release(int(reboot[0].id), str(reboot[0].claimed_by))
-	board.claim(int(reboot[0].id), tinker.sim_id)
-	board.add_progress(sim(), int(reboot[0].id), tinker.sim_id, float(reboot[0].work))
-	facility.spend(1.0, "test")
+	facility.finish_errands()
+	if WorkBoard.active(reboot[0]):   # (nobody could get there in this random facility: do it by hand)
+		var tinker := sim().get_system("robot_tinker") as RobotAgent
+		board.release(int(reboot[0].id), str(reboot[0].claimed_by))
+		board.claim(int(reboot[0].id), tinker.sim_id)
+		board.add_progress(sim(), int(reboot[0].id), tinker.sim_id, float(reboot[0].work))
+		facility.spend(1.0, "test")
 	_check(not hauler.offline(), "rebooting it by hand gets it moving")
 	req.inventory["servo_bundle"] = 1
 	hauler.wear = 0.7
@@ -297,7 +314,8 @@ func _test_parts_and_wear() -> void:
 	var svc := board.jobs.filter(func(j): return str(j.source) == "service:hauler" and WorkBoard.active(j))
 	_check(svc.size() == 1 and str(svc[0].get("only", "")) == hauler.sim_id and int(req.inventory["servo_bundle"]) == 0,
 		"Book a service posts a service only that unit takes, with the servo taken from stock")
-	if svc.size() == 1:
+	facility.finish_errands()
+	if svc.size() == 1 and WorkBoard.active(svc[0]):
 		board.release(int(svc[0].id), str(svc[0].claimed_by))
 		board.claim(int(svc[0].id), hauler.sim_id)
 		board.add_progress(sim(), int(svc[0].id), hauler.sim_id, float(svc[0].work))
@@ -357,15 +375,25 @@ func _test_uplink() -> void:
 	var o := Story.oversight(sim())
 	var plant := sim().get_system("plant") as FacilityPlant
 	var layout := sim().get_system("layout") as FacilityLayout
+	# Past the scripted 10:20 dock-door jam first, then clear the way.
+	var after_jam := Story.campaign(sim()).shift_start_time() + 4.5 * 3600.0
+	if sim().time() < after_jam:
+		facility.spend(after_jam - sim().time(), "test")
+	o.standing = 60.0
 	layout.set_blocked(sim(), "freight_gate", false)
 	plant.devices["gate"].fault = false
+	for id in FacilityPlant.DOORS:   # (whatever this random facility has stuck)
+		plant.devices[id].fault = false
+		layout.set_blocked(sim(), FacilityPlant.DOORS[id][1], false)
 	var k := Story.knowledge(sim())
 	k.values["trust:hauler"] = 2.0
 	var hauler := sim().get_system("robot_hauler") as RobotAgent
 	hauler.power = 1.0
 	hauler.stability = 0.9
+	hauler.wear = 0.1
 	hauler.activity = {"kind": "idle"}
 	var cams = desk.open_app("cameras")
+	var jmark := sim().journal.added
 	cams.start_talk("hauler")
 	var choice := -1
 	for i in cams.talk_runner.choices.size():
@@ -380,7 +408,8 @@ func _test_uplink() -> void:
 		if plant.device("uplink").fault:
 			break
 		facility.spend(300.0, "test")
-	_check(plant.device("uplink").fault, "and the uplink relay goes down (%s / %s / %s)" % [str(hauler.order), str(hauler.activity), str(hauler.scores.slice(0, 3).map(func(o): return "%s %.2f" % [o.key, o.score]))])
+	_check(plant.device("uplink").fault, "and the uplink relay goes down (%s / %s / %s) %s" % [str(hauler.order), str(hauler.activity), str(hauler.scores.slice(0, 3).map(func(o): return "%s %.2f" % [o.key, o.score])),
+		str(sim().journal.added_since(jmark).filter(func(e): return e.cat in ["hauler", "supervisor", "speech", "time"] or str(e.text).contains("Hauler")).slice(0, 14).map(func(e): return str(e.text).left(80)))])
 	_check(not sim().journal.entries.any(func(e): return e.cat == "sabotage" and str(e.text).contains("uplink")), "as an accident: nothing says sabotage")
 	await process_frame
 	await process_frame

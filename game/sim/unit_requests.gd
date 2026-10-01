@@ -66,6 +66,42 @@ func ask(sim: FacilitySim, robot: String, kind: String, text: String, options: A
 	return int(r.id)
 
 
+## Is this request still worth asking? (The supervisor may already have dealt
+## with what it's about: ordered the repair, booked the service...)
+func relevant(sim: FacilitySim, r: Dictionary) -> bool:
+	var bot := sim.get_system("robot_" + str(r.robot)) as RobotAgent
+	var board := sim.get_system("work") as WorkBoard
+	if bot == null or board == null:
+		return false
+	var d: Dictionary = r.data
+	match str(r.kind):
+		"service":
+			return bot.wear >= SERVICE_AT - 0.05 and not board.jobs.any(func(j): return str(j.source) == "service:" + bot.robot_id and WorkBoard.active(j))
+		"help":
+			var seized := sim.get_system("robot_" + str(d.get("robot", ""))) as RobotAgent
+			return seized != null and seized.activity.kind == "seized" and not bot.offline() \
+				and not board.jobs.any(func(j): return str(j.source) == "unit:" + seized.robot_id and WorkBoard.active(j) and (j.get("requested", false) or j.status == "claimed"))
+		"recharge":
+			var j := board.get_job(int(d.get("job", -1)))
+			return WorkBoard.active(j) and bot.activity.kind == "work" and int(bot.activity.get("job", -1)) == int(j.id) and bot.power < bot.traits.power_reserve + 0.12
+		"bored":
+			var plant := sim.get_system("plant") as FacilityPlant
+			var dev := plant.device(str(d.get("device", ""))) if plant else {}
+			return bot.activity.kind in ["idle", "wander"] and bot.order.is_empty() and not dev.is_empty() and int(dev.job) < 0
+		"hot":
+			var j := board.get_job(int(d.get("job", -1)))
+			return WorkBoard.active(j) and not j.get("requested", false) and j.status != "claimed" and not bot.offline()
+	return true
+
+
+## Withdraws requests that no longer make sense (quietly: nobody ignored anything).
+func prune(sim: FacilitySim) -> void:
+	for q in requests.duplicate():
+		if not relevant(sim, q):
+			requests.erase(q)
+			sim.note("request", "%s no longer asks: %s" % [str(q.robot).capitalize(), str(q.text).left(60)])
+
+
 ## Answers request `id` with option `i`. Returns what happened ("" = no such request).
 func answer(sim: FacilitySim, id: int, i: int, by_default := false) -> String:
 	var r := get_request(id)
@@ -150,6 +186,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 	_acc = 0.0
 	var camp := sim.get_system("campaign") as Campaign
 	var on := camp == null or camp.on_duty()
+	prune(sim)
 	# Expired: the unit decides for itself.
 	for r in requests.duplicate():
 		if sim.time() >= float(r.expires) or not on:

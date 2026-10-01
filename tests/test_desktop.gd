@@ -54,13 +54,23 @@ func _initialize() -> void:
 	_check(not job.is_empty() and job.status == "open" and not job.get("requested", false), "debris in bay 2: posted, but nobody goes")
 	var menu: Array = load("res://os/object_menu.gd").entries(sim, "bay_2")
 	var order: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))
-	_check(order.size() == 1 and not order[0].disabled, "clicking it in Cameras offers Order maintenance")
+	_check(order.size() == 1 and order[0].has("sub"), "clicking it in Cameras offers Order maintenance")
+	var units: Array = order[0].sub
+	_check(units.size() == FacilitySetup.robots(sim).size() and str(units[0].text).contains("(best)"),
+		"you pick which unit goes: every unit listed, the best free one first (%s)" % str(units.map(func(u): return u.text)))
+	var ogre: Array = units.filter(func(u): return str(u.text).begins_with("Ogre"))
+	_check(ogre.size() == 1 and ogre[0].disabled, "units that can't do it are greyed out, with why (%s)" % (ogre[0].text if ogre.size() == 1 else ""))
 	var t0: float = sim.time()
-	cams._menu_entries = [order[0].merged({"for": "bay_2"})]
+	cams._menu_entries = [units[0].merged({"for": "bay_2"})]
 	cams._on_menu(0)
-	_check(sim.time() - t0 >= 299.0 and job.get("requested", false), "ordering it costs facility time and requests the job")
-	_check(cams.feedback.text.contains("on its way") or cams.feedback.text.contains("Queued"), "and says who's going (%s)" % cams.feedback.text)
-	_check(job.status == "claimed" or board.queued_jobs().has(job), "a unit takes it (or it waits for one)")
+	var facility_node := desk.get_node("/root/Facility")
+	_check(job.get("requested", false) and cams.feedback.text.contains("on its way"), "ordering it requests the job and sends a unit (%s)" % cams.feedback.text)
+	_check(sim.time() - t0 < 1.0 and facility_node.errand_running(), "no time passes when you order: the unit's errand runs instead")
+	for i in 30:
+		await process_frame
+	_check(sim.time() > t0, "the clock runs while you watch it go")
+	facility_node.finish_errands()
+	_check(job.status == "done" and not facility_node.errand_running(), "and the job's done without anything else from you")
 	_check(not load("res://os/object_menu.gd").describe(sim, "robot:hauler").is_empty() and load("res://os/object_menu.gd").describe(sim, "bay_2").contains("Bay 2"), "hovering shows what a thing is")
 
 	# Break something: toast + alarm light.
@@ -82,6 +92,10 @@ func _initialize() -> void:
 	var reqs: UnitRequests = sim.get_system("requests")
 	reqs.requests.clear()
 	reqs._last.clear()
+	(sim.get_system("robot_hauler") as RobotAgent).wear = 0.7   # (worn: the question stands)
+	for j in board.jobs:
+		if str(j.source) == "service:hauler" and WorkBoard.active(j):
+			board.cancel(sim, int(j.id), "test")
 	var rid := reqs.ask(sim, "hauler", "service", "My joints are grinding. Book me a service?", ["Book a service", "Not now"], 1)
 	cams.set_grid(true)
 	cams.refresh()

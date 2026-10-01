@@ -902,6 +902,7 @@ func _refresh_taskbar() -> void:
 		alarm_button.text = "ALARM  %d" % faults
 	var reqs := sim.get_system("requests") as UnitRequests
 	if reqs:
+		reqs.prune(Facility.sim)
 		requests_button.visible = not reqs.requests.is_empty()
 		requests_button.text = "REQUESTS  %d" % reqs.requests.size()
 		if _asked_mark >= 0 and reqs.asked > _asked_mark and not reqs.requests.is_empty():

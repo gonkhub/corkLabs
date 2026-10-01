@@ -171,8 +171,7 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 				var uses := ""
 				if job.has("part") and not job.get("part_used", false):
 					uses = " (uses %s: %d in stock)" % [WorkBoard.part_name(sim, str(job.part)), int(req.inventory.get(str(job.part), 0)) if req else 0]
-				out.append(_item("Order maintenance" + uses, "", "The most suitable free unit is sent. 5 min",
-					func(): return str(Supervisor.order_maintenance(id).text)))
+				out.append({"text": "Order maintenance" + uses, "sub": _units_for(sim, job, id, false)})
 			else:
 				var it := req.item(part) if req else {}
 				out.append(_item("Order maintenance", "No %s in stock." % it.get("name", part), ""))
@@ -181,15 +180,13 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 				out.append(_item("Express %s (%d cr, about %d h)" % [it.get("name", part), roundi(int(it.get("price", 0)) * Requisitions.EXPRESS_COST),
 					maxi(roundi(float(it.get("hours", 0)) * Requisitions.EXPRESS_TIME), 1)], "", "Couriered straight into stock. 5 min",
 					func(): return str(Supervisor.requisition(part, 1, true).text)))
-				out.append(_item("Patch it without the part", "", "A makeshift repair: a unit goes now, but it won't hold long. 5 min",
-					func(): return str(Supervisor.order_maintenance(id, true).text)))
+				out.append({"text": "Patch it without the part (won't hold long)", "sub": _units_for(sim, job, id, true)})
 			if int(job.priority) < 3:
 				out.append(_item("Make it urgent", "", "Critical priority: units put it first. 5 min", func():
 					Supervisor.set_priority(jid, 3)
 					return "Job #%d is critical now." % jid))
 	elif k.has("drift") and float(d.value) < 0.95:
-		out.append(_item("Order maintenance (early)", "", "Service it before it needs it. 5 min",
-			func(): return str(Supervisor.order_maintenance(id).text)))
+		out.append({"text": "Order maintenance (early)", "sub": _units_for(sim, {"skill": FacilityPlant.KINDS[d.kind].skill, "station": d.station, "id": -1}, id, false)})
 	else:
 		out.append(_label("Nothing needs doing."))
 	if d.kind == "pipe" and plant:
@@ -200,6 +197,28 @@ static func _device(sim: FacilitySim, id: String) -> Array[Dictionary]:
 	out.append({"sep": true})
 	out.append(_item("Inspect (%d min)" % int(Supervisor.INSPECT_MINUTES), "", "Wear rate, when it needs work, who's on it, the part it needs.",
 		func(): return Supervisor.inspect_device(id)))
+	return out
+
+
+# Which unit to send: every unit, the best free one first; the ones that
+# can't, greyed out with why.
+static func _units_for(sim: FacilitySim, job: Dictionary, device_id: String, makeshift: bool) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for o in Dispatch.options(sim, job):
+		var bot: RobotAgent = o.bot
+		var why := str(o.why)
+		var note := "%s %d%%" % [str(job.get("skill", "general")), roundi(float(o.fit) * 100.0)]
+		if float(o.dist) >= 0.0:
+			note += ", %d m" % roundi(float(o.dist))
+		if why == "busy":
+			note += ", busy: drops what it's doing"
+		elif not why.is_empty():
+			note += ": " + why
+		if o.best:
+			note += " (best)"
+		var uid := bot.robot_id
+		out.append(_item("%s (%s)" % [bot.display_name(), note], "" if why.is_empty() or why == "busy" else why.capitalize() + ".",
+			"It goes now; the time passes while it works.", func(): return str(Supervisor.order_maintenance(device_id, makeshift, uid).text)))
 	return out
 
 

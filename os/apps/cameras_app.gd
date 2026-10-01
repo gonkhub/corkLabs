@@ -367,6 +367,7 @@ func _check_requests() -> void:
 	var w := _world()
 	if reqs == null or w == null:
 		return
+	reqs.prune(sim())   # don't ask about something you've already dealt with
 	if asking >= 0:
 		var current := reqs.get_request(asking)
 		if current.is_empty() or grid_mode or w.robot_room(str(current.robot)) != w.camera_rooms[cam]:

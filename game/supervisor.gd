@@ -26,7 +26,10 @@ static func order(bot: RobotAgent, kind: String, job_id := -1) -> Dictionary:
 	sim.note("supervisor", "To %s: %s" % [bot.display_name(), what])
 	var r := bot.give_order(sim, kind, job_id)
 	did("order")
-	Facility.act(ORDER_COST, "Supervisor orders %s: %s" % [bot.display_name(), what])
+	if kind == "job" and r.ok:
+		_go(job_id, bot, "Supervisor orders %s: %s" % [bot.display_name(), what])
+	else:
+		Facility.act(ORDER_COST, "Supervisor orders %s: %s" % [bot.display_name(), what])
 	return r
 
 
@@ -59,7 +62,9 @@ static func book_service(bot: RobotAgent) -> int:
 	var id := bot.book_service(sim)
 	if id >= 0:
 		sim.note("supervisor", "Books a service for %s" % bot.display_name())
-		Facility.act(ORDER_COST, "Supervisor books a service")
+		if not bot.offline() and Dispatch.unfit(sim, bot, sim.get_system("work").get_job(id)) in ["", "busy"]:
+			bot.give_order(sim, "job", id)
+		_go(id, bot, "Supervisor books a service")
 	return id
 
 
@@ -299,7 +304,7 @@ static func patch_job(job_id: int) -> bool:
 ## job (posting one for something that wears; the part comes out of stock)
 ## and Dispatch sends the most suitable free unit. `makeshift`: patch it
 ## without the part. 5 minutes. Returns {"ok", "text"}.
-static func order_maintenance(device_id: String, makeshift := false) -> Dictionary:
+static func order_maintenance(device_id: String, makeshift := false, unit_id := "") -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var plant := sim.get_system("plant") as FacilityPlant
 	var d := plant.device(device_id) if plant else {}
@@ -308,23 +313,35 @@ static func order_maintenance(device_id: String, makeshift := false) -> Dictiona
 	var job := Dispatch.job_for_device(sim, device_id)
 	if job.is_empty():
 		return {"ok": false, "text": "%s doesn't need anything." % d.name}
-	return request_job(int(job.id), makeshift, d.name)
+	return request_job(int(job.id), makeshift, d.name, unit_id)
 
 
 ## Requests a job and sends a unit (a seized unit's manual reboot, a device's
 ## repair). 5 minutes. Returns {"ok", "text"}.
-static func request_job(job_id: int, makeshift := false, what := "") -> Dictionary:
+static func request_job(job_id: int, makeshift := false, what := "", unit_id := "") -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var board := sim.get_system("work") as WorkBoard
 	var job := board.get_job(job_id)
-	var r := Dispatch.request(sim, job_id, makeshift)
+	var unit := sim.get_system("robot_" + unit_id) as RobotAgent if not unit_id.is_empty() else null
+	var r := Dispatch.request(sim, job_id, makeshift, unit)
 	if not r.ok:
 		return r
 	sim.note("supervisor", "%s: %s%s" % ["Patch it" if makeshift else "Maintenance", what if not what.is_empty() else str(job.get("title", "")),
 		" (no part)" if makeshift else ""])
 	did("order")
-	Facility.act(ORDER_COST, "Supervisor orders maintenance")
+	_go(job_id, r.unit, "Supervisor orders maintenance")
 	return r
+
+
+# A unit on its way: the time passes as it does the job (an errand), not now.
+# Nobody free (queued): the order itself is all that happens now (5 minutes).
+static func _go(job_id: int, bot: Variant, cause: String) -> void:
+	var sim: FacilitySim = Facility.sim
+	var unit := bot as RobotAgent
+	if unit != null and unit.order.get("kind", "") == "job" and int(unit.order.get("job", -1)) == job_id:
+		Facility.start_errand(job_id, unit.sim_id, cause)
+	else:
+		Facility.act(ORDER_COST, cause)
 
 
 ## Takes a job off the queue (its unit stands down; an unused part goes back). 5 minutes.

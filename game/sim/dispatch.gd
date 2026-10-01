@@ -1,7 +1,9 @@
 # Dispatch: who does a job. The supervisor asks for maintenance on a thing
-# (a camera's object menu, Supervisor.order_maintenance); Dispatch requests
-# the job (WorkBoard.request: its part comes out of stock) and sends the most
-# suitable unit that's free:
+# (a camera's object menu, Supervisor.order_maintenance) and picks the unit
+# from a list (options(): every unit, best first, with why it can't); or
+# leaves it to Dispatch, which sends the most suitable unit that's free. The
+# job is requested either way (WorkBoard.request: its part comes out of stock).
+# What makes a unit suitable:
 #
 #   can do it     skill at least its refuse_below_skill; not a rail-only job
 #                 for a crane; not someone else's service; not the unit
@@ -18,18 +20,22 @@ class_name Dispatch
 extends RefCounted
 
 
-## Requests a job and sends a unit. Returns {"ok", "text", "unit"}.
-static func request(sim: FacilitySim, job_id: int, makeshift := false) -> Dictionary:
+## Requests a job and sends a unit (`unit`, or the best free one). Returns {"ok", "text", "unit"}.
+static func request(sim: FacilitySim, job_id: int, makeshift := false, unit: RobotAgent = null) -> Dictionary:
 	var board := sim.get_system("work") as WorkBoard
 	if board == null:
 		return {"ok": false, "text": "No work board.", "unit": null}
+	if unit != null:
+		var cant := unfit(sim, unit, board.get_job(job_id))
+		if not cant.is_empty() and cant != "busy":
+			return {"ok": false, "text": "%s can't: %s." % [unit.display_name(), cant], "unit": null}
 	var why := board.request(sim, job_id, makeshift)
 	if not why.is_empty():
 		return {"ok": false, "text": why, "unit": null}
 	var job := board.get_job(job_id)
 	if job.status == "claimed":
 		return {"ok": true, "text": "%s is already on it." % _name(str(job.claimed_by)), "unit": sim.get_system(str(job.claimed_by))}
-	var bot := best_unit(sim, job)
+	var bot := unit if unit != null else best_unit(sim, job)
 	if bot == null:
 		return {"ok": true, "text": "Queued: no unit is free for it. The first one that is will take it.", "unit": null}
 	var r := bot.give_order(sim, "job", job_id)
@@ -62,6 +68,24 @@ static func candidates(sim: FacilitySim, job: Dictionary) -> Array[Dictionary]:
 		out.append({"bot": bot, "score": score, "why": "%s skill %d%%, %.0f m" % [job.skill, roundi(fit * 100.0), dist]})
 	out.sort_custom(func(a, b): return a.score > b.score)
 	return out
+
+
+## Every unit for a job, the best free one first: [{"bot", "why" ("" or why
+## not; "busy" = it would drop what it's doing), "fit" (skill), "dist" (m, -1 =
+## can't get there), "best": bool}].
+static func options(sim: FacilitySim, job: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var best := best_unit(sim, job)
+	for bot in FacilitySetup.robots(sim):
+		out.append({"bot": bot, "why": unfit(sim, bot, job), "fit": bot.traits.skill(str(job.get("skill", "general"))),
+			"dist": bot.route_length(sim, str(job.get("station", ""))), "best": bot == best})
+	out.sort_custom(func(a, b): return (a.best and not b.best) or (a.best == b.best and _rank(a) > _rank(b)))
+	return out
+
+
+static func _rank(o: Dictionary) -> float:
+	var why := str(o.why)
+	return float(o.fit) + (1.0 if why.is_empty() else (0.5 if why == "busy" else 0.0))
 
 
 ## "" if this unit could take this job right now, else why not.
