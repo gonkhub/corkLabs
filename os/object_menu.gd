@@ -72,6 +72,79 @@ static func trust_pips(t: float) -> String:
 	return out
 
 
+## What the hover card on a camera feed shows about a thing:
+## {"title", "color", "chips": [[text, Color]], "lines": [text], "bars": [[label, 0-1, Color]]}.
+static func info(sim: FacilitySim, id: String) -> Dictionary:
+	var out := {"title": "", "color": OSTheme.ACCENT, "chips": [], "lines": [], "bars": []}
+	if sim == null:
+		return out
+	if id.begins_with("robot:"):
+		var bot := sim.get_system("robot_" + id.trim_prefix("robot:")) as RobotAgent
+		if bot == null:
+			return out
+		out.title = bot.display_name().to_upper()
+		out.color = OSTheme.category_color(bot.robot_id)
+		var state_col := {"stable": OSTheme.ACCENT, "drifting": OSTheme.WARN, "unstable": OSTheme.ALARM, "critical": OSTheme.ALARM}
+		if bot.offline():
+			out.chips.append([str(bot.activity.kind).to_upper(), OSTheme.ALARM])
+		else:
+			out.chips.append([bot.stability_state.to_upper(), state_col.get(bot.stability_state, OSTheme.TEXT)])
+		if bot.activity.kind == "link":
+			out.chips.append(["ON THE LINK", OSTheme.INFO])
+		if not _request_of(sim, bot).is_empty():
+			out.chips.append(["ASKING", OSTheme.WARN])
+		var props := sim.get_system("props") as UnitProps
+		var held := props.holding(bot.robot_id) if props else ""
+		if not held.is_empty():
+			out.chips.append(["HOLDING " + str(props.item(held).name).trim_prefix(bot.display_name() + "'s ").to_upper(), OSTheme.TEXT_DIM])
+		var doing := bot.doing_text(sim)
+		out.lines.append(doing.left(1).to_upper() + doing.substr(1))
+		out.bars.append(["Power", bot.power, OSTheme.ACCENT if bot.power > 0.35 else OSTheme.WARN])
+		out.bars.append(["Stability", bot.stability, OSTheme.ACCENT if bot.stability >= 0.6 else (OSTheme.WARN if bot.stability >= 0.35 else OSTheme.ALARM)])
+		out.bars.append(["Condition", 1.0 - bot.wear, OSTheme.ACCENT if bot.wear < 0.4 else (OSTheme.WARN if bot.wear < 0.5 else OSTheme.ALARM)])
+		if Story.knows(sim, "met:" + RobotTraits.model_of(bot.robot_id)) or Story.knows(sim, "met:" + bot.robot_id):
+			out.lines.append("Trust " + trust_pips(Story.knowledge(sim).value("trust:" + bot.robot_id)))
+		return out
+	if id.begins_with("prop:") or id == "bench":
+		out.title = describe(sim, id).get_slice("\n", 0).get_slice(":", 0).to_upper()
+		out.lines.append(describe(sim, id).substr(describe(sim, id).find(":") + 1).strip_edges())
+		return out
+	var plant := sim.get_system("plant") as FacilityPlant
+	var d := plant.device(id) if plant else {}
+	if d.is_empty():
+		return out
+	out.title = str(d.name).to_upper()
+	var k: Dictionary = FacilityPlant.KINDS[d.kind]
+	if d.fault:
+		out.chips.append([("DISABLED" if d.get("disabled", false) else ("NO POWER" if d.get("unpowered", false) else "FAULT")), OSTheme.ALARM])
+	var board := sim.get_system("work") as WorkBoard
+	var job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
+	if WorkBoard.active(job):
+		if job.status == "claimed":
+			out.chips.append(["IN HAND", OSTheme.ACCENT])
+		elif job.get("requested", false):
+			out.chips.append(["REQUESTED", OSTheme.INFO])
+		elif not board.missing_part(sim, job).is_empty():
+			out.chips.append(["NO PART", OSTheme.WARN])
+		else:
+			out.chips.append(["NEEDS ORDERING", OSTheme.WARN])
+	out.lines.append(plant.device_text(id).get_slice("  job", 0).substr(str(d.name).length()).strip_edges().capitalize())
+	if k.has("drift"):
+		var v := float(d.value)
+		var label: String = {"pod": "Sync", "filter": "Clean", "waste": "Room", "compactor": "Room", "rails": "Clean"}.get(d.kind, "Condition")
+		out.bars.append([label, v, OSTheme.ACCENT if v >= 0.6 else (OSTheme.WARN if v >= 0.3 else OSTheme.ALARM)])
+	if WorkBoard.active(job):
+		out.lines.append(job_state(sim, job))
+		if job.status == "claimed":
+			out.bars.append(["Job", board.fraction_done(job), OSTheme.INFO])
+	if d.kind in ["pipe", "feed"]:
+		out.bars.append(["Coolant", plant.coolant, OSTheme.ACCENT if plant.coolant >= 0.5 else OSTheme.WARN])
+	var rep: Dictionary = plant.reports.get(id, {})
+	if not rep.is_empty():
+		out.lines.append("Inspected %s by %s" % [FacilitySim.format_clock(float(rep.t)), rep.by])
+	return out
+
+
 ## "Hauler on it, 40%" / "queued" / "nobody asked" / "needs a part".
 static func job_state(sim: FacilitySim, job: Dictionary) -> String:
 	var board := sim.get_system("work") as WorkBoard

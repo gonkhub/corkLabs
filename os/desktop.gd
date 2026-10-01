@@ -377,10 +377,15 @@ func open_app(id: String) -> OSApp:
 	for a in APPS:
 		if a[0] == id:
 			script = a[1]
-	if script == null or not app_available(id):
+	var app: OSApp = null
+	if id.begins_with("cam_pop_") and id.trim_prefix("cam_pop_").is_valid_int():
+		# A camera popped out of Cameras into its own window.
+		app = (preload("res://os/apps/camera_pop_app.gd").new() as CameraPopApp).for_camera(int(id.trim_prefix("cam_pop_")))
+	elif script == null or not app_available(id):
 		return null
+	else:
+		app = script.new()
 	Supervisor.did("open:" + id)
-	var app: OSApp = script.new()
 	app.desktop = self
 	var win := OSWindow.new()
 	win.setup(app)

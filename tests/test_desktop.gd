@@ -98,6 +98,21 @@ func _initialize() -> void:
 	_check(r.ok and not rep.is_empty() and str(rep.text).contains("Bay 1 filters") and sim.time() > t1,
 		"a unit inspects a device and reports back (%s, %s)" % [r.text, str(rep.get("by", ""))])
 	_check(sim.journal.tail(40).any(func(e): return e.cat == "report" and str(e.text).contains("report on Bay 1 filters")), "the report is in the Facility Log")
+	# The hover card: what a thing is, at a glance.
+	var om = load("res://os/object_menu.gd")
+	var card_unit: Dictionary = om.info(sim, "robot:tinker")
+	_check(card_unit.title == "TINKER" and (card_unit.bars as Array).size() == 3 and not (card_unit.chips as Array).is_empty(),
+		"hovering a unit: a card with its state, power, stability and condition")
+	var card_dev: Dictionary = om.info(sim, "pod_1")
+	_check(str(card_dev.title).begins_with("POD 1") and (card_dev.bars as Array).any(func(b): return b[0] == "Sync"), "hovering a pod: its sync")
+	# Pop out: a camera in a window of its own.
+	cams.show_camera(2)
+	cams.pop_out()
+	await process_frame
+	_check(desk.is_open("cam_pop_2") and desk._windows["cam_pop_2"].app.cam == 2 and desk._windows["cam_pop_2"].app.feeds.size() == 1,
+		"Pop out: camera 3 in its own window")
+	desk._windows["cam_pop_2"].app.show_camera(5)
+	_check(desk._windows["cam_pop_2"].app.cam == 2, "and it stays on its camera")
 	# A unit's request: it pings, and asks on camera when you watch its feed.
 	var reqs: UnitRequests = sim.get_system("requests")
 	reqs.requests.clear()

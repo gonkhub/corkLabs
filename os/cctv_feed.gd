@@ -73,8 +73,12 @@ var _moved := false
 ## What the mouse is over right now ("" = nothing), and its label.
 var hover_id := ""
 var hover_label: Label
+## The hover card (a richer read-out than the label: ObjectMenu.info).
+var hover_card: PanelContainer
 ## Gives the hover label its text (set by the Cameras app: ObjectMenu.describe).
 var describe: Callable
+## Gives the hover card its contents (ObjectMenu.info), if set.
+var info: Callable
 var no_signal: Label
 var _frame_clock := 0.0     # time since the last rendered frame
 var _feed_time := 0.0       # the feed's own clock, in whole frames
@@ -148,6 +152,11 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hover_label.visible = false
 	add_child(hover_label)
+	hover_card = PanelContainer.new()
+	hover_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_card.add_theme_stylebox_override("panel", OSTheme.box(Color(0.04, 0.07, 0.08, 0.92), Color(1.0, 0.8, 0.3, 0.6), 4, 10, 8))
+	hover_card.visible = false
+	add_child(hover_card)
 	mouse_exited.connect(func(): _set_hover(""))
 
 
@@ -309,15 +318,69 @@ func _set_hover(id: String, at := Vector2.ZERO) -> void:
 	if id != hover_id and world:
 		world.highlight(id)
 	hover_id = id
-	hover_label.visible = not id.is_empty()
+	var card := info.is_valid() and not id.is_empty()
+	hover_label.visible = not id.is_empty() and not card
+	hover_card.visible = card
 	if id.is_empty():
 		mouse_default_cursor_shape = Control.CURSOR_MOVE if interactive else Control.CURSOR_POINTING_HAND
 		return
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	hover_label.text = describe.call(id) if describe.is_valid() else id
-	hover_label.reset_size()
-	hover_label.position = Vector2(clampf(at.x + 16.0, 4.0, maxf(size.x - hover_label.size.x - 4.0, 4.0)),
-		clampf(at.y + 14.0, 4.0, maxf(size.y - hover_label.size.y - 4.0, 4.0)))
+	var shown: Control = hover_label
+	if card:
+		_fill_card(info.call(id))
+		shown = hover_card
+	shown.reset_size()
+	shown.position = Vector2(clampf(at.x + 18.0, 4.0, maxf(size.x - shown.size.x - 4.0, 4.0)),
+		clampf(at.y + 16.0, 4.0, maxf(size.y - shown.size.y - 4.0, 4.0)))
+
+
+# The hover card: title, status chips, lines, bars.
+func _fill_card(d: Dictionary) -> void:
+	for c in hover_card.get_children():
+		hover_card.remove_child(c)
+		c.queue_free()
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_card.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	col.add_child(head)
+	head.add_child(OSTheme.label(str(d.get("title", "")), 15, d.get("color", OSTheme.ACCENT)))
+	for chip in d.get("chips", []):
+		var tag := OSTheme.label(" %s " % chip[0], 10, Color.BLACK)
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = chip[1]
+		bg.set_corner_radius_all(3)
+		tag.add_theme_stylebox_override("normal", bg)
+		head.add_child(tag)
+	for line in d.get("lines", []):
+		var l := OSTheme.label(str(line), 12, OSTheme.TEXT)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 240
+		col.add_child(l)
+	if not (d.get("bars", []) as Array).is_empty():
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 6)
+		col.add_child(grid)
+		for b in d.bars:
+			grid.add_child(OSTheme.label(str(b[0]), 11, OSTheme.TEXT_DIM))
+			var bar := ProgressBar.new()
+			bar.show_percentage = false
+			bar.custom_minimum_size = Vector2(130, 8)
+			bar.max_value = 1.0
+			bar.value = clampf(float(b[1]), 0.0, 1.0)
+			var fill := StyleBoxFlat.new()
+			fill.bg_color = b[2]
+			bar.add_theme_stylebox_override("fill", fill)
+			var back := StyleBoxFlat.new()
+			back.bg_color = Color(1, 1, 1, 0.08)
+			bar.add_theme_stylebox_override("background", back)
+			bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			grid.add_child(bar)
+			grid.add_child(OSTheme.mono_label("%3d%%" % roundi(float(b[1]) * 100.0), 11, OSTheme.TEXT_DIM))
 
 
 func _gui_input(event: InputEvent) -> void:

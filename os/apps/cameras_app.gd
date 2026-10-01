@@ -44,6 +44,8 @@ var single_button: Button
 var grid_button: Button
 var track_button: Button
 var reset_button: Button
+var pop_button: Button
+var view_sep: VSeparator
 var night_button: CheckBox
 var mute_button: Button
 var hint: Label
@@ -78,7 +80,8 @@ func build() -> void:
 	var views := ButtonGroup.new()
 	single_button = _toggle(row, "Single", views, func(): set_grid(false))
 	grid_button = _toggle(row, "Grid", views, func(): set_grid(true))
-	row.add_child(VSeparator.new())
+	view_sep = VSeparator.new()
+	row.add_child(view_sep)
 	var cams := ButtonGroup.new()
 	if world:
 		for i in world.cameras.size():
@@ -98,6 +101,12 @@ func build() -> void:
 		if c:
 			c.set_auto_track(on))
 	row.add_child(track_button)
+	pop_button = Button.new()
+	pop_button.text = "Pop out"
+	pop_button.focus_mode = Control.FOCUS_NONE
+	pop_button.tooltip_text = "This camera in a window of its own (P)"
+	pop_button.pressed.connect(pop_out)
+	row.add_child(pop_button)
 	reset_button = Button.new()
 	reset_button.text = "Reset view"
 	reset_button.focus_mode = Control.FOCUS_NONE
@@ -247,6 +256,7 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 	f.set_filter(filter_on)
 	f.set_night_vision(night_on)
 	f.describe = func(id: String) -> String: return ObjectMenu.describe(sim(), id)
+	f.info = func(id: String) -> Dictionary: return ObjectMenu.info(sim(), id)
 	if interactive:
 		f.object_clicked.connect(func(_feed: CCTVFeed, id: String, _at: Vector2):
 			if not id.is_empty():
@@ -273,9 +283,18 @@ func refresh() -> void:
 	_show_mute()
 
 
+## Opens the current camera in a window of its own.
+func pop_out() -> void:
+	if desktop and not grid_mode:
+		desktop.open_app("cam_pop_%d" % cam)
+
+
 func key_input(event: InputEventKey) -> bool:
 	if event.keycode == KEY_ESCAPE and talk_runner != null:
 		end_talk()
+		return true
+	if event.keycode == KEY_P and not grid_mode:
+		pop_out()
 		return true
 	var c := _camera()
 	match event.keycode:
