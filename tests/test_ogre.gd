@@ -237,6 +237,26 @@ func _test_roles() -> void:
 	sim.advance(20.0)
 	var pod := board.get_job(int(plant.device("pod_1").job))
 	_check(pod.get("units", []) == ["tinker"], "pods are Tinker's work")
+	# Asking for something to do: only work that's its own, and in reach.
+	var reqs: UnitRequests = sim.get_system("requests")
+	var ogre: RobotAgent = sim.get_system("robot_ogre")
+	for j in board.open_jobs():
+		board.cancel(sim, int(j.id), "test")
+	for id in plant.device_ids():
+		if plant.devices[id].kind == "filter":
+			plant.devices[id].value = 0.5   # filters want sweeping...
+	plant.devices["compactor"].value = 0.6   # ...and the compactor's filling
+	plant.devices["compactor"].job = -1
+	ogre.activity = {"kind": "idle"}
+	ogre.stability = 0.65
+	(sim.get_system("campaign") as Campaign).state = "on_duty"   # (units only ask on duty)
+	reqs.requests.clear()
+	reqs._last.clear()
+	reqs._acc = 999.0
+	reqs.sim_tick(sim, 1.0)
+	var mine := reqs.requests.filter(func(q): return q.robot == "ogre" and q.kind == "bored")
+	_check(mine.size() == 1 and str(mine[0].text).contains("compactor") and not str(mine[0].text).contains("filter"),
+		"idle Ogre offers to empty the compactor, never to sweep filters (%s)" % (mine[0].text if mine.size() == 1 else "nothing"))
 
 
 func _test_speech() -> void:

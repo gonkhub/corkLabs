@@ -218,16 +218,27 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 					["Finish it", "Go and charge"], 1, {"job": j.id})
 		# Standing about with nothing asked of it (stable units wait to be told).
 		if bot.activity.kind in ["idle", "wander"] and bot.stability < 0.75 and not bot.own_will() and board.queued_jobs().is_empty() and plant:
+			# Only routine work that's its job, and that it can get to.
 			var worst := ""
-			var worst_v := 2.0
+			var worst_v := 0.95
 			for id in plant.device_ids():
 				var dv := plant.device(id)
-				if dv.kind == "filter" and int(dv.job) < 0 and float(dv.value) < worst_v and bot.traits.skill("general") > 0.3:
-					worst_v = float(dv.value)
-					worst = id
+				var k: Dictionary = FacilityPlant.KINDS[dv.kind]
+				var units: Array = k.get("units", [])
+				if not k.has("drift") or int(dv.job) >= 0 or float(dv.value) >= worst_v:
+					continue
+				if (not units.is_empty() and not bot.robot_id in units) or bot.route_length(sim, str(dv.station)) < 0.0:
+					continue
+				worst_v = float(dv.value)
+				worst = id
 			if not worst.is_empty():
-				ask(sim, bot.robot_id, "bored", "Nobody's asked me for anything. Standing still is bad for me. Can I sweep %s?" % plant.device(worst).name,
+				var title := FacilityPlant._job_title(plant.device(worst))
+				ask(sim, bot.robot_id, "bored", "Nobody's asked me for anything. Standing still is bad for me. Can I go and %s?" % _lower_first(title),
 					["Yes, go", "No, stand by"], 1, {"device": worst})
+
+
+static func _lower_first(t: String) -> String:
+	return t.left(1).to_lower() + t.substr(1)
 
 
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:

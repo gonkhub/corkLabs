@@ -21,7 +21,9 @@
 #                 (or arrow keys, + / -, Home). Auto-track follows a robot.
 #   Grid view     every camera at once; click one to open it.
 #   Night vision  the facility is dark (it was built for robots); N switches
-#                 every feed to infrared.
+#                 every feed to infrared, once the cameras have the infrared
+#                 firmware (the "ir-vision" package from the Cork package
+#                 server: corkpkg in the Terminal).
 #   Keys          1-9 camera, G grid/single, N night vision, F CCTV filter, M mute.
 #   Robots' speech floats over them in any feed that can see them.
 #   Sound         you hear the facility through one camera at a time: the
@@ -96,6 +98,14 @@ func build() -> void:
 		if c:
 			c.set_auto_track(on))
 	row.add_child(track_button)
+	var this_cam := Button.new()
+	this_cam.text = "This camera"
+	this_cam.focus_mode = Control.FOCUS_NONE
+	this_cam.tooltip_text = "This camera's own menu: inspect it, have it repaired (or click the caption on the picture)"
+	this_cam.pressed.connect(func():
+		if not grid_mode:
+			open_menu("cam_%d" % (cam + 1)))
+	row.add_child(this_cam)
 	reset_button = Button.new()
 	reset_button.text = "Reset view"
 	reset_button.focus_mode = Control.FOCUS_NONE
@@ -157,7 +167,13 @@ func set_grid(on: bool) -> void:
 	_rebuild()
 
 
+## Can the cameras see in the dark yet (the ir-vision package)?
+static func has_ir() -> bool:
+	return Supervisor.has_software("ir-vision")
+
+
 func set_night_vision(on: bool) -> void:
+	on = on and has_ir()
 	night_on = on
 	night_button.set_pressed_no_signal(on)
 	for f in feeds:
@@ -249,6 +265,12 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 
 func refresh() -> void:
 	_check_requests()
+	var ir := has_ir()
+	night_button.disabled = not ir
+	night_button.tooltip_text = "See by the cameras' own infrared light (N)" if ir else \
+		"The cameras have no infrared firmware. Request the ir-vision package (Terminal: connect, then corkpkg)."
+	if night_on and not ir:
+		set_night_vision(false)
 	var c := _camera()
 	var single := not grid_mode and c != null
 	var w := _world()

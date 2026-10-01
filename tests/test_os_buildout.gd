@@ -104,6 +104,10 @@ func _test_cameras() -> void:
 	var room_lights: Array = desk.world.get_children().filter(func(n): return n is Light3D)
 	_check(room_lights.is_empty(), "the facility has no room lights (%d)" % room_lights.size())
 	_check(app.feeds.all(func(f): return not f.night_vision and f.eye.environment == null), "feeds start without night vision")
+	app.set_night_vision(true)
+	_check(not app.night_on and app.feeds.all(func(f): return not f.night_vision), "without the ir-vision package, there's no night vision")
+	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("ir-vision")
+	app.refresh()
 	_key(KEY_N)
 	await process_frame
 	var ir: Environment = app.feeds[0].eye.environment

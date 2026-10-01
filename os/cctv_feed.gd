@@ -11,8 +11,10 @@
 # They also let you point at things. Hovering a robot or a device outlines
 # it (FacilityWorld.pick / highlight) and shows what it is; a left CLICK
 # (no drag) emits object_clicked, and the Cameras app opens that thing's
-# menu at the cursor (ObjectMenu). A dead feed (NO SIGNAL) clicks as its own
-# camera, so you can still send someone to fix it.
+# menu at the cursor (ObjectMenu). The caption (top left: "CAM 05 ...") is
+# the camera itself: click it for this camera's menu (inspect it, have it
+# serviced); a camera can't see its own housing, and a room may have only
+# the one. A dead feed (NO SIGNAL) clicks as its own camera everywhere.
 #
 # Robots' speech (SpeechDirector) floats over them as coloured text in any
 # feed whose camera is in the same room and can see them.
@@ -290,8 +292,13 @@ func _speech_label(id: String) -> Label:
 # --- Pointing at things ----------------------------------------------------------------
 
 ## What's under a point of this feed ("" = nothing; a dead feed is its own camera).
+# Where the caption is (at least a decent target, whatever the font does).
+func _caption_rect() -> Rect2:
+	return Rect2(caption.position - Vector2(6, 4), Vector2(maxf(caption.size.x, 220.0) + 12.0, maxf(caption.size.y, 36.0) + 8.0))
+
+
 func pick_at(pos: Vector2) -> String:
-	if signal_lost():
+	if signal_lost() or _caption_rect().has_point(pos):
 		return "cam_%d" % (cam + 1)
 	if world == null or not Facility.running:
 		return ""

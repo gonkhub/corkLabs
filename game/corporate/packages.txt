@@ -3,6 +3,7 @@
 # clearance: the supervisor clearance level needed before corporate will approve it (1-3)
 # wired:     yes = the package already does something in the game; no = placeholder for now
 
+ir-vision | Infrared Camera Firmware | 2.4.0 | 12 | 1 | 15 | yes | Night vision for the security cameras: the feeds see by their own infrared light (Cameras: Night vision, N).
 remote-reboot | Remote Reboot | 1.2.0 | 14 | 1 | 10 | yes | Supervisor can reboot a unit remotely (its menu in Cameras). Offline a few minutes, stability restored.
 route-control | Route Control | 2.0.1 | 22 | 1 | 15 | yes | Supervisor can close and reopen rail passages from the terminal (block / unblock).
 firmware-stabilizer | Firmware Stabilizer | 0.9.4 | 48 | 2 | 30 | yes | Units' software drifts half as fast when idle.

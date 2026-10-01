@@ -58,6 +58,13 @@ func _initialize() -> void:
 	var send: Array = load("res://os/object_menu.gd").entries(sim, "robot:ogre").filter(func(e): return str(e.get("text", "")) == "Send to a job")
 	_check(send.size() == 1 and not send[0].sub.any(func(e): return e.get("disabled", false) and not e.get("label", false)),
 		"a unit's Send to a job lists only jobs it can take (Ogre: %s)" % str(send[0].sub.map(func(e): return e.text)) if send.size() == 1 else "")
+	# A camera's own menu: its caption on the feed (a room may have only the one camera).
+	cams.show_camera(4)
+	await process_frame
+	var f5 = cams.feeds[0]
+	_check(f5.pick_at(f5.caption.position + Vector2(10, 8)) == "cam_5", "clicking a feed's caption is the camera itself (CAM 5)")
+	_check(load("res://os/object_menu.gd").entries(sim, "cam_5").any(func(e): return str(e.get("text", "")).begins_with("Send a unit to inspect")),
+		"so even a room's only camera can be inspected")
 	var units: Array = order[0].sub
 	_check(units.size() == FacilitySetup.robots(sim).size() and str(units[0].text).contains("(best)"),
 		"you pick which unit goes: every unit listed, the best free one first (%s)" % str(units.map(func(u): return u.text)))
