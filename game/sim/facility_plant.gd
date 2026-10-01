@@ -84,12 +84,12 @@ const KINDS := {
 		"levels": [0.75, 0.5, 0.3], "units": ["tinker"]},
 	"filter": {"job": "Sweep filters", "skill": "general", "work": 400.0, "drift": 0.06,
 		"levels": [0.6, 0.35, 0.15], "start_priority": 0, "units": ["hauler"]},
-	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.05, "priority": 2, "part": "pipe_clamps", "units": ["hauler"]},
+	"pipe": {"job": "Clamp coolant leak", "skill": "heavy", "work": 900.0, "rate": 0.05, "priority": 2, "part": "pipe_clamps", "units": ["hauler"], "tool": {"hauler": "wrench"}},
 	"relay": {"job": "Replace relay fuse", "skill": "precise", "work": 360.0, "rate": 0.08, "priority": 2, "part": "fuse_pack", "units": ["tinker"]},
 	"bay": {"job": "Clear debris", "skill": "heavy", "work": 600.0, "rate": 0.12, "priority": 1, "units": ["hauler"]},
 	"gate": {"job": "Unjam freight gate", "skill": "general", "work": 300.0, "rate": 0.06, "priority": 2,
-		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler"]},
-	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler", "tinker"]},
+		"blocks": "freight_gate", "part": "actuator_kit", "units": ["hauler"], "tool": {"hauler": "wrench"}},
+	"door": {"job": "Free stuck door: %s", "skill": "general", "work": 480.0, "rate": 0.045, "priority": 2, "units": ["hauler", "tinker"], "tool": {"hauler": "wrench"}},
 	"camera": {"job": "Repair %s", "skill": "precise", "work": 420.0, "rate": 0.015, "priority": 1, "part": "camera_module", "units": ["tinker"]},
 	"uplink": {"job": "Restore the corkHQ uplink", "skill": "precise", "work": 1800.0, "rate": 0.008, "priority": 3, "units": ["tinker"]},
 	"freight": {"job": "Stack freight (%s)", "skill": "heavy", "work": 900.0, "rate": 0.12, "priority": 1, "units": ["ogre"]},
@@ -102,7 +102,7 @@ const KINDS := {
 	"feed": {"job": "Feed a coolant canister", "skill": "heavy", "work": 300.0, "part": "coolant_canister", "units": ["ogre", "hauler"]},
 }
 ## Who does the work that isn't a device's: job source prefix -> units.
-const SOURCE_UNITS := {"core:haul": ["hauler"], "core:install": ["tinker"], "crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
+const SOURCE_UNITS := {"fetch:": ["tinker"], "bring:": ["tinker"], "core:haul": ["hauler"], "core:install": ["tinker"], "crate:haul": ["hauler"], "crate:unpack": ["tinker"], "part:repair": ["tinker"],
 	"part:refit": ["hauler"], "unit:": ["tinker"], "service:": ["tinker"], "freight_stacks": ["ogre"]}
 ## Extra wear when Hauler feeds a coolant canister (they're Ogre's to lift).
 const FEED_WEAR_HAULER := 0.12
@@ -680,6 +680,15 @@ static func is_chore(sim: FacilitySim, job: Dictionary) -> bool:
 	var plant := sim.get_system("plant") as FacilityPlant
 	var src := str(job.get("source", ""))
 	return plant != null and plant.devices.has(src) and KINDS[plant.devices[src].kind].get("chore", false)
+
+
+## The tool this unit needs for this job ("" = none): KINDS "tool" by model.
+static func tool_for(sim: FacilitySim, job: Dictionary, robot_id: String) -> String:
+	var plant := sim.get_system("plant") as FacilityPlant
+	var src := str(job.get("source", ""))
+	if plant == null or not plant.devices.has(src):
+		return ""
+	return str(KINDS[plant.devices[src].kind].get("tool", {}).get(RobotTraits.model_of(robot_id), ""))
 
 
 ## Which units may do a job (empty = anyone).

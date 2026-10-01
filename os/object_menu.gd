@@ -38,6 +38,13 @@ static func describe(sim: FacilitySim, id: String) -> String:
 		elif bot.own_will():
 			text += "\n(unstable: choosing its own work)"
 		return text
+	if id.begins_with("prop:"):
+		var props := sim.get_system("props") as UnitProps
+		var it := props.item(id.trim_prefix("prop:")) if props else {}
+		if it.is_empty():
+			return ""
+		var held := str(it.held_by)
+		return "%s: %s" % [str(it.name).capitalize(), ("with " + held.capitalize()) if not held.is_empty() else ("at the " + str((sim.get_system("layout") as FacilityLayout).station(str(it.at)).get("name", it.at)).to_lower())]
 	if id == "bench":
 		var req := sim.get_system("requisitions") as Requisitions
 		var crated: Array = req.crated_units() if req else []
@@ -87,6 +94,8 @@ static func entries(sim: FacilitySim, id: String) -> Array[Dictionary]:
 		return _robot(sim, bot) if bot else []
 	if id == "bench":
 		return _bench(sim)
+	if id.begins_with("prop:"):
+		return [_label(describe(sim, id))]
 	return _device(sim, id)
 
 

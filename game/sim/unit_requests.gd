@@ -9,6 +9,8 @@
 #   recharge  power's low in the middle of something urgent: finish or charge?
 #   bored     standing about with nothing asked of it: can I do something?
 #   hot       a leak in a hot facility: clamp it live (fast, but it wears me)?
+#   tool      it can't get to its tool (Hauler's wrench, the gate jammed):
+#             send Tinker for it, or make do without (half speed)?
 #
 # Each request: {"id", "robot", "kind", "text", "options": [labels],
 # "default": option index used when it expires, "expires", "data"}.
@@ -95,6 +97,10 @@ func relevant(sim: FacilitySim, r: Dictionary) -> bool:
 		"hot":
 			var j := board.get_job(int(d.get("job", -1)))
 			return WorkBoard.active(j) and not j.get("requested", false) and j.status != "claimed" and not bot.offline()
+		"tool":
+			var props := sim.get_system("props") as UnitProps
+			return props != null and bot.activity.kind == "work" and int(bot.activity.get("job", -1)) == int(d.get("job", -1)) \
+				and not props.held_by(str(d.tool), bot.robot_id) and not props.being_fetched(sim, str(d.tool)) and not bot.activity.get("without", false)
 	return true
 
 
@@ -166,6 +172,14 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 					return "%s goes early." % bot.display_name()
 				bot.stability = maxf(bot.stability - 0.04, 0.0)
 				return "%s stands by. Unhappily." % bot.display_name()
+		"tool":
+			var props := sim.get_system("props") as UnitProps
+			if yes and props:
+				var why := props.send_for(sim, str(d.tool), str(r.robot))
+				return why if not why.is_empty() else "Tinker's going for it."
+			if bot and bot.activity.kind == "work":
+				bot.activity.without = true
+			return "%s makes do without it. Slowly." % (bot.display_name() if bot else "It")
 		"hot":
 			var board := sim.get_system("work") as WorkBoard
 			var j := board.get_job(int(d.get("job", -1))) if board else {}

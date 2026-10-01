@@ -43,7 +43,7 @@ const AUTOPILOT_EVERY := 60.0
 ## follow-on steps of something already under way (a crate's hand-off, a
 ## salvaged part), story and dev jobs. (A booked service is requested by
 ## RobotAgent.book_service once its servo bundle is on it.)
-const AUTO_SOURCES := ["crate:", "core:", "part:", "story", "dev", "routine", "inspect:"]
+const AUTO_SOURCES := ["crate:", "core:", "part:", "story", "dev", "routine", "inspect:", "fetch:", "bring:"]
 
 ## Everyday work a dev key (or a quiet facility) can post: [title, skill, work units].
 const ROUTINE := [

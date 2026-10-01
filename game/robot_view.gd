@@ -128,6 +128,7 @@ func _process(delta: float) -> void:
 	if a == null:
 		return
 	_update_led(a, delta)   # first: whatever else happens this frame, the LED shows its state
+	_show_dead(a.activity.kind == "broken")
 	if int(a.perform.n) != _perform_seen:
 		_perform_seen = int(a.perform.n)
 		if a.perform.has("cam"):
@@ -158,6 +159,32 @@ func _process(delta: float) -> void:
 	_swing(delta)
 	_motor_sound(moved.length() / maxf(delta, 0.0001), delta)
 	_perform(a, delta)
+
+
+# A broken unit (Ogre's dead core): no animation, the eye shut and dark.
+var _dead := false
+
+
+func _show_dead(dead: bool) -> void:
+	if actor == null:
+		return
+	var rig := actor.rig
+	if dead != _dead:
+		_dead = dead
+		if actor.tree:
+			actor.tree.active = not dead
+		var lens := rig.get_node_or_null("Core/Eye/Lens") if rig else null
+		if lens is Node3D:
+			(lens as Node3D).visible = not dead
+	if not dead or rig == null:
+		return
+	# Every frame: the rig would put its eye back otherwise.
+	var glow := rig.get_node_or_null("Core/Eye/Glow")
+	if glow is Light3D:
+		(glow as Light3D).light_energy = 0.0
+	var lid := rig.get_node_or_null("Core/Eye/LidTop")
+	if lid is Node3D:
+		(lid as Node3D).rotation.x = -deg_to_rad(85.0)
 
 
 # On the link, or greeting a camera: turn to face it. Returns true if it is.

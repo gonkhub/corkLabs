@@ -41,6 +41,9 @@ var _time := 0.0
 ## What can be pointed at in a camera feed: device id (or "bench") -> [Node3D]
 ## (every MeshInstance3D under them counts).
 var pick_nodes := {}
+## The units' things (UnitProps): id -> Node3D, placed every frame (on their
+## spot, or in a unit's claw, on Ogre's hook).
+var _things := {}
 
 
 ## Builds a prop for every plant device at its station, and a charging clamp at each dock.
@@ -68,6 +71,7 @@ func build(layout: FacilityLayout) -> void:
 	_build_compactor(layout.station_world_pos("compactor"))
 	_build_feed(_beside_rail("coolant_feed", 0.0, 3.5))
 	_build_waste(_beside_rail("waste_bins", 0.0, 2.5))
+	_build_things()
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
 	for id in plant.device_ids():
@@ -126,6 +130,7 @@ func _process(delta: float) -> void:
 	(_lamps["compactor"][1] as StandardMaterial3D).emission = BAD if full else _health_color(1.0 - fill * 0.9)
 	(_lamps["compactor"][1] as StandardMaterial3D).emission_energy_multiplier = (0.5 + 1.5 * flash) if full else 0.8
 	(_lamps["coolant_feed"][1] as StandardMaterial3D).emission = _health_color(plant.coolant)
+	_place_things()
 	var waste := float(plant.device("pod_waste").value)
 	(_lamps["pod_waste"][1] as StandardMaterial3D).emission = BAD if waste <= 0.25 else _health_color(waste * 1.2)
 	(_lamps["pod_waste"][1] as StandardMaterial3D).emission_energy_multiplier = (0.5 + 1.5 * flash) if waste <= 0.25 else 0.8
@@ -366,6 +371,69 @@ func _build_waste(at: Vector3) -> void:
 	for n in nodes:
 		_pick("pod_waste", n)
 	_add_label("pod_waste", at + Vector3(0, 2.0, 0))
+
+
+# The units' things: Hauler's wrench (and its rack), Tinker's radio, Ogre's crate.
+func _build_things() -> void:
+	var rack := _mesh(_box(Vector3(0.1, 1.2, 1.6)), _mat(Color(0.3, 0.3, 0.33), 0.6), self)
+	rack.position = _beside_rail("tool_rack", 0.0, 1.6) + Vector3(0, 1.3, 0)
+	var wrench := Node3D.new()
+	add_child(wrench)
+	var bar := _mesh(_box(Vector3(0.12, 0.9, 0.06)), _mat(Color(0.7, 0.7, 0.72), 0.9), wrench)
+	var jaw := _mesh(_box(Vector3(0.3, 0.12, 0.06)), _mat(Color(0.7, 0.7, 0.72), 0.9), wrench)
+	jaw.position = Vector3(0, 0.45, 0)
+	wrench.scale = Vector3.ONE * 1.6
+	_things["wrench"] = wrench
+	_pick("prop:wrench", bar)
+	_pick("prop:wrench", jaw)
+	var radio := Node3D.new()
+	add_child(radio)
+	var body := _mesh(_box(Vector3(0.36, 0.22, 0.16)), _mat(Color(0.35, 0.25, 0.18), 0.2), radio)
+	var dial := _mesh(_cyl(0.05, 0.03), _mat(WARN, 0.3, true), radio)
+	dial.rotation.x = PI / 2
+	dial.position = Vector3(0.1, 0.03, 0.09)
+	_things["radio"] = radio
+	_pick("prop:radio", body)
+	var crate := Node3D.new()
+	add_child(crate)
+	var box := _mesh(_box(Vector3(2.2, 1.8, 2.2)), _mat(Color(0.46, 0.38, 0.22), 0.1), crate)
+	box.position.y = 0.9
+	_things["crate"] = crate
+	_pick("prop:crate", box)
+
+
+func _place_things() -> void:
+	var props := Facility.sim.get_system("props") as UnitProps
+	var world := get_parent() as FacilityWorld
+	if props == null:
+		return
+	for id in _things:
+		var node: Node3D = _things[id]
+		var it := props.item(id)
+		var holder := str(it.get("held_by", ""))
+		if not holder.is_empty() and world and world.views.has(holder):
+			var view: RobotView = world.views[holder]
+			var grip: Node3D = view.actor if view.actor else view
+			if view.actor and view.actor.rig:
+				var hook := view.actor.rig.get_node_or_null("Core/CraneBase/Boom/Jib/Tip/Hook")
+				if hook is Node3D:
+					grip = hook
+				else:
+					var claw := view.actor.rig.find_child("ClawA", true, false) as Node3D
+					if claw:
+						grip = claw
+			node.global_position = grip.global_position + (Vector3(0, -1.9, 0) if id == "crate" else Vector3(0, -0.2, 0))
+			node.rotation.y = view.rotation.y
+			continue
+		var at := str(it.get("at", ""))
+		if at.is_empty() or _layout.station(at).is_empty():
+			continue
+		match id:
+			"wrench": node.position = _beside_rail(at, 0.0, 1.45) + Vector3(0, 1.3, 0) if at == "tool_rack" else _beside_rail(at, 0.6, 1.2) + Vector3(0, 0.05, 0)
+			"radio": node.position = _beside_rail(at, 0.25, 0.0) + Vector3(0, 1.05, 0.2)
+			"crate":
+				var p := _layout.station_world_pos(at)
+				node.position = Vector3(p.x, 0.0, p.z)
 
 
 # The coolant feed: a squat tank with a hopper the crane drops canisters into.

@@ -187,3 +187,28 @@ waste | ogre |  | ...the... bins... are... full...
 feed_heavy | hauler |  | Canisters are Ogre's job. My joints know it.
 feed_heavy | hauler |  | Heavy. Heavier than they look. I'll be feeling that.
 feed_heavy | hauler |  | Ogre lifts these with one arm. I lift them with everything.
+
+# --- Tools (UnitProps) ------------------------------------------------------------------
+got_tool | hauler |  | Wrench.
+got_tool | hauler |  | Got it. Now the work.
+tool_cut_off | hauler |  | My wrench is on the other side of that.
+tool_cut_off | hauler |  | Can't get to my wrench.
+
+# --- Habits (habits.txt): what they do with nothing to do --------------------------------
+habit_toss_wrench | hauler |  | Catch. Throw. Catch.
+habit_toss_wrench | hauler |  | Balanced. Heavy at the right end.
+habit_dock_door | hauler |  | Watching the door.
+habit_dock_door | hauler |  | Nothing comes through. Good.
+habit_pipes | hauler |  | Pipes are talking.
+habit_pipes | hauler |  | That one's going to go. Not today.
+habit_radio | tinker |  | Let's see what you pick up today.
+habit_radio | tinker |  | Static, static, static... ooh. No. Static.
+habit_radio | tinker |  | If I twist this a bit more...
+habit_pod3 | tinker |  | Hm hm hm. Hm hm. Hm.
+habit_pod3 | tinker |  | Hello, pod 3. Still humming?
+habit_visit_ogre | tinker |  | Ogre? It's me. Just visiting.
+habit_visit_ogre | tinker |  | It's very big in here. You're very big in here.
+habit_swing_crate | ogre |  | ...up.
+habit_swing_crate | ogre |  | ...around. ...and... down.
+habit_sweep_lamp | ogre |  | ...count. ...count. ...four.
+habit_sweep_lamp | ogre |  | ...the... stacks... are... still.

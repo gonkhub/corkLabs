@@ -111,6 +111,14 @@ const TRUST_SERVICED := 0.5
 const TRUST_PER_JOB := 0.02
 const TRUST_OVERRULED := -0.1
 const TRUST_LEFT_SEIZED := -0.5
+## Habits (habits.txt): after this long with nothing to do it goes and does
+## one; the same habit again only after HABIT_GAP; a little steadier for it.
+const HABIT_AFTER := 900.0
+const HABIT_GAP := 7200.0
+const HABIT_SCORE := 0.36
+const HABIT_STEADY := 0.00004
+## Doing a job without its tool (the owner chose to make do): this fast.
+const WITHOUT_TOOL := 0.5
 ## Longest a unit waits on an open link before it gets on with things.
 const LINK_MAX := 1800.0
 ## The overclock package: faster, at a price (wear, and software drift).
@@ -160,6 +168,10 @@ var _think_left := 0.0
 var _step_left := 0.0
 var _whim_seed := 0
 var _whim_until := -1.0
+## When it last had nothing to do (-1 = it's busy), and when it last did each habit.
+var _idle_since := -1.0
+var _habit_last := {}
+static var _habits: Array[Dictionary] = []
 
 ## The last evaluation, best first: [{"key", "label", "score", "why"}]
 var scores: Array[Dictionary] = []
@@ -243,7 +255,22 @@ func errand_estimate(sim: FacilitySim, job_id: int) -> Dictionary:
 	return {"phase": "work", "left": maxf(float(j.work) - float(j.progress), 0.0) / maxf(speed, 0.01)}
 
 
-## Out of action (crashed, rebooting, stalled, seized): it can't think or take orders.
+## The station nearest it (where a seized unit is rebooted, where a tool is brought).
+func nearest_station(sim: FacilitySim) -> String:
+	return _nearest_station(sim)
+
+
+## The habits of this unit's model (habits.txt).
+func habits() -> Array[Dictionary]:
+	if _habits.is_empty():
+		for row in DataTable.read("res://game/sim/habits.txt", PackedStringArray(["id", "robot", "station", "minutes", "prop", "clip", "after"])):
+			row.minutes = float(row.minutes)
+			_habits.append(row)
+	var model := RobotTraits.model_of(robot_id)
+	return _habits.filter(func(h): return str(h.robot) == model)
+
+
+## Out of action (crashed, rebooting, stalled, seized, broken): it can't think or take orders.
 func offline() -> bool:
 	return activity.kind in ["crashed", "rebooting", "stalled", "seized", "broken"]
 
@@ -435,6 +462,29 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 		idle_why += ", ORDERED to stand by"
 	out.append({"key": "idle", "label": "stand by", "score": idle, "why": idle_why})
 
+	# Nothing to do for a while: its habits (habits.txt); and putting its tool back.
+	var props := sim.get_system("props") as UnitProps
+	var idle_for := sim.time() - _idle_since if _idle_since >= 0.0 else 0.0
+	if energy > 0.0 and (idle_for >= HABIT_AFTER or current.begins_with("habit:")):
+		for h in habits():
+			var hid := str(h.id)
+			if sim.time() - float(_habit_last.get(hid, -INF)) < HABIT_GAP and current != "habit:" + hid:
+				continue
+			var p := str(h.prop)
+			if not p.is_empty() and props and not props.item(p).is_empty() and not str(props.item(p).held_by).is_empty() \
+					and str(props.item(p).held_by) != robot_id:
+				continue   # someone else has it
+			if _reach_station(layout, f, str(h.station)).is_empty():
+				continue
+			out.append({"key": "habit:" + hid, "label": "habit: " + hid.replace("_", " "), "score": HABIT_SCORE + (0.05 if current == "habit:" + hid else 0.0),
+				"why": "nothing to do for %d min" % roundi(idle_for / 60.0)})
+	if props and energy > 0.0:
+		var held := props.holding(robot_id)
+		if not held.is_empty() and str(props.item(held).owner) == RobotTraits.model_of(robot_id) and not _tool_wanted(sim, held) \
+				and not current.begins_with("habit:") and not _reach_station(layout, f, str(props.item(held).home)).is_empty():
+			out.append({"key": "put_back:" + held, "label": "put %s back" % props.item(held).name, "score": 0.4,
+				"why": "done with it"})
+
 	# Errant behaviour: grows as stability falls.
 	var drift := clampf(traits.stability_decay / 0.0004, 0.3, 2.0)
 	var wander := drift * 0.25 * pow(1.0 - stability, 1.5) * (0.3 + 0.7 * energy)
@@ -493,6 +543,8 @@ func activity_key() -> String:
 		"work": return "work:%d" % int(activity.job)
 		"sabotage": return "sabotage:" + str(activity.device)
 		"accident": return "accident:" + str(activity.device)
+		"habit": return "habit:" + str(activity.habit)
+		"put_back": return "put_back:" + str(activity.prop)
 		"idle": return "idle"
 	return str(activity.kind)
 
@@ -503,7 +555,19 @@ func _switch_to(sim: FacilitySim, option: Dictionary) -> void:
 		board.release(int(activity.job), sim_id)
 	route = []
 	_route_goal = ""
+	_idle_since = -1.0
 	var key: String = option.key
+	if key.begins_with("habit:"):
+		var hid := key.trim_prefix("habit:")
+		for h in habits():
+			if str(h.id) == hid:
+				activity = {"kind": "habit", "habit": hid, "station": str(h.station), "until": -1.0, "prop": str(h.prop)}
+		return
+	if key.begins_with("put_back:"):
+		var pid := key.trim_prefix("put_back:")
+		var props := sim.get_system("props") as UnitProps
+		activity = {"kind": "put_back", "prop": pid, "station": str(props.item(pid).home) if props else ""}
+		return
 	if key.begins_with("work:"):
 		var id := int(key.trim_prefix("work:"))
 		board.claim(id, sim_id)
@@ -852,7 +916,20 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				var t := _wander_target(sim)
 				activity.seg = t.seg
 				activity.off = t.off
+		"habit":
+			_do_habit(sim, dt)
+		"put_back":
+			var props := sim.get_system("props") as UnitProps
+			var st := layout.station(str(activity.station))
+			if props == null or st.is_empty():
+				activity = {"kind": "idle"}
+			elif _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
+				props.put(sim, str(activity.prop), str(activity.station))
+				activity = {"kind": "idle"}
+				_think_left = 0.0
 		"idle":
+			if _idle_since < 0.0:
+				_idle_since = sim.time()
 			stability = maxf(stability - _decay(sim) * dt, 0.0)
 			if order.get("kind", "") == "standby" and sim.time() - float(order.given) > ORDER_TIMEOUT:
 				order = {}
@@ -895,6 +972,8 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 					_think_left = 0.0
 		"work":
 			var st := layout.station(activity.station)
+			if not _has_tool(sim, dt):
+				return   # fetching it, or waiting for it
 			if _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
 				var board := _board(sim)
 				_use_power(sim, traits.drain_work * dt)
@@ -904,6 +983,8 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 				var j := board.get_job(int(activity.job))
 				wear = minf(wear + WEAR_WORK * traits.wear_rate * _wear_scale(sim) * dt, 1.0)
 				var amount: float = traits.skill(j.get("skill", "general")) * traits.work_speed * wear_factor() * speed_boost(sim) * dt
+				if activity.get("without", false):
+					amount *= WITHOUT_TOOL   # making do without its tool
 				if j.get("status", "") != "claimed" or j.get("claimed_by", "") != sim_id:
 					activity = {"kind": "idle"}   # stopped under it (waiting for a part, cancelled)
 					_think_left = 0.0
@@ -929,6 +1010,104 @@ func _perform(sim: FacilitySim, dt: float) -> void:
 					_say(sim, "charged", {})
 					activity = {"kind": "idle"}
 					_think_left = 0.0
+
+
+# --- Tools and habits --------------------------------------------------------------------
+
+# Does this job need a tool it hasn't got? Fetches it (true once it's got it,
+# or the job needs none). Cut off from it, it asks for it to be fetched and
+# waits at the job; someone bringing it, it waits for them.
+func _has_tool(sim: FacilitySim, dt: float) -> bool:
+	if activity.get("without", false):
+		return true
+	var board := _board(sim)
+	var j: Dictionary = board.get_job(int(activity.job)) if board else {}
+	var tool := FacilityPlant.tool_for(sim, j, robot_id)
+	var props := sim.get_system("props") as UnitProps
+	if tool.is_empty() or props == null or props.held_by(tool, robot_id):
+		return true
+	var it := props.item(tool)
+	var layout := _layout(sim)
+	var job_st := layout.station(str(activity.station))
+	if not str(it.held_by).is_empty() or props.being_fetched(sim, tool):
+		_travel(sim, "station:" + str(activity.station), job_st.segment, job_st.offset, dt)   # wait for it at the job
+		return false
+	var where := str(it.at)
+	if route_length(sim, where) < 0.0:
+		if not activity.get("asked", false):
+			activity.asked = true
+			var reqs := sim.get_system("requests") as UnitRequests
+			if reqs:
+				reqs.ask(sim, robot_id, "tool", "My %s is at the %s and I can't get there. Send Tinker for it? Or I'll make do without. Slowly." % [
+					it.name.trim_prefix(display_name() + "'s "), str(layout.station(where).get("name", where)).to_lower()],
+					["Send Tinker", "Make do without"], 1, {"tool": tool, "job": int(activity.job)})
+			_say(sim, "tool_cut_off", {"device": it.name})
+		_travel(sim, "station:" + str(activity.station), job_st.segment, job_st.offset, dt)
+		return false
+	var st := layout.station(where)
+	if _travel(sim, "station:" + where, st.segment, st.offset, dt):
+		props.take(sim, tool, robot_id)
+		_say(sim, "got_tool", {"device": it.name})
+		route = []
+		_route_goal = ""
+		return true
+	return false
+
+
+# Is a requested job waiting that needs this tool of its?
+func _tool_wanted(sim: FacilitySim, tool: String) -> bool:
+	var board := _board(sim)
+	if board == null:
+		return false
+	for j in board.open_jobs():
+		if (j.get("requested", false) or _ordered_job() == int(j.id)) and FacilityPlant.tool_for(sim, j, robot_id) == tool:
+			return true
+	return false
+
+
+func _do_habit(sim: FacilitySim, dt: float) -> void:
+	var layout := _layout(sim)
+	var props := sim.get_system("props") as UnitProps
+	var hid := str(activity.habit)
+	var h := {}
+	for x in habits():
+		if str(x.id) == hid:
+			h = x
+	if h.is_empty():
+		activity = {"kind": "idle"}
+		return
+	# Its thing first, if the habit uses one (and it can get to it).
+	var p := str(activity.get("prop", ""))
+	if not p.is_empty() and props and not props.held_by(p, robot_id):
+		var it := props.item(p)
+		var where := str(it.get("at", ""))
+		if it.is_empty() or not str(it.held_by).is_empty() or route_length(sim, where) < 0.0:
+			activity.prop = ""   # it can't: does it without
+		else:
+			var pst := layout.station(where)
+			if _travel(sim, "station:" + where, pst.segment, pst.offset, dt):
+				props.take(sim, p, robot_id)
+				route = []
+				_route_goal = ""
+			return
+	var st := layout.station(str(activity.station))
+	if not _travel(sim, "station:" + str(activity.station), st.segment, st.offset, dt):
+		return
+	if float(activity.until) < 0.0:
+		activity.until = sim.time() + float(h.minutes) * 60.0
+		_say(sim, "habit_" + hid, {})
+		if not str(h.clip).is_empty():
+			request_clip(str(h.clip))
+	stability = minf(stability + HABIT_STEADY * dt, 1.0)
+	if sim.time() >= float(activity.until):
+		_habit_last[hid] = sim.time()
+		if str(h.after) == "swap" and props and props.held_by(p, robot_id):
+			var spots: Array = UnitProps.CRATE_SPOTS
+			var other: String = spots[1] if str(props.item(p).home) == spots[0] or str(activity.station) == spots[0] else spots[0]
+			props.put(sim, p, other)   # set down on its other spot
+			props.item(p).home = other
+		activity = {"kind": "idle"}
+		_think_left = 0.0
 
 
 # Rides the network toward (to_seg, to_off). Plans (or re-plans) the route as
@@ -1174,7 +1353,8 @@ func sim_save() -> Dictionary:
 	return {"seg": seg, "off": off, "power": power, "stability": stability, "stability_state": stability_state, "wear": wear,
 		"activity": activity.duplicate(), "order": order.duplicate(), "moving": moving, "jobs_done": jobs_done,
 		"route": route.duplicate(true), "route_goal": _route_goal,
-		"think_left": _think_left, "step_left": _step_left, "whim_seed": str(_whim_seed), "whim_until": _whim_until}
+		"think_left": _think_left, "step_left": _step_left, "whim_seed": str(_whim_seed), "whim_until": _whim_until,
+		"idle_since": _idle_since, "habit_last": _habit_last.duplicate()}
 
 
 func sim_load(d: Dictionary) -> void:
@@ -1200,6 +1380,11 @@ func sim_load(d: Dictionary) -> void:
 	_step_left = float(d.get("step_left", 0.0))
 	_whim_seed = int(str(d.get("whim_seed", "0")))
 	_whim_until = float(d.get("whim_until", -1.0))
+	_idle_since = float(d.get("idle_since", -1.0))
+	_habit_last = {}
+	var hl: Dictionary = d.get("habit_last", {})
+	for k in hl:
+		_habit_last[k] = float(hl[k])
 
 
 ## One line saying what it's doing, for panels and camera labels.
@@ -1233,6 +1418,10 @@ func doing_text(sim: FacilitySim) -> String:
 			return "OFFLINE: %s" % str(activity.get("why", "broken"))
 		"link":
 			return "on the link with you"
+		"habit":
+			return "%s (nothing to do)" % str(activity.habit).replace("_", " ")
+		"put_back":
+			return "putting %s back" % str(activity.prop)
 		"accident":
 			return "heading to %s" % _layout(sim).station(activity.station).get("name", "?")
 	return "standing by (%s)" % _room_name(sim)

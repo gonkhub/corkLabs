@@ -1,0 +1,16 @@
+# What each unit does with itself when it's had nothing to do for a while
+# (RobotAgent: habits). Mostly for liveliness: it goes somewhere it likes and
+# does its thing for a few minutes (a little steadier for it), then waits a
+# couple of hours before that habit again. It says something as it starts
+# (barks.txt: habit_<id>) and performs its clip if it's been recorded.
+#   id | robot model | station | minutes | prop (fetched first if it can) | clip | after (ogre's crate: where it's set down)
+# Stations: see FacilitySetup.layout(). Props: see UnitProps.
+
+toss_wrench | hauler | bay_2 | 12 | wrench | idle_toss_wrench |
+dock_door | hauler | dock_door_ctl | 15 |  | idle_watch_door |
+pipes | hauler | bay_1 | 12 |  | idle_listen_pipes |
+radio | tinker | bench | 15 | radio | idle_fiddle_radio |
+pod3 | tinker | pods_b | 10 |  | idle_hum_pod3 |
+visit_ogre | tinker | loading | 12 |  | idle_look_up |
+swing_crate | ogre | crate_a | 15 | crate | idle_swing_crate | swap
+sweep_lamp | ogre | stacks | 12 |  | idle_sweep_lamp |

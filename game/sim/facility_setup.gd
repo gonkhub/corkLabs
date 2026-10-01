@@ -86,6 +86,8 @@ static func layout() -> FacilityLayout:
 	l.add_segment("hangar_rail", "g_door", "g_e", "Hangar loading rail")
 	l.add_pad("ogre_mount", "hangar", -15, 45, "Ogre's mount", 23.0)
 	l.add_pad("deep_stacks", "hangar", -2, 56, "Deep stacks")
+	l.add_pad("crate_pad_a", "hangar", -8, 52, "Ogre's crate spot")
+	l.add_pad("crate_pad_b", "hangar", -24, 54, "Ogre's other crate spot")
 	l.add_pad("compactor_pad", "hangar", 2, 41, "Waste compactor")
 
 	# Passages between rooms, with their caveats.
@@ -117,6 +119,9 @@ static func layout() -> FacilityLayout:
 	l.add_station("stacks", "deep_stacks", 0.5, "work", "Deep stacks")
 	l.add_station("coolant_feed", "hangar_rail", 4.0, "work", "Coolant feed")
 	l.add_station("ogre_service", "hangar_rail", 16.0, "work", "Under Ogre (service point)")
+	l.add_station("tool_rack", "ws_back", 7.0, "work", "Tool rack")
+	l.add_station("crate_a", "crate_pad_a", 0.5, "work", "Ogre's crate spot")
+	l.add_station("crate_b", "crate_pad_b", 0.5, "work", "Ogre's other crate spot")
 	l.add_station("compactor", "compactor_pad", 0.5, "work", "Waste compactor")
 	return l
 
@@ -149,7 +154,7 @@ static func systems() -> Array:
 	shifts.names.assign(["Day"])
 	var out: Array = [l, shifts, WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
 		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new(), Knowledge.new(), Oversight.new(), Campaign.new(),
-		Directives.new(), UnitRequests.new(), Forms.new()]
+		Directives.new(), UnitRequests.new(), Forms.new(), UnitProps.new()]
 	for id in START_STATIONS:
 		var st := l.station(START_STATIONS[id])
 		out.append(RobotAgent.new(id, null, st.segment, st.offset))
