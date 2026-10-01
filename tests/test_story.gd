@@ -20,6 +20,7 @@ func _initialize() -> void:
 	_test_campaign()
 	_test_oversight()
 	_test_crated_units()
+	_test_policy_and_directives()
 	await _test_checkpoint()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(failures)
@@ -35,6 +36,47 @@ func _new_sim(seed_value := 4242) -> FacilitySim:
 		if s.has_method("sim_start"):
 			s.sim_start(sim)
 	return sim
+
+
+# Only files that are actually off limits are flagged; operational messages
+# aren't reprimands; nothing is missed overnight.
+func _test_policy_and_directives() -> void:
+	var sim := _new_sim()
+	var camp := sim.get_system("campaign") as Campaign
+	var o := sim.get_system("oversight") as Oversight
+	var hq := sim.get_system("hq") as CorkHQ
+	sim.advance(camp.shift_start_time() - sim.time() + 1.0)
+	var mark := hq.posted
+	var readable := 0
+	for path in ["/sys/units/ogre.cfg", "/corp/policy/conduct.txt", "/corp/memos/facility_map.txt"]:
+		if Story.read_file(sim, path).ok:
+			readable += 1
+	_check(readable == 3 and o.trail.is_empty() and not hq.since(mark).any(func(m): return m.kind == "reprimand"),
+		"reading ogre.cfg, the conduct policy and the facility map breaks no rule")
+	o.violate(sim, "read /home/jkim/notes.txt", 3.0)
+	var pell := hq.since(mark).filter(func(m): return m.kind == "reprimand")
+	_check(pell.size() == 1 and str(pell[0].text).contains("/home/jkim/notes.txt"), "a former staff file does: Pell names it, as a reprimand")
+	var events := FileAccess.get_file_as_string("res://game/story/events.txt").split("\n")
+	var dock := Array(events).filter(func(l): return str(l).contains("dock door has stuck"))
+	_check(dock.size() == 1 and str(dock[0]).contains("| notice |"), "the stuck dock door is a notice, not a reprimand")
+	# A directive can't run past the end of the shift, and is settled when it ends.
+	var dirs := sim.get_system("directives") as Directives
+	var plant := sim.get_system("plant") as FacilityPlant
+	while sim.time() < camp.shift_end_time() - 1200.0:   # to 13:40, with the plant kept up (nobody's running it here)
+		for pid in plant.device_ids():
+			plant.devices[pid].value = 1.0
+		plant.coolant = 1.0
+		o.standing = 100.0
+		sim.advance(minf(1800.0, camp.shift_end_time() - 1200.0 - sim.time()))
+	dirs.active.clear()
+	var id := dirs.issue(sim, "report", "", 60.0, "File a report.")
+	_check(float(dirs.get_directive(id).due) <= camp.shift_end_time(), "a directive issued late is due by the end of the shift")
+	o.standing = 100.0   # (nobody's running the facility in this test: keep the job)
+	sim.advance(1260.0)   # past 14:00
+	_check(dirs.active.is_empty() and camp.state == "off_duty", "an outstanding directive is settled when the shift ends (%s, %s)" % [camp.state, o.fired_reason])
+	sim.advance(camp.night_until() - sim.time())
+	camp.night_over(sim)
+	_check(not Array(camp.overnight).any(func(l): return str(l).contains("DIRECTIVE")), "and nothing about directives happens overnight (%s)" % str(camp.overnight))
 
 
 func _test_fs() -> void:
@@ -63,7 +105,7 @@ func _test_reading() -> void:
 	_check(k.has("cmd:ls") and not k.has("cmd:order") and not k.has("cmd:talk"), "a new supervisor knows only the basics")
 	var r := Story.read_file(sim, "/home/supervisor/welcome.txt")
 	_check(r.ok and r.first and float(r.minutes) == 3.0 * VirtualFS.READ_SCALE, "reading onboarding takes its time (%s min)" % r.get("minutes", "?"))
-	_check(k.has("cmd:order") and k.has("cmd:duties") and k.has("read:/home/supervisor/welcome.txt"), "and teaches the commands it mentions")
+	_check(k.has("cmd:jobs") and k.has("cmd:duties") and k.has("read:/home/supervisor/welcome.txt"), "and teaches the commands it mentions")
 	r = Story.read_file(sim, "/home/supervisor/welcome.txt")
 	_check(r.ok and not r.first and float(r.minutes) == 0.0, "re-reading is free")
 	_check(o.suspicion == 0.0, "reading your own files isn't a violation")

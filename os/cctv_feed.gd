@@ -8,6 +8,12 @@
 #   double-click    back to the home view
 # All free: pointing a camera is only looking.
 #
+# They also let you point at things. Hovering a robot or a device outlines
+# it (FacilityWorld.pick / highlight) and shows what it is; a left CLICK
+# (no drag) emits object_clicked, and the Cameras app opens that thing's
+# menu at the cursor (ObjectMenu). A dead feed (NO SIGNAL) clicks as its own
+# camera, so you can still send someone to fix it.
+#
 # Robots' speech (SpeechDirector) floats over them as coloured text in any
 # feed whose camera is in the same room and can see them.
 #
@@ -30,6 +36,11 @@ extends Control
 signal clicked(feed: CCTVFeed)
 ## The mouse went onto / off this feed (the grid listens to the one you point at).
 signal hovered(feed: CCTVFeed, on: bool)
+## A left click on something in the picture (id from FacilityWorld.pick; "" = nothing).
+signal object_clicked(feed: CCTVFeed, id: String, at: Vector2)
+
+## A press that moves less than this (pixels) is a click, not a drag.
+const CLICK_SLOP := 5.0
 
 const FEED_SHADER := preload("res://os/cctv_feed.gdshader")
 ## Locked feed frame rate.
@@ -57,6 +68,13 @@ var night_vision := false
 var listening := false
 var _material: ShaderMaterial
 var _dragging := false
+var _press_at := Vector2.ZERO
+var _moved := false
+## What the mouse is over right now ("" = nothing), and its label.
+var hover_id := ""
+var hover_label: Label
+## Gives the hover label its text (set by the Cameras app: ObjectMenu.describe).
+var describe: Callable
 var no_signal: Label
 var _frame_clock := 0.0     # time since the last rendered frame
 var _feed_time := 0.0       # the feed's own clock, in whole frames
@@ -97,6 +115,8 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	screen.add_child(viewport)
 	eye = Camera3D.new()
 	eye.current = true
+	if world:
+		eye.cull_mask = world.feed_cull_mask(cam)
 	viewport.add_child(eye)
 
 	caption = OSTheme.mono_label("", 14, Color(0.85, 1.0, 0.9))
@@ -122,6 +142,13 @@ func setup(facility_world: FacilityWorld, world_viewport: SubViewport, cam_index
 	no_signal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	no_signal.visible = false
 	add_child(no_signal)
+	hover_label = OSTheme.label("", 13, Color(1.0, 0.85, 0.45))
+	hover_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
+	hover_label.add_theme_constant_override("outline_size", 6)
+	hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_label.visible = false
+	add_child(hover_label)
+	mouse_exited.connect(func(): _set_hover(""))
 
 
 ## Is this camera broken (a "camera" fault in the plant)?
@@ -248,6 +275,39 @@ func _speech_label(id: String) -> Label:
 	return _speech_labels[id]
 
 
+# --- Pointing at things ----------------------------------------------------------------
+
+## What's under a point of this feed ("" = nothing; a dead feed is its own camera).
+func pick_at(pos: Vector2) -> String:
+	if signal_lost():
+		return "cam_%d" % (cam + 1)
+	if world == null or not Facility.running:
+		return ""
+	var room: String = world.camera_rooms[cam] if cam < world.camera_rooms.size() else ""
+	return world.pick(eye, pos * _pixel_scale(), room)
+
+
+# Feed pixels per control pixel (the viewport can be a different size).
+func _pixel_scale() -> Vector2:
+	var vs := Vector2(viewport.size)
+	return Vector2(vs.x / maxf(size.x, 1.0), vs.y / maxf(size.y, 1.0)) if vs.x > 0.0 else Vector2.ONE
+
+
+func _set_hover(id: String, at := Vector2.ZERO) -> void:
+	if id != hover_id and world:
+		world.highlight(id)
+	hover_id = id
+	hover_label.visible = not id.is_empty()
+	if id.is_empty():
+		mouse_default_cursor_shape = Control.CURSOR_MOVE if interactive else Control.CURSOR_POINTING_HAND
+		return
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	hover_label.text = describe.call(id) if describe.is_valid() else id
+	hover_label.reset_size()
+	hover_label.position = Vector2(clampf(at.x + 16.0, 4.0, maxf(size.x - hover_label.size.x - 4.0, 4.0)),
+		clampf(at.y + 14.0, 4.0, maxf(size.y - hover_label.size.y - 4.0, 4.0)))
+
+
 func _gui_input(event: InputEvent) -> void:
 	var src := camera()
 	if src == null:
@@ -257,6 +317,13 @@ func _gui_input(event: InputEvent) -> void:
 			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 				clicked.emit(self)
 			return
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_press_at = event.position
+				_moved = false
+			elif not _moved:
+				var id := pick_at(event.position)
+				object_clicked.emit(self, id, event.position)
 		match event.button_index:
 			MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT:
 				_dragging = event.pressed
@@ -270,7 +337,13 @@ func _gui_input(event: InputEvent) -> void:
 					src.zoom_by(1.0 / 0.9)
 		accept_event()
 	elif event is InputEventMouseMotion and _dragging and interactive:
+		if not _moved and (event.position - _press_at).length() < CLICK_SLOP:
+			return   # not a drag yet: maybe a click
+		_moved = true
+		_set_hover("")
 		# Drag the picture: degrees per pixel follow the zoom, so it feels the same zoomed in.
 		var deg_per_px := src.fov / maxf(size.y, 1.0)
 		src.nudge(event.relative.x * deg_per_px, event.relative.y * deg_per_px)
 		accept_event()
+	elif event is InputEventMouseMotion and interactive:
+		_set_hover(pick_at(event.position), event.position)

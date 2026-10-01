@@ -92,19 +92,29 @@ and that's noticed).
   the freight gate and three **passage doors** (pod bay, dock, hangar:
   stuck = route blocked; a stuck dock door cuts the units off from their
   chargers), seven **cameras** (NO SIGNAL), the **uplink**.
+- **Nothing is fixed until you say so.** A fault posts a job, but a stable
+  unit only works on jobs you ordered (Cameras: click the thing → Order
+  maintenance; Dispatch sends the best free unit) or the one you sent it to.
+  A unit below "stable" picks its own work and starts ignoring you. Standing
+  by waiting for orders still frets its software (slowly). Off duty a
+  **night autopilot** asks for everything it can.
 - **Parts:** repairs use spare parts from stock (clamps, fuses, filter
-  cartridges, door actuators, camera modules). No part in stock = the job
-  **stops halfway** and waits. The starting stock covers the first morning.
-  Deliveries take hours (express: ~1/3 the time, +75% cost) and arrive as
-  crates the units bring in (Ogre → a rail unit → Tinker unpacks).
+  cartridges, gate actuators, camera modules), taken when you order the
+  repair. No part in stock: the menu offers to order it, express it, or
+  **patch it** without (it fails again within 40-120 minutes). The facility
+  starts with an order or two of everything and two coolant canisters
+  (pump one in from a pipe's menu). Deliveries take hours (express: ~1/3 the
+  time, +75% cost, straight into stock); standard ones arrive as crates the
+  units bring in (Ogre → a rail unit → Tinker unpacks), without being asked.
 - **Wear:** units wear with work. Worn units slow down; past 50% they can
   **seize up** and need another unit to reboot them by hand (Tinker's work),
   or they free themselves after two hours. A **service** at the dock uses a
   servo bundle and brings wear back down. Units wear far less overnight and
   never seize in standby.
-- **Requests:** the units ask for things: order a part, book a service, let
-  me go and reboot X, finish or recharge, clamp a live leak (faster, wears
-  the unit), can I sweep early. Unanswered ones expire, the unit decides,
+- **Requests:** the units ask for things: book a service, let me go and
+  reboot X, finish or recharge, clamp a live leak (faster, wears the unit),
+  nobody's asked me for anything, can I sweep. Answer in the unit's menu
+  (REQUESTS on the taskbar takes you there). Unanswered ones expire, the unit decides,
   and being ignored costs it stability.
 
 ## The cast

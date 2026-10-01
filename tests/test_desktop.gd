@@ -36,23 +36,32 @@ func _initialize() -> void:
 	_check(desk.world != null and desk.world.cameras.size() == FacilitySetup.cameras().size(), "the 3D facility runs hidden, with its cameras")
 	_check(str(desk.clock_button.text).contains(FacilitySim.format_time(facility.sim.time())), "the taskbar clock shows facility time (%s)" % desk.clock_button.text)
 
-	for id in ["cameras", "units", "work", "plant", "log", "terminal"]:
+	_check(not desk.APPS.any(func(a): return a[0] == "units" or a[0] == "work"), "no Units or Work Orders apps: that's all in Cameras now")
+	for id in ["cameras", "plant", "log", "terminal"]:
 		_check(desk.open_app(id) != null and desk.is_open(id), "the %s app opens in a window" % id)
-	var again: Object = desk.open_app("work")
-	_check(desk.window_layer.get_child_count() == 6 and again == desk._windows["work"].app, "opening an open app just brings it forward")
+	var again: Object = desk.open_app("plant")
+	_check(desk.window_layer.get_child_count() == 4 and again == desk._windows["plant"].app, "opening an open app just brings it forward")
 
-	# Assign a job from the Work Orders app.
-	var work = desk._windows["work"].app
+	# On duty, a stable unit leaves a broken thing alone until you order maintenance on it.
+	var cams = desk._windows["cameras"].app
 	var sim: FacilitySim = facility.sim
 	var board: WorkBoard = sim.get_system("work")
-	var job := board.post(sim, "Clear debris", "heavy", "bay_2", 300.0, 1, "test")
-	work.selected_job = job
+	var plant: FacilityPlant = sim.get_system("plant")
+	plant.devices["bay_2"].job = -1
+	sim.schedule_in(0.0, "plant_fault", {"device": "bay_2"})
+	desk.get_node("/root/Facility").spend(600.0, "test")
+	var job := board.get_job(int(plant.device("bay_2").job))
+	_check(not job.is_empty() and job.status == "open" and not job.get("requested", false), "debris in bay 2: posted, but nobody goes")
+	var menu: Array = load("res://os/object_menu.gd").entries(sim, "bay_2")
+	var order: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))
+	_check(order.size() == 1 and not order[0].disabled, "clicking it in Cameras offers Order maintenance")
 	var t0: float = sim.time()
-	work._assign("hauler")
-	_check(sim.time() - t0 >= 119.9, "an order from the Work app costs facility time")
-	_check(work.reply.text.contains("Order sent to Hauler"), "and says the order went (%s)" % work.reply.text)
-	_check(str(facility.sim.journal.tail(20).map(func(e): return e.text)).contains("Hauler answers"),
-		"the robot's answer goes to the journal (and is spoken on camera)")
+	cams._menu_entries = [order[0].merged({"for": "bay_2"})]
+	cams._on_menu(0)
+	_check(sim.time() - t0 >= 299.0 and job.get("requested", false), "ordering it costs facility time and requests the job")
+	_check(cams.feedback.text.contains("on its way") or cams.feedback.text.contains("Queued"), "and says who's going (%s)" % cams.feedback.text)
+	_check(job.status == "claimed" or board.queued_jobs().has(job), "a unit takes it (or it waits for one)")
+	_check(not load("res://os/object_menu.gd").describe(sim, "robot:hauler").is_empty() and load("res://os/object_menu.gd").describe(sim, "bay_2").contains("Bay 2"), "hovering shows what a thing is")
 
 	# Break something: toast + alarm light.
 	var toasts_before: int = desk.toast_box.get_child_count()
@@ -69,8 +78,8 @@ func _initialize() -> void:
 	var text: String = load("res://game/supervisor.gd").inspect_device("filter_1")   # by path: classes that use the Facility autoload can't be named in --script tests
 	await process_frame
 	_check(not text.is_empty() and is_equal_approx(sim.time() - t1, 1800.0), "an inspection passes its facility time (30 min)")
-	var units = desk._windows["units"].app
-	_check(not str(units.cards["tinker"].think.text).is_empty(), "the Units app shows what each robot is weighing up")
+	cams.refresh()
+	_check(cams.roster.get_child_count() >= FacilitySetup.robots(sim).size(), "Cameras has a chip per unit")
 	var log_app = desk._windows["log"].app
 	_check(log_app.view.get_parsed_text().contains("FUSE BLOWN"), "the Facility Log shows the journal")
 

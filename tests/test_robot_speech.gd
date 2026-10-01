@@ -77,7 +77,13 @@ func _test_chatter() -> void:
 	var before := chatter.said
 	sim.advance(3 * 3600.0)
 	var per_hour := (chatter.said - before) / 3.0
-	_check(per_hour > 3 and per_hour < 60, "robots talk now and then (%.0f lines per facility hour)" % per_hour)
+	var hist := {}
+	for e in sim.journal.entries:
+		if e.cat == "speech":
+			hist[str(e.text).left(50)] = int(hist.get(str(e.text).left(50), 0)) + 1
+	var top := hist.keys()
+	top.sort_custom(func(x, y): return hist[x] > hist[y])
+	_check(per_hour > 3 and per_hour < 60, "robots talk now and then (%.0f lines per facility hour) %s" % [per_hour, str(top.slice(0, 6).map(func(k): return "%s x%d" % [k, hist[k]]))])
 	_check(sim.journal.entries.any(func(e): return e.cat == "speech"), "what they say is in the journal")
 
 

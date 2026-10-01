@@ -1,7 +1,15 @@
 # The facility's job board: every piece of work waiting to be done ("clear
-# debris at Bay 2", "recalibrate pod 3"). Things that break post jobs here;
-# robots pick them up by their own choice (utility scores), or because the
-# supervisor ordered them to.
+# debris at Bay 2", "recalibrate pod 3"). Things that break post jobs here,
+# but a posted job is only a record that something needs doing. Nobody works
+# on it until it's REQUESTED: the supervisor orders maintenance on the thing
+# (a camera's object menu: Dispatch picks the best free unit), or, off duty,
+# the night autopilot requests everything it can. Stable units only work on
+# requested jobs (or the one they were ordered onto); unstable ones choose
+# for themselves, requested or not (RobotAgent).
+#
+# Parts are taken from stock when a job is requested, not halfway through: a
+# repair that needs a part can't be requested without one (order it, or
+# patch it: a makeshift repair with no part, which won't hold long).
 #
 # A job is plain data, so it saves and loads:
 #   id         int, never reused
@@ -11,11 +19,11 @@
 #   work       work units needed (a robot with skill 1 and work_speed 1 does 1 per second)
 #   progress   work units done so far (kept if a robot walks away)
 #   priority   0 low, 1 normal, 2 high, 3 critical
-#   status     "open", "claimed", "parts" (stopped halfway: waiting for a
-#              spare part from stock), "done", "cancelled"
-#   part       a Requisitions stock item the repair uses up, or absent.
-#              Halfway through, the robot takes one from stock; if there's
-#              none, the job stops ("parts") until a delivery is unpacked.
+#   status     "open", "claimed", "done", "cancelled"
+#   requested  true once someone asked for it to be done (see above)
+#   part       a Requisitions stock item the repair uses up, or absent;
+#              taken when it's requested ("part_used"). "makeshift": patched
+#              without it.
 #   claimed_by robot sim_id working on it, or ""
 #   source     who posted it (a device id, "dev", "supervisor"...)
 #   posted     facility time it was posted
@@ -28,8 +36,13 @@ extends RefCounted
 const PRIORITY_NAMES := ["low", "normal", "high", "critical"]
 ## Finished and cancelled jobs kept for the record.
 const HISTORY := 60
-## How far into a job the robot needs its part.
-const PART_AT := 0.5
+## Off duty, the night autopilot requests what it can this often.
+const AUTOPILOT_EVERY := 60.0
+## Jobs from these sources are requested as soon as they're posted: the
+## follow-on steps of something already under way (a crate's hand-off, a
+## salvaged part), story and dev jobs. (A booked service is requested by
+## RobotAgent.book_service once its servo bundle is on it.)
+const AUTO_SOURCES := ["crate:", "part:", "story", "dev", "routine"]
 
 ## Everyday work a dev key (or a quiet facility) can post: [title, skill, work units].
 const ROUTINE := [
@@ -46,6 +59,7 @@ var sim_id := "work"
 var starter_jobs := 0
 var jobs: Array[Dictionary] = []   # in id order
 var next_id := 1
+var _autopilot_acc := 0.0
 
 
 func post(sim: FacilitySim, title: String, skill: String, station: String, work: float,
@@ -64,7 +78,80 @@ func post(sim: FacilitySim, title: String, skill: String, station: String, work:
 	var st: Dictionary = _layout(sim).station(station)
 	sim.note("work", "Job #%d posted: %s at %s (%s, %s priority)" % [job.id, title,
 		st.get("name", station), skill, PRIORITY_NAMES[job.priority]])
+	if AUTO_SOURCES.any(func(p): return source.begins_with(p)) or (autopilot(sim) and missing_part(sim, job).is_empty()):
+		request(sim, job.id)
 	return job.id
+
+
+## Asks for a job to be done: from now on units will take it (Dispatch also
+## sends one). Takes its part from stock; `makeshift` does without (a patch).
+## Returns "" or why not (no part in stock, not open).
+func request(sim: FacilitySim, id: int, makeshift := false) -> String:
+	var j := get_job(id)
+	if not active(j):
+		return "There's no open job #%d." % id
+	if j.has("part") and not j.get("part_used", false):
+		if makeshift:
+			j.part_used = true
+			j.makeshift = true
+			sim.note("work", "Job #%d: patching it without a %s (makeshift)" % [j.id, j.part])
+		else:
+			var req := sim.get_system("requisitions") as Requisitions
+			if req:
+				var part := str(j.part)
+				if int(req.inventory.get(part, 0)) <= 0:
+					return "It needs %s, and there are none in stock." % part_name(sim, part)
+				req.inventory[part] = int(req.inventory[part]) - 1
+			j.part_used = true
+	if not j.get("requested", false):
+		j.requested = true
+		j.requested_at = sim.time()
+		sim.note("work", "Job #%d requested: %s" % [j.id, j.title])
+		sim.schedule(sim.time(), "job_requested", {"job": j.id})   # units reconsider
+	return ""
+
+
+## Takes a job off the queue (it stays posted; its part goes back in stock).
+func unrequest(sim: FacilitySim, id: int) -> void:
+	var j := get_job(id)
+	if not active(j) or not j.get("requested", false):
+		return
+	j.requested = false
+	if j.get("part_used", false) and not j.get("makeshift", false) and float(j.progress) <= 0.0:
+		var req := sim.get_system("requisitions") as Requisitions
+		if req:
+			req.inventory[str(j.part)] = int(req.inventory.get(str(j.part), 0)) + 1
+		j.part_used = false
+	if j.status == "claimed":
+		var by := str(j.claimed_by)
+		j.status = "open"
+		j.claimed_by = ""
+		sim.schedule(sim.time(), "job_released", {"job": id, "by": by})
+	sim.note("work", "Job #%d taken off the queue: %s" % [j.id, j.title])
+
+
+## The part a job still needs and can't get from stock ("" = none needed, or in stock).
+func missing_part(sim: FacilitySim, j: Dictionary) -> String:
+	if j.is_empty() or not j.has("part") or j.get("part_used", false):
+		return ""
+	var req := sim.get_system("requisitions") as Requisitions
+	if req == null or int(req.inventory.get(str(j.part), 0)) > 0:
+		return ""
+	return str(j.part)
+
+
+static func part_name(sim: FacilitySim, part: String) -> String:
+	var req := sim.get_system("requisitions") as Requisitions
+	return str(req.item(part).get("name", part)) if req else part
+
+
+## Requested jobs nobody's on yet (the queue), in id order.
+func queued_jobs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for j in jobs:
+		if j.status == "open" and j.get("requested", false):
+			out.append(j)
+	return out
 
 
 func get_job(id: int) -> Dictionary:
@@ -74,21 +161,21 @@ func get_job(id: int) -> Dictionary:
 	return {}
 
 
-## Still to be done: open, claimed, or waiting for a part.
+## Still to be done: open or claimed.
 static func active(j: Dictionary) -> bool:
-	return not j.is_empty() and j.get("status", "") in ["open", "claimed", "parts"]
+	return not j.is_empty() and j.get("status", "") in ["open", "claimed"]
 
 
-## Jobs waiting for a spare part, in id order.
-func waiting_jobs() -> Array[Dictionary]:
+## Jobs that can't be requested for want of a part (none in stock), in id order.
+func waiting_jobs(sim: FacilitySim) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for j in jobs:
-		if j.status == "parts":
+		if j.status == "open" and not missing_part(sim, j).is_empty():
 			out.append(j)
 	return out
 
 
-## Jobs a robot can work on now (not finished, cancelled or waiting for a part), in id order.
+## Jobs not finished or cancelled, in id order.
 func open_jobs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for j in jobs:
@@ -129,9 +216,6 @@ func add_progress(sim: FacilitySim, id: int, robot: String, amount: float) -> bo
 	if j.is_empty() or j.status != "claimed" or j.claimed_by != robot:
 		return false
 	j.progress = minf(j.progress + amount, j.work)
-	if j.has("part") and not j.get("part_used", false) and j.progress >= j.work * PART_AT:
-		if not _take_part(sim, j):
-			return false
 	if j.progress < j.work:
 		return false
 	j.status = "done"
@@ -143,47 +227,21 @@ func add_progress(sim: FacilitySim, id: int, robot: String, amount: float) -> bo
 	return true
 
 
-# Takes the job's part from stock. No part: the job stops and waits.
-func _take_part(sim: FacilitySim, j: Dictionary) -> bool:
-	var req := sim.get_system("requisitions") as Requisitions
-	if req == null:
-		j.part_used = true
-		return true
-	var part := str(j.part)
-	if int(req.inventory.get(part, 0)) > 0:
-		req.inventory[part] = int(req.inventory[part]) - 1
-		j.part_used = true
-		return true
-	var robot := str(j.claimed_by)
-	j.status = "parts"
-	j.claimed_by = ""
-	j.progress = j.work * PART_AT
-	sim.note("alarm", "Job #%d stopped: %s needs %s, and stock is empty" % [j.id, j.title, req.item(part).get("name", part)])
-	sim.schedule(sim.time(), "job_parts", {"job": j.id, "part": part, "robot": robot, "source": j.source})
-	return false
-
-
-## Finishes a waiting job without its part: a makeshift fix (the device it
-## repairs won't hold long, see FacilityPlant). Returns false if it isn't waiting.
+## Does a job without its part: a makeshift fix (the device it repairs won't
+## hold long, see FacilityPlant). Requests it. Returns false if there's no
+## open job that still needs a part.
 func patch(sim: FacilitySim, id: int) -> bool:
 	var j := get_job(id)
-	if j.is_empty() or j.status != "parts":
+	if not active(j) or not j.has("part") or j.get("part_used", false):
 		return false
-	j.part_used = true
-	j.makeshift = true
-	j.status = "open"
-	sim.note("work", "Job #%d: patching it without a %s (makeshift)" % [j.id, j.part])
-	sim.schedule(sim.time(), "alarm", {"patched": j.id})
-	return true
+	return request(sim, id, true).is_empty()
 
 
-## A delivery's been unpacked: jobs waiting for it go back on the board.
+## A delivery's been unpacked: say if jobs were waiting for it.
 func parts_arrived(sim: FacilitySim, part: String) -> void:
-	for j in jobs:
-		if j.status == "parts" and str(j.get("part", "")) == part:
-			j.status = "open"
-			sim.note("work", "Job #%d can go on: %s in stock" % [j.id, part])
-			sim.schedule(sim.time(), "alarm", {"parts": part})
+	var n := jobs.filter(func(j): return active(j) and str(j.get("part", "")) == part and not j.get("part_used", false)).size()
+	if n > 0:
+		sim.note("work", "%s in stock: %d job%s can be requested now" % [part_name(sim, part), n, "" if n == 1 else "s"])
 
 
 func cancel(sim: FacilitySim, id: int, reason: String) -> void:
@@ -259,16 +317,34 @@ func sim_start(sim: FacilitySim) -> void:
 		post_random(sim, "routine")
 
 
-func sim_tick(_sim: FacilitySim, _dt: float) -> void:
-	pass
+# Off duty (or with no campaign at all), the night autopilot requests every
+# open job it can (anything that needs a part it hasn't got waits for night
+# procurement, see Requisitions).
+func sim_tick(sim: FacilitySim, dt: float) -> void:
+	_autopilot_acc += dt
+	if _autopilot_acc < AUTOPILOT_EVERY - 0.001:
+		return
+	_autopilot_acc = 0.0
+	if not autopilot(sim):
+		return
+	for j in jobs:
+		if j.status == "open" and not j.get("requested", false) and missing_part(sim, j).is_empty():
+			request(sim, int(j.id))
+
+
+## Is the night autopilot running (nobody on duty to give orders)?
+static func autopilot(sim: FacilitySim) -> bool:
+	var camp := sim.get_system("campaign") as Campaign
+	return camp == null or not camp.on_duty()
 
 
 func sim_save() -> Dictionary:
-	return {"next_id": next_id, "jobs": jobs.duplicate(true)}
+	return {"next_id": next_id, "jobs": jobs.duplicate(true), "autopilot_acc": _autopilot_acc}
 
 
 func sim_load(d: Dictionary) -> void:
 	next_id = int(d.get("next_id", 1))
+	_autopilot_acc = float(d.get("autopilot_acc", 0.0))
 	jobs.clear()
 	for j in d.get("jobs", []):
 		var job: Dictionary = j.duplicate(true)
@@ -289,5 +365,5 @@ func sim_describe(_sim: FacilitySim) -> PackedStringArray:
 	for j in open:
 		lines.append("  #%d %-26s %-8s %-7s %3d%%  %s" % [j.id, j.title, j.skill,
 			PRIORITY_NAMES[j.priority], int(fraction_done(j) * 100.0),
-			("-> " + str(j.claimed_by).trim_prefix("robot_")) if j.status == "claimed" else "waiting"])
+			("-> " + str(j.claimed_by).trim_prefix("robot_")) if j.status == "claimed" else ("queued" if j.get("requested", false) else "not requested")])
 	return lines

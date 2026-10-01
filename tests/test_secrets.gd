@@ -96,7 +96,7 @@ func _test_terminal() -> void:
 	var t0 := sim().time()
 	var out: String = term.run("cat welcome.txt")
 	_check(out.contains("WELCOME TO corkLabs") and sim().time() - t0 >= 539.0, "cat reads it, and reading takes a while (%d min)" % roundi((sim().time() - t0) / 60.0))
-	_check(out.contains("new commands noted") and term.run("help").contains("order"), "what it mentions is learned (help lists 'order' now)")
+	_check(out.contains("new commands noted") and term.run("help").contains("jobs"), "what it mentions is learned (help lists 'jobs' now)")
 	t0 = sim().time()
 	term.run("cat welcome.txt")
 	_check(is_equal_approx(sim().time(), t0), "reading it again is free")
@@ -145,21 +145,25 @@ func _test_terminal() -> void:
 	tinker.stability = 0.5
 	t0 = sim().time()
 	out = term.run("talk tinker")
-	_check(out.contains("TINKER:") and term.mode == "talk" and sim().time() - t0 >= 179.0, "talk opens the unit link; lines cost time")
+	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
+	_check(cams != null and out.contains("unit link") and cams.talk_runner != null and cams.talk_log.get_parsed_text().contains("TINKER:")
+		and sim().time() - t0 >= 179.0, "talk opens the unit link in Cameras; lines cost time")
+	if cams == null:
+		return
 	_check(tinker.stability > 0.5, "a conversation steadies the unit")
 	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "and counts toward its trust")
-	out = term.run("2")   # "Who was here before me?"
-	_check(out.contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
-	_check(not term.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "(nothing private yet: trust 1)")
-	out = term.run("0")
-	_check(term.mode == "" and out.contains("link closed"), "0 closes the link")
-	term.run("talk tinker")
-	term.run("0")
+	cams._talk_choose(1)   # "Who was here before me?"
+	_check(cams.talk_log.get_parsed_text().contains("Okafor") and Story.knows(sim(), "asked:okafor"), "picking a reply plays on")
+	_check(cams.talk_runner == null or not cams.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "(nothing private yet: trust 1)")
+	cams.end_talk()
+	_check(cams.talk_runner == null and not cams.talk_box.visible, "closing the link")
+	cams.start_talk("tinker")
+	cams.end_talk()
 	_check(Story.knowledge(sim()).value("trust:tinker") == 1.0, "talking again straight away doesn't build trust")
 	Story.knowledge(sim()).values["trust:tinker"] = 3.0
-	out = term.run("talk tinker")
-	_check(out.contains("private"), "with trust, Tinker can be asked something private")
-	term.run("0")
+	cams.start_talk("tinker")
+	_check(cams.talk_runner.choices.any(func(c): return str(c.text).contains("private")), "with trust, Tinker can be asked something private")
+	cams.end_talk()
 
 
 func _test_apps() -> void:
@@ -188,14 +192,14 @@ func _test_apps() -> void:
 		"tutorial duties tick themselves off as you do things (cameras, onboarding)")
 	duties.refresh()
 	_check(duties.rows.get_child_count() >= camp.duties.size(), "Duties lists the shift's duties")
-	# Units: Talk shows once you know you can; diagnose takes half an hour.
-	var units = desk.open_app("units")
-	await process_frame
-	units.refresh()
-	_check(units.cards["tinker"].talk.visible and units.cards["tinker"].wear_txt.text.contains("worn"), "Units shows Talk and each unit's wear")
+	# A unit's menu (Cameras): Talk once you know you can; diagnose takes half an hour.
+	var menu: Array = load("res://os/object_menu.gd").entries(sim(), "robot:tinker")
+	_check(menu.any(func(e): return e.get("talk", false)) and load("res://os/object_menu.gd").describe(sim(), "robot:tinker").contains("wear"),
+		"a unit's menu has Talk, and hovering it shows its wear")
 	var t0 := sim().time()
-	units._diagnose("hauler")
-	_check(sim().time() - t0 >= 1799.0 and units.cards["hauler"].reply.text.contains("DIAG"), "Diagnose takes 30 minutes and reads the unit out")
+	var diag: Dictionary = load("res://os/object_menu.gd").entries(sim(), "robot:hauler").filter(func(e): return str(e.get("text", "")).begins_with("Diagnose"))[0]
+	var said: String = diag.act.call()
+	_check(sim().time() - t0 >= 1799.0 and said.contains("DIAG"), "Diagnose takes 30 minutes and reads the unit out")
 
 
 func _test_bin_and_notes() -> void:
@@ -229,7 +233,7 @@ func _test_parts_and_wear() -> void:
 	var board := sim().get_system("work") as WorkBoard
 	var req := sim().get_system("requisitions") as Requisitions
 	var reqs := sim().get_system("requests") as UnitRequests
-	# A leak with no clamps in stock: the repair stops halfway and the unit asks.
+	# A leak with no clamps in stock: nobody can be sent until there's a part.
 	req.inventory["pipe_clamps"] = 0
 	reqs.requests.clear()
 	reqs._last.clear()
@@ -241,54 +245,62 @@ func _test_parts_and_wear() -> void:
 	facility.spend(1.0, "test")
 	var job := board.get_job(int(plant.device("pipe_2").job))
 	_check(not job.is_empty() and str(job.get("part", "")) == "pipe_clamps", "a leak repair needs a pipe clamp")
-	var hauler := sim().get_system("robot_hauler") as RobotAgent
-	hauler.activity = {"kind": "idle"}
-	job.status = "open"
-	job.claimed_by = ""
-	board.claim(int(job.id), hauler.sim_id)
-	board.add_progress(sim(), int(job.id), hauler.sim_id, float(job.work) * 0.6)
-	_check(job.status == "parts" and board.waiting_jobs().has(job), "no clamp in stock: the job stops halfway, waiting for one")
-	facility.spend(1.0, "test")
-	var ask := reqs.requests.filter(func(r): return r.kind == "part")
-	_check(not ask.is_empty(), "and the unit asks for one")
-	if ask.is_empty():
-		return
-	var plant_app = desk.open_app("plant")
-	plant_app.selected = "pipe_2"
-	_check(plant.inspect_text(sim(), "pipe_2").contains("STOPPED"), "Plant's inspect says it's stopped for a part")
+	facility.spend(600.0, "test")
+	_check(job.status == "open" and not job.get("requested", false), "on duty, nobody touches it until you order it")
+	_check(board.waiting_jobs(sim()).has(job) and plant.inspect_text(sim(), "pipe_2").contains("NO PART"), "no clamp in stock: it's waiting for one (and Inspect says so)")
+	var menu: Array = load("res://os/object_menu.gd").entries(sim(), "pipe_2")
+	var order: Dictionary = menu.filter(func(e): return str(e.get("text", "")) == "Order maintenance")[0]
+	var buy: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order Pipe clamp"))
+	var patch: Array = menu.filter(func(e): return str(e.get("text", "")).begins_with("Patch it"))
+	_check(order.disabled and buy.size() == 1 and patch.size() == 1, "its menu: Order maintenance greyed out, Order a clamp set, Patch it")
 	var funds := req.funds
 	var t0 := sim().time()
-	var out: String = sup.answer_request(int(ask[0].id), 0)
-	_check(out.contains("Requisition") and req.funds < funds and sim().time() - t0 >= 299.0,
-		"answering 'Order one' places a requisition (5 min)")
-	facility.spend(30.0, "test")
-	_check(Story.campaign(sim()).duty("tut_answer").done and Story.campaign(sim()).duty("tut_requisition").done, "(and ticks two tutorial duties)")
+	var out: String = buy[0].act.call()
+	_check(out.contains("Requisition") and req.funds < funds and sim().time() - t0 >= 299.0, "ordering the part from the menu places a requisition (5 min)")
+	_check(Story.campaign(sim()).duty("tut_requisition").done or Story.knows(sim(), "did:requisition"), "(the tutorial notices)")
 	req.unpacked(sim(), int(req.orders.back().id))
-	_check(job.status == "open", "when the clamps are unpacked, the job goes back on the board")
+	var clamps := int(req.inventory["pipe_clamps"])
+	menu = load("res://os/object_menu.gd").entries(sim(), "pipe_2")
+	order = menu.filter(func(e): return str(e.get("text", "")).begins_with("Order maintenance"))[0]
+	_check(not order.disabled, "with clamps in stock, Order maintenance is there")
+	out = order.act.call()
+	_check(job.get("requested", false) and int(req.inventory["pipe_clamps"]) == clamps - 1 and (out.contains("on its way") or out.contains("Queued") or out.contains("on it")),
+		"ordering maintenance takes a clamp and sends a unit: " + out)
 	# Express shipping: dearer, faster.
 	var normal := req.place(sim(), "fuse_pack", 1)
 	var fast := req.place(sim(), "fuse_pack", 1, true)
 	_check(int(fast.order.cost) > int(normal.order.cost) and float(fast.order.eta) - sim().time() < float(normal.order.eta) - sim().time(), "express costs more and arrives sooner")
-	# Wear: a seized unit needs a manual reboot; services need servos.
+	# Wear: a seized unit needs a manual reboot (you send someone); services need servos.
+	var hauler := sim().get_system("robot_hauler") as RobotAgent
 	hauler.seize(sim())
 	var reboot := board.jobs.filter(func(j): return str(j.source) == "unit:hauler" and WorkBoard.active(j))
-	_check(hauler.offline() and hauler.doing_text(sim()).contains("SEIZED") and reboot.size() == 1, "a seized unit is frozen, with a manual reboot job posted")
+	_check(hauler.offline() and hauler.doing_text(sim()).contains("SEIZED") and reboot.size() == 1 and not reboot[0].get("requested", false),
+		"a seized unit is frozen, with a manual reboot job posted (not yet asked for)")
+	var send: Array = load("res://os/object_menu.gd").entries(sim(), "robot:hauler").filter(func(e): return str(e.get("text", "")).begins_with("Send a unit to reboot"))
+	_check(send.size() == 1, "its menu offers to send a unit to reboot it")
+	if send.size() == 1:
+		send[0].act.call()
+	_check(reboot[0].get("requested", false), "and that requests the reboot")
 	var tinker := sim().get_system("robot_tinker") as RobotAgent
+	board.release(int(reboot[0].id), str(reboot[0].claimed_by))
 	board.claim(int(reboot[0].id), tinker.sim_id)
 	board.add_progress(sim(), int(reboot[0].id), tinker.sim_id, float(reboot[0].work))
 	facility.spend(1.0, "test")
 	_check(not hauler.offline(), "rebooting it by hand gets it moving")
 	req.inventory["servo_bundle"] = 1
 	hauler.wear = 0.7
-	var units = desk.open_app("units")
-	units.refresh()
-	units.cards["hauler"].service.pressed.emit()
+	var book: Array = load("res://os/object_menu.gd").entries(sim(), "robot:hauler").filter(func(e): return str(e.get("text", "")).begins_with("Book a service"))
+	_check(book.size() == 1 and not book[0].disabled, "its menu offers a service")
+	book[0].act.call()
 	var svc := board.jobs.filter(func(j): return str(j.source) == "service:hauler" and WorkBoard.active(j))
-	_check(svc.size() == 1 and str(svc[0].get("only", "")) == hauler.sim_id and str(svc[0].part) == "servo_bundle", "Book service posts a service only that unit takes")
-	board.claim(int(svc[0].id), hauler.sim_id)
-	board.add_progress(sim(), int(svc[0].id), hauler.sim_id, float(svc[0].work))
+	_check(svc.size() == 1 and str(svc[0].get("only", "")) == hauler.sim_id and int(req.inventory["servo_bundle"]) == 0,
+		"Book a service posts a service only that unit takes, with the servo taken from stock")
+	if svc.size() == 1:
+		board.release(int(svc[0].id), str(svc[0].claimed_by))
+		board.claim(int(svc[0].id), hauler.sim_id)
+		board.add_progress(sim(), int(svc[0].id), hauler.sim_id, float(svc[0].work))
 	facility.spend(1.0, "test")
-	_check(hauler.wear < 0.1 and int(req.inventory["servo_bundle"]) == 0, "a service uses a servo and brings wear down")
+	_check(hauler.wear < 0.1, "a service brings wear down")
 
 
 func _test_corporate() -> void:
@@ -307,7 +319,7 @@ func _test_corporate() -> void:
 	dirs.issue(sim(), "diagnose", "tinker", 30.0, "Diagnose Tinker.")
 	o.standing = 50.0
 	facility.spend(31.0 * 60.0, "test")
-	_check(not dirs.active.any(func(d): return d.kind == "diagnose") and o.standing < 50.0, "a missed directive costs standing")
+	_check(not dirs.active.any(func(d): return d.kind == "diagnose") and o.standing < 50.0, "a missed directive costs standing (%s, %s, %.0f)" % [FacilitySim.format_clock(sim().time()), Story.campaign(sim()).state, o.standing])
 	# Pell escalates as violations of a kind pile up.
 	var hq := sim().get_system("hq") as CorkHQ
 	o.counts.clear()
@@ -349,21 +361,22 @@ func _test_uplink() -> void:
 	var hauler := sim().get_system("robot_hauler") as RobotAgent
 	hauler.power = 1.0
 	hauler.stability = 0.9
-	var term = desk.open_app("terminal")
-	var out: String = term.run("talk hauler")
+	var cams = desk.open_app("cameras")
+	cams.start_talk("hauler")
 	var choice := -1
-	for i in term.talk_runner.choices.size():
-		if str(term.talk_runner.choices[i].text).contains("uplink"):
+	for i in cams.talk_runner.choices.size():
+		if str(cams.talk_runner.choices[i].text).contains("uplink"):
 			choice = i
 	_check(choice >= 0, "with trust (and the uplink known), Hauler can be asked about the uplink")
-	term.run(str(choice + 1))
-	out = term.run("1")   # "Just for an hour."
-	_check(out.contains("Accidents happen"), "Hauler agrees, and goes")
+	cams._talk_choose(choice)
+	cams._talk_choose(0)   # "Just for an hour."
+	_check(cams.talk_log.get_parsed_text().contains("Accidents happen"), "Hauler agrees, and goes")
+	cams.end_talk()
 	for i in 40:
 		if plant.device("uplink").fault:
 			break
 		facility.spend(300.0, "test")
-	_check(plant.device("uplink").fault, "and the uplink relay goes down")
+	_check(plant.device("uplink").fault, "and the uplink relay goes down (%s / %s / %s)" % [str(hauler.order), str(hauler.activity), str(hauler.scores.slice(0, 3).map(func(o): return "%s %.2f" % [o.key, o.score]))])
 	_check(not sim().journal.entries.any(func(e): return e.cat == "sabotage" and str(e.text).contains("uplink")), "as an accident: nothing says sabotage")
 	await process_frame
 	await process_frame
@@ -471,8 +484,11 @@ func _test_fired_and_retry() -> void:
 	var term = desk.open_app("terminal")
 	await process_frame
 	var out: String = term.run("talk tinker")
-	_check(out.contains("TINKER:") and Story.knows(sim(), "cmd:talk"), "but what the PLAYER remembers still works: talk")
-	term.run("0")
+	var cams = desk._windows["cameras"].app if desk._windows.has("cameras") else null
+	_check(out.contains("unit link") and cams != null and cams.talk_log.get_parsed_text().contains("TINKER:") and Story.knows(sim(), "cmd:talk"),
+		"but what the PLAYER remembers still works: talk")
+	if cams:
+		cams.end_talk()
 
 
 func _test_end() -> void:

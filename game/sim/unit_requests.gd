@@ -4,11 +4,10 @@
 # decides for itself (the default answer), says so, and its software takes the
 # knock: being ignored hurts.
 #
-#   part      a job stopped halfway, no part in stock: order one now?
 #   service   joints grinding (wear): book a service (uses a servo bundle)?
 #   help      another unit has seized up: can I go and reboot it?
 #   recharge  power's low in the middle of something urgent: finish or charge?
-#   bored     unstable and nothing on the board: can I do something early?
+#   bored     standing about with nothing asked of it: can I do something?
 #   hot       a leak in a hot facility: clamp it live (fast, but it wears me)?
 #
 # Each request: {"id", "robot", "kind", "text", "options": [labels],
@@ -86,21 +85,10 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 	var yes := i == 0
 	var d: Dictionary = r.data
 	match str(r.kind):
-		"part":
-			if yes:
-				var req := sim.get_system("requisitions") as Requisitions
-				if req == null:
-					return "No requisitions."
-				var res := req.place(sim, str(d.part), 1)
-				return str(res.text)
-			if i == 1:
-				var board := sim.get_system("work") as WorkBoard
-				return "Patching it. It won't hold long." if board and board.patch(sim, int(d.job)) else "Nothing to patch."
-			return "The job waits."
 		"service":
 			if yes and bot:
 				var id := bot.book_service(sim)
-				return "Service booked (job #%d)." % id if id >= 0 else "A service is already booked."
+				return "Service booked (job #%d)." % id if id >= 0 else ("No servo bundles in stock." if id == -2 else "A service is already booked.")
 			if bot:
 				bot.stability = maxf(bot.stability - 0.03, 0.0)
 			return "Not now."
@@ -109,7 +97,9 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 				var board := sim.get_system("work") as WorkBoard
 				for j in board.open_jobs():
 					if str(j.source) == "unit:" + str(d.robot):
-						board.set_priority(sim, int(j.id), 3)
+						var why := board.request(sim, int(j.id))
+						if not why.is_empty():
+							return why
 						bot.give_order(sim, "job", int(j.id))
 						return "%s is on its way." % bot.display_name()
 			return "It stays seized for now."
@@ -129,6 +119,7 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 					if not dev.is_empty() and int(dev.job) < 0 and board:
 						dev.job = board.post(sim, FacilityPlant._job_title(dev), FacilityPlant.KINDS[dev.kind].skill, dev.station,
 							FacilityPlant.KINDS[dev.kind].work * 0.6, 1, str(d.device))
+					if not dev.is_empty() and int(dev.job) >= 0 and board and board.request(sim, int(dev.job)).is_empty():
 						bot.give_order(sim, "job", int(dev.job))
 					bot.stability = minf(bot.stability + 0.06, 1.0)
 					return "%s goes early." % bot.display_name()
@@ -138,8 +129,13 @@ func _apply(sim: FacilitySim, r: Dictionary, i: int, bot: RobotAgent) -> String:
 			var board := sim.get_system("work") as WorkBoard
 			var j := board.get_job(int(d.get("job", -1))) if board else {}
 			if yes and not j.is_empty() and WorkBoard.active(j):
+				var why := board.request(sim, int(j.id))
+				if not why.is_empty():
+					return why
 				j.work = float(j.progress) + (float(j.work) - float(j.progress)) * 0.5
 				j.hot = true
+				if bot:
+					bot.give_order(sim, "job", int(j.id))
 				return "Clamping it live."
 			return "Waiting for it to cool."
 	return ""
@@ -178,13 +174,13 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 			ask(sim, bot.robot_id, "service", "My joints are grinding (wear %d%%). Book me a service? It uses a servo bundle." % roundi(bot.wear * 100.0),
 				["Book a service", "Not now"], 1)
 		# Low power in the middle of urgent work.
-		if bot.activity.kind == "work" and bot.power < bot.traits.power_reserve + 0.08:
+		if bot.activity.kind == "work" and bot.power < bot.traits.power_reserve + 0.08 and not bot.own_will():
 			var j := board.get_job(int(bot.activity.job))
 			if not j.is_empty() and int(j.priority) >= 2:
 				ask(sim, bot.robot_id, "recharge", "Power's at %d%%. Finish job #%d (%s) first, or go and charge?" % [roundi(bot.power * 100.0), j.id, j.title],
 					["Finish it", "Go and charge"], 1, {"job": j.id})
-		# Restless with nothing to do.
-		if bot.activity.kind in ["idle", "wander"] and bot.stability < 0.5 and board.open_jobs().is_empty() and plant:
+		# Standing about with nothing asked of it (stable units wait to be told).
+		if bot.activity.kind in ["idle", "wander"] and bot.stability < 0.75 and not bot.own_will() and board.queued_jobs().is_empty() and plant:
 			var worst := ""
 			var worst_v := 2.0
 			for id in plant.device_ids():
@@ -193,7 +189,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 					worst_v = float(dv.value)
 					worst = id
 			if not worst.is_empty():
-				ask(sim, bot.robot_id, "bored", "There's nothing on the board. Can I sweep %s early?" % plant.device(worst).name,
+				ask(sim, bot.robot_id, "bored", "Nobody's asked me for anything. Standing still is bad for me. Can I sweep %s?" % plant.device(worst).name,
 					["Yes, go", "No, stand by"], 1, {"device": worst})
 
 
@@ -205,14 +201,6 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 	if camp and not camp.on_duty():
 		return
 	match event_name:
-		"job_parts":
-			var robot := str(data.get("robot", "")).trim_prefix("robot_")
-			if robot.is_empty():
-				return
-			var req := sim.get_system("requisitions") as Requisitions
-			var it := req.item(str(data.part)) if req else {}
-			ask(sim, robot, "part", "Job #%d stopped: I need a %s and stock is empty. Order one (%d cr), or patch it without? A patch won't hold long." % [int(data.job), it.get("name", data.part), int(it.get("price", 0))],
-				["Order one", "Patch it", "Leave it"], 2, {"part": data.part, "job": data.job})
 		"alarm":
 			if data.has("robot"):
 				var seized := sim.get_system("robot_" + str(data.robot)) as RobotAgent

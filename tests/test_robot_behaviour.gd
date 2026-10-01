@@ -69,7 +69,8 @@ func _test_board() -> void:
 	board.add_progress(sim, id, "b", 4.0)
 	_check(board.add_progress(sim, id, "b", 6.0), "progress adds up to done")
 	sim.step()
-	_check(fired.size() == 1 and fired[0][0] == "job_done" and int(fired[0][1].job) == id, "job_done event fires")
+	fired = fired.filter(func(f): return f[0] == "job_done")
+	_check(fired.size() == 1 and int(fired[0][1].job) == id, "job_done event fires")
 	_check(board.open_jobs().is_empty(), "done jobs leave the open list")
 
 
@@ -136,7 +137,7 @@ func _test_power() -> void:
 	var r := bot.give_order(sim, "job", id)
 	_check(not r.ok and r.reply.contains("Recharging first"), "below reserve it pushes back and recharges first (%s)" % r.reply)
 	_check(bot.activity.kind == "recharge", "and heads for the dock")
-	sim.advance(6.0 + 800.0)
+	sim.advance(6.0 + 900.0)
 	_check(bot.power >= bot.traits.charge_until - 0.01 or bot.activity.kind == "work",
 		"it charges up (%.2f, %s)" % [bot.power, bot.activity_key()])
 	sim.advance(200.0)
@@ -267,6 +268,9 @@ func _test_repeatable() -> void:
 	for s in systems:
 		if s.has_method("sim_start"):
 			s.sim_start(a)
+	# Nobody on duty: the night autopilot asks for everything (on duty, stable
+	# units wait to be told).
+	(a.get_system("campaign") as Campaign).state = "complete"
 	a.advance(3600.0)
 	var saved := JSON.stringify(a.save_data())
 	# An order in the middle, like a player would give.

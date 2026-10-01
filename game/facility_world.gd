@@ -17,6 +17,14 @@
 #
 # Placeholder shapes everywhere: the point is the framework. Real models can
 # replace any piece later.
+#
+# PICKING. Camera feeds let the supervisor point at things: a robot, a device
+# (FacilityProps.pick_nodes), a passage door, a camera's housing, the
+# workbench. pick() casts a ray from a feed's camera against the bounding
+# boxes of each thing's meshes (things in other rooms don't count: walls)
+# and returns its id ("robot:tinker", "pipe_2", "door_dock", "cam_3",
+# "bench"); highlight() outlines it (an inverted-hull silhouette plus a faint
+# tint, drawn as each mesh's material_overlay).
 class_name FacilityWorld
 extends Node3D
 
@@ -35,6 +43,13 @@ var views := {}            # robot id -> RobotView
 var props: FacilityProps
 var _shutters := {}        # passage segment id -> MeshInstance3D (shown while blocked)
 var _trackers := {}        # camera index -> robot id it follows
+## Pickable things built here (doors, camera housings): id -> [Node3D].
+var _pick_nodes := {}
+var _pick_rooms := {}      # id -> room ("" = seen from either side)
+var _highlighted := ""
+static var _outline: StandardMaterial3D
+## Each camera's housing is on its own render layer, so its own feed doesn't see it.
+const HOUSING_LAYER := 10
 ## The camera you're listening through (its feed is the 3D audio listener),
 ## or -1 for none. Set by the Cameras app; FacilitySound uses its room.
 var listener_cam := -1
@@ -56,6 +71,7 @@ func _ready() -> void:
 	add_child(props)
 	props.build(layout)
 	_build_cameras()
+	_link_doors()
 
 
 func _add_view(id: String) -> void:
@@ -332,11 +348,138 @@ func _build_cameras() -> void:
 			cam.target = views[c.track].actor
 			_trackers[cameras.size()] = c.track
 		root.add_child(cam)
+		# A housing for it, seen from the other cameras (click it: repair).
+		var i := cameras.size()
+		var housing := _mesh(_box_mesh(Vector3(0.35, 0.25, 0.5)), _mat(Color(0.82, 0.82, 0.78), 0.3, 0.5), root)
+		housing.position = c.pos + Vector3(0, 0.22, 0)
+		housing.layers = 1 << (HOUSING_LAYER + i)
+		housing.look_at_from_position(housing.position, c.look, Vector3.UP)
+		_pick_nodes["cam_%d" % (i + 1)] = [housing]
+		_pick_rooms["cam_%d" % (i + 1)] = c.room
 		cameras.append(cam)
 		camera_rooms.append(c.room)
 
 
+## The layers a camera's feed renders: everything but its own housing.
+func feed_cull_mask(cam_index: int) -> int:
+	return 0xFFFFF & ~(1 << (HOUSING_LAYER + cam_index))
+
+
+# A stuck door is the passage itself: point at the doorway.
+func _link_doors() -> void:
+	for id in FacilityPlant.DOORS:
+		var frame := get_node_or_null("Passage_" + str(FacilityPlant.DOORS[id][1]))
+		if frame:
+			_pick_nodes[id] = [frame]
+			_pick_rooms[id] = ""
+
+
+# --- Picking ------------------------------------------------------------------------------
+
+## What's under a point of a feed (`eye` is the feed's camera; `room` the
+## camera's room). Returns an id ("robot:hauler", "pipe_2", "bench") or "".
+func pick(eye: Camera3D, screen_pos: Vector2, room: String) -> String:
+	var from := eye.project_ray_origin(screen_pos)
+	var dir := eye.project_ray_normal(screen_pos)
+	var best := ""
+	var best_d := INF
+	for id in pickable_ids():
+		var r := pick_room(id)
+		if not r.is_empty() and not room.is_empty() and r != room:
+			continue
+		for mi in pick_meshes(id):
+			if not mi.is_visible_in_tree() or (mi.layers & eye.cull_mask) == 0:
+				continue
+			var box: AABB = (mi.global_transform * mi.get_aabb()).grow(0.06)
+			var hit: Variant = box.intersects_ray(from, dir)
+			if hit == null:
+				continue
+			var d := from.distance_to(hit as Vector3)
+			if d < best_d:
+				best_d = d
+				best = id
+	return best
+
+
+func pickable_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id in views:
+		out.append("robot:" + str(id))
+	if props:
+		for id in props.pick_nodes:
+			out.append(str(id))
+	for id in _pick_nodes:
+		out.append(str(id))
+	return out
+
+
+## Which room a pickable thing is in ("" = more than one: a doorway).
+func pick_room(id: String) -> String:
+	if id.begins_with("robot:"):
+		return robot_room(id.trim_prefix("robot:"))
+	if _pick_rooms.has(id):
+		return _pick_rooms[id]
+	var plant := Facility.sim.get_system("plant") as FacilityPlant if Facility.running else null
+	var st := "bench" if id == "bench" else (str(plant.device(id).get("station", "")) if plant else "")
+	return str(layout.station(st).get("room", "")) if not st.is_empty() else ""
+
+
+## Every mesh that makes up a pickable thing.
+func pick_meshes(id: String) -> Array[MeshInstance3D]:
+	var roots: Array = []
+	if id.begins_with("robot:"):
+		var v: RobotView = views.get(id.trim_prefix("robot:"))
+		if v:
+			roots = [v]
+	elif _pick_nodes.has(id):
+		roots = _pick_nodes[id]
+	elif props and props.pick_nodes.has(id):
+		roots = props.pick_nodes[id]
+	var out: Array[MeshInstance3D] = []
+	for n in roots:
+		if n is MeshInstance3D:
+			out.append(n)
+		for m in (n as Node).find_children("*", "MeshInstance3D", true, false):
+			out.append(m)
+	return out
+
+
+## Outlines one pickable thing ("" = none).
+func highlight(id: String) -> void:
+	if id == _highlighted:
+		return
+	for mi in pick_meshes(_highlighted):
+		mi.material_overlay = null
+	_highlighted = id
+	for mi in pick_meshes(id):
+		mi.material_overlay = outline_material()
+
+
+static func outline_material() -> StandardMaterial3D:
+	if _outline == null:
+		var tint := StandardMaterial3D.new()
+		tint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		tint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		tint.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		tint.albedo_color = Color(1.0, 0.75, 0.25, 0.22)
+		var hull := StandardMaterial3D.new()
+		hull.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hull.cull_mode = BaseMaterial3D.CULL_FRONT
+		hull.grow = true
+		hull.grow_amount = 0.045
+		hull.albedo_color = Color(1.0, 0.8, 0.3)
+		tint.next_pass = hull
+		_outline = tint
+	return _outline
+
+
 # --- Helpers ---------------------------------------------------------------------------
+
+static func _box_mesh(size: Vector3) -> BoxMesh:
+	var b := BoxMesh.new()
+	b.size = size
+	return b
+
 
 static func _mesh(m: Mesh, mat: Material, parent: Node) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()

@@ -111,7 +111,7 @@ func violate(sim: FacilitySim, what: String, amount: float, catch_chance := 0.0)
 	sim.note("oversight", "Violation logged: %s (suspicion %d)" % [what, roundi(suspicion)])
 	if catch_chance > 0.0 and not fired() and rng.randf() < catch_chance:
 		_caught(sim, what)
-	_escalate(sim, category(what))
+	_escalate(sim, category(what), what)
 
 
 ## Which kind of violation this is (for Pell).
@@ -128,7 +128,7 @@ static func category(what: String) -> String:
 	return ""
 
 
-func _escalate(sim: FacilitySim, cat: String) -> void:
+func _escalate(sim: FacilitySim, cat: String, what := "") -> void:
 	if cat.is_empty() or not ESCALATE.has(cat) or not watching:
 		return
 	counts[cat] = int(counts.get(cat, 0)) + 1
@@ -137,7 +137,7 @@ func _escalate(sim: FacilitySim, cat: String) -> void:
 		return
 	var hq := sim.get_system("hq") as CorkHQ
 	if hq:
-		hq.say(sim, "pell_%s_%d" % [cat, level], "warning")
+		hq.say(sim, "pell_%s_%d" % [cat, level], "reprimand", {"what": what})
 	match level:
 		2:
 			var dirs := sim.get_system("directives") as Directives
@@ -172,7 +172,7 @@ func fire(sim: FacilitySim, kind: String, reason: String) -> void:
 	sim.note("oversight", "DISMISSED (%s): %s" % [kind, reason])
 	var hq := sim.get_system("hq") as CorkHQ
 	if hq:
-		hq.post(sim, "Human Resources", "warning", "NOTICE OF DISMISSAL. %s Your access ends at the close of this session." % reason)
+		hq.post(sim, "Human Resources", "reprimand", "NOTICE OF DISMISSAL. %s Your access ends at the close of this session." % reason)
 	sim.schedule_in(0.0, "dismissed", {"kind": kind})
 
 
@@ -217,7 +217,7 @@ func _caught(sim: FacilitySim, what: String) -> void:
 	suspicion = maxf(suspicion - 20.0, 0.0)
 	sim.note("oversight", "Caught: %s (strike %d)" % [what, strikes])
 	if hq:
-		hq.post(sim, "Compliance", "warning", "FORMAL WARNING. An audit of your terminal found: %s. This is recorded. There will not be a second warning." % what)
+		hq.post(sim, "Compliance", "reprimand", "FORMAL WARNING. An audit of your terminal found: %s. This is recorded. There will not be a second warning." % what)
 
 
 # --- Crises ---------------------------------------------------------------------------
@@ -288,7 +288,7 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 			if watching and not fired():
 				var hq := sim.get_system("hq") as CorkHQ
 				if hq:
-					hq.post(sim, "Compliance", "warning", "Targeted audit of your terminal: in progress.")
+					hq.post(sim, "Compliance", "reprimand", "Targeted audit of your terminal: in progress.")
 				audit(sim, TARGETED_AUDIT)
 		"job_done":
 			if str(data.get("source", "")) == "uplink" and _uplink_since >= 0.0:
@@ -337,7 +337,7 @@ func _uplink_lost(sim: FacilitySim) -> void:
 func sim_save() -> Dictionary:
 	return {"standing": standing, "counts": counts.duplicate(), "uplink_breaks": uplink_breaks, "uplink_since": _uplink_since, "blind": blind, "suspicion": suspicion, "strikes": strikes, "trail": trail.duplicate(true),
 		"fired_reason": fired_reason, "fired_kind": fired_kind, "hq_muted_until": hq_muted_until, "watching": watching,
-		"audit_acc": _audit_acc, "coolant_since": _coolant_since, "output_since": _output_since, "warned": _warned.duplicate(),
+		"audit_acc": _audit_acc, "crisis_acc": _crisis_acc, "coolant_since": _coolant_since, "output_since": _output_since, "warned": _warned.duplicate(),
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state)}
 
 
@@ -353,6 +353,7 @@ func sim_load(d: Dictionary) -> void:
 	hq_muted_until = float(d.get("hq_muted_until", -1.0))
 	watching = bool(d.get("watching", true))
 	_audit_acc = float(d.get("audit_acc", 0.0))
+	_crisis_acc = float(d.get("crisis_acc", 0.0))
 	_coolant_since = float(d.get("coolant_since", -1.0))
 	_output_since = float(d.get("output_since", -1.0))
 	_warned = d.get("warned", {}).duplicate()

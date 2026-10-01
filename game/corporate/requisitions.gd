@@ -16,10 +16,10 @@ extends RefCounted
 
 const CATALOG_PATH := "res://game/corporate/catalog.txt"
 const START_FUNDS := 1000
-## Spare parts on the shelf when a new supervisor arrives: enough for the
-## first morning, not for the week.
-const START_STOCK := {"pipe_clamps": 3, "fuse_pack": 2, "filter_cartridges": 4, "actuator_kit": 1,
-	"camera_module": 1, "servo_bundle": 1}
+## Spare parts on the shelf when a new supervisor arrives: an order or two of
+## each (and two coolant canisters to pump in when it runs low); not the week.
+const START_STOCK := {"pipe_clamps": 6, "fuse_pack": 4, "filter_cartridges": 6, "actuator_kit": 2,
+	"camera_module": 2, "servo_bundle": 2, "coolant_canister": 2}
 ## Budget allocated per shift for each grade.
 const ALLOCATION := {"A": 900, "B": 700, "C": 500, "D": 300, "F": 100}
 ## Lowest grade at which corporate approves items that need approval.
@@ -269,11 +269,16 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 	var want: Array[String] = []
 	var board := sim.get_system("work") as WorkBoard
 	if board:
-		for j in board.waiting_jobs():
+		for j in board.waiting_jobs(sim):
 			if not want.has(str(j.part)):
 				want.append(str(j.part))
 	var plant := sim.get_system("plant") as FacilityPlant
-	if plant and plant.coolant < NIGHT_COOLANT and not orders.any(func(o): return o.item == "coolant_canister" and o.placed > sim.time() - 12 * 3600.0):
+	if plant and plant.coolant < NIGHT_COOLANT and int(inventory.get("coolant_canister", 0)) > 0:
+		# A canister from stock first.
+		inventory.coolant_canister = int(inventory.coolant_canister) - 1
+		plant.coolant = minf(plant.coolant + FacilityPlant.COOLANT_CANISTER, 1.0)
+		sim.note("requisitions", "Night procurement: pumped a coolant canister from stock (coolant %d%%)" % roundi(plant.coolant * 100.0))
+	elif plant and plant.coolant < NIGHT_COOLANT and not orders.any(func(o): return o.item == "coolant_canister" and o.placed > sim.time() - 12 * 3600.0):
 		want.append("coolant_canister")   # one a night at most
 	for item_id in want:
 		# Already on its way by courier? (A crate stuck in the hangar doesn't count.)
@@ -286,7 +291,7 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 			sim.note("requisitions", "Night procurement: %s (express, %d cr)" % [item(item_id).name, before - funds])
 		elif board:
 			# No budget: the night crew patches what's waiting for it instead.
-			for j in board.waiting_jobs():
+			for j in board.waiting_jobs(sim):
 				if str(j.part) == item_id:
 					board.patch(sim, int(j.id))
 					night_patched += 1

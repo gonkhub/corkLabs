@@ -13,10 +13,16 @@ const PRIORITY_COST := "choice"      # re-prioritising a job: 5 minutes
 
 
 ## Orders a robot. kind: "job" (with job_id), "recharge", "standby", "cancel".
-## Returns the robot's answer: {"ok": bool, "reply": String}.
+## Putting a unit on a job also requests the job (its part comes out of
+## stock: no part, no order). Returns the robot's answer: {"ok": bool, "reply": String}.
 static func order(bot: RobotAgent, kind: String, job_id := -1) -> Dictionary:
 	var sim: FacilitySim = Facility.sim
 	var what := describe_order(sim, kind, job_id)
+	if kind == "job":
+		var board := sim.get_system("work") as WorkBoard
+		var why := board.request(sim, job_id) if board else ""
+		if not why.is_empty():
+			return {"ok": false, "reply": why}
 	sim.note("supervisor", "To %s: %s" % [bot.display_name(), what])
 	var r := bot.give_order(sim, kind, job_id)
 	did("order")
@@ -141,6 +147,9 @@ const TALK_STEADY_EVERY := 3600.0
 ## did was at least this long ago: trust takes days, not one long chat.
 const TRUST_GAP := 7200.0
 const INSPECT_MINUTES := 30.0
+## Facility minutes a diagnostic takes, and how much it steadies the unit.
+const DIAGNOSE_MINUTES := 30.0
+const DIAGNOSE_STEADY := 0.02
 const ACTIVATE_MINUTES := 90.0
 
 
@@ -275,16 +284,90 @@ static func inspect_device(id: String) -> String:
 	return plant.inspect_text(sim, id)
 
 
-## Patches a job that's waiting for a part, without it (5 minutes). The
-## device won't hold long. Returns false if the job isn't waiting.
+## Patches a repair without its part (5 minutes): a unit is sent, but the
+## device won't hold long. Returns false if the job doesn't need a part.
 static func patch_job(job_id: int) -> bool:
 	var sim: FacilitySim = Facility.sim
 	var board := sim.get_system("work") as WorkBoard
-	if board == null or not board.patch(sim, job_id):
+	var j := board.get_job(job_id) if board else {}
+	if not WorkBoard.active(j) or not j.has("part") or j.get("part_used", false):
 		return false
-	sim.note("supervisor", "Authorises a makeshift patch on job #%d" % job_id)
-	Facility.act(ORDER_COST, "Supervisor authorises a patch")
-	return true
+	return request_job(job_id, true).ok
+
+
+## Orders maintenance on a device (its object menu in Cameras): requests its
+## job (posting one for something that wears; the part comes out of stock)
+## and Dispatch sends the most suitable free unit. `makeshift`: patch it
+## without the part. 5 minutes. Returns {"ok", "text"}.
+static func order_maintenance(device_id: String, makeshift := false) -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var plant := sim.get_system("plant") as FacilityPlant
+	var d := plant.device(device_id) if plant else {}
+	if d.is_empty():
+		return {"ok": false, "text": "Nothing there."}
+	var job := Dispatch.job_for_device(sim, device_id)
+	if job.is_empty():
+		return {"ok": false, "text": "%s doesn't need anything." % d.name}
+	return request_job(int(job.id), makeshift, d.name)
+
+
+## Requests a job and sends a unit (a seized unit's manual reboot, a device's
+## repair). 5 minutes. Returns {"ok", "text"}.
+static func request_job(job_id: int, makeshift := false, what := "") -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var board := sim.get_system("work") as WorkBoard
+	var job := board.get_job(job_id)
+	var r := Dispatch.request(sim, job_id, makeshift)
+	if not r.ok:
+		return r
+	sim.note("supervisor", "%s: %s%s" % ["Patch it" if makeshift else "Maintenance", what if not what.is_empty() else str(job.get("title", "")),
+		" (no part)" if makeshift else ""])
+	did("order")
+	Facility.act(ORDER_COST, "Supervisor orders maintenance")
+	return r
+
+
+## Takes a job off the queue (its unit stands down; an unused part goes back). 5 minutes.
+static func cancel_request(job_id: int) -> void:
+	var sim: FacilitySim = Facility.sim
+	var board := sim.get_system("work") as WorkBoard
+	board.unrequest(sim, job_id)
+	sim.note("supervisor", "Calls off job #%d" % job_id)
+	Facility.act(ORDER_COST, "Supervisor calls off a job")
+
+
+## Pumps a coolant canister from stock into the reservoir. 5 minutes.
+static func pump_coolant() -> Dictionary:
+	var sim: FacilitySim = Facility.sim
+	var req := sim.get_system("requisitions") as Requisitions
+	var plant := sim.get_system("plant") as FacilityPlant
+	if req == null or plant == null or int(req.inventory.get("coolant_canister", 0)) <= 0:
+		return {"ok": false, "text": "No coolant canisters in stock."}
+	if plant.coolant >= 0.95:
+		return {"ok": false, "text": "The reservoir is full."}
+	req.inventory.coolant_canister = int(req.inventory.coolant_canister) - 1
+	plant.coolant = minf(plant.coolant + FacilityPlant.COOLANT_CANISTER, 1.0)
+	sim.note("supervisor", "Pumps a coolant canister into the loop: coolant %d%%" % roundi(plant.coolant * 100.0))
+	Facility.act(ORDER_COST, "Supervisor pumps in coolant")
+	return {"ok": true, "text": "Coolant at %d%%." % roundi(plant.coolant * 100.0)}
+
+
+## Diagnostics on a unit (its object menu): reads it out properly and
+## steadies it a little. 30 minutes. Returns the read-out.
+static func diagnose(bot: RobotAgent) -> String:
+	var sim: FacilitySim = Facility.sim
+	sim.note("supervisor", "Runs diagnostics on %s" % bot.display_name())
+	did("diagnose")
+	var dirs := sim.get_system("directives") as Directives
+	if dirs:
+		dirs.notify(sim, "diagnose", bot.robot_id)
+	if not bot.offline():
+		bot.stability = minf(bot.stability + DIAGNOSE_STEADY, 1.0)
+	Facility.spend(DIAGNOSE_MINUTES * 60.0, "Supervisor runs diagnostics on %s" % bot.display_name())
+	return "DIAG %s: power %d%%, stability %d%% (%s), independence %d%%, wear %d%%, jobs done %d. %s" % [
+		bot.display_name().to_upper(), roundi(bot.power * 100.0), roundi(bot.stability * 100.0), bot.stability_state,
+		roundi(bot.independence() * 100.0), roundi(bot.wear * 100.0), bot.jobs_done,
+		"Firmware: knowledge filter active." if bot.robot_id != "ogre" else "Firmware: no knowledge filter installed."]
 
 
 ## Posts a maintenance job for a worn device before it's an alarm (5 minutes).

@@ -134,6 +134,11 @@ far (with dates), so nobody has to rediscover them. How-to lives in the
 | 2026-09-30 | **Endings scrapped for now**, archived in docs/archive/endings.txt; the run ends with "the end of this build" | User's direction |
 | 2026-09-30 | Nights: units in standby (stability drifts 15%, wear 30%, no seizing); corkHQ doesn't post to an empty desk | Unattended nights shouldn't wreck a decently run facility; what you leave undone still shows in the morning |
 | 2026-09-29 | Robots act in 0.5 s steps inside the 0.1 s facility tick | 5× cheaper, still deterministic; an hour of facility time simulates in ~0.4 s |
+| 2026-10-01 | **Run the facility from the cameras**: hover outlines a unit or machine, a left click opens its menu at the cursor. The Units and Work Orders apps are gone; talking moved from the Terminal into Cameras | User: assigning jobs felt indirect; act on what you see |
+| 2026-10-01 | **Stable units only do what they're told** (requested jobs, direct orders); Dispatch sends the best free unit. Below "stable" they choose for themselves and ignore you. Off duty, a night autopilot requests everything | User: bots shouldn't pick tasks while stable; overnight nobody gives orders |
+| 2026-10-01 | **Parts are taken when a repair is ordered**, not halfway (no part: order it, express it, or patch it) | User: jobs stopping halfway for another action felt weird |
+| 2026-10-01 | **Reprimands** are a corkHQ message kind of their own (policy breaches only) and shake the panel violently; operational warnings no longer come as reprimands | User: a Pell warning appeared after reading a harmless file |
+| 2026-10-01 | Directives are due by the end of the shift and settled at 14:00, never overnight; the facility starts with an order or two of every part and two coolant canisters | User: a missed directive in the overnight summary; start with basic resources |
 
 ## Gameplay directions (approved long-term, not started)
 

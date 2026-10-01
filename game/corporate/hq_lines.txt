@@ -23,10 +23,10 @@ idle_units | | Directorate of Output | Idle units detected. Idle units are waste
 
 # Liaison Pell escalating (Oversight): pell_<kind>_<level>. Level 2 comes with a
 # directive to explain yourself (her Reply); level 3 sets Compliance on you.
-pell_files_1 | | Liaison Pell | I see you've been opening former staff files, Supervisor. Those are closed for a reason.
+pell_files_1 | | Liaison Pell | I see you {what}, Supervisor. Former staff files are closed for a reason.
 pell_files_2 | | Liaison Pell | Former staff files. Again. Explain yourself: use Reply.
 pell_files_3 | | Liaison Pell | That's enough. Compliance has been asked to look at your terminal.
-pell_games_1 | | Liaison Pell | There's recreational software running on your terminal. Close it.
+pell_games_1 | | Liaison Pell | There's recreational software running on your terminal ({what}). Close it.
 pell_games_2 | | Liaison Pell | Games. On shift. Explain yourself: use Reply.
 pell_games_3 | | Liaison Pell | Your time is the facility's time. Compliance will be reviewing how you spend it.
 pell_talk_1 | | Liaison Pell | Units don't need conversation, Supervisor. They need direction.

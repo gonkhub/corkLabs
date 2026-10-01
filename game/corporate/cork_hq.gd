@@ -27,7 +27,8 @@ const SERVER := "cork://pkg.corklabs.int"
 
 var sim_id := "hq"
 ## Newest last: {"n", "t", "sender", "kind", "text", "code"}
-## kind: "directive", "review", "notice", "order", "software", "warning"
+## kind: "directive", "review", "notice", "order", "software", "warning",
+## "reprimand" (you broke policy and corporate saw: the panel shakes hard)
 var messages: Array[Dictionary] = []
 ## How many messages have ever been posted (the panel watches this).
 var posted := 0

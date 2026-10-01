@@ -81,6 +81,8 @@ const REPAIR_WORK := 480.0
 const REFIT_WORK := 300.0
 ## Coolant lost per hour per leaking pipe, and regained per hour with no leaks.
 const LEAK_RATE := 0.25
+## How much a coolant canister from stock fills the reservoir.
+const COOLANT_CANISTER := 0.5
 const REFILL_RATE := 0.1
 ## Charge speed on docks while the relay is out.
 const RELAY_OUT_CHARGE := 0.4
@@ -410,6 +412,8 @@ func receive_crate(sim: FacilitySim, order_id: int, label: String) -> void:
 	var job: Dictionary = board.get_job(int(d.job)) if board and int(d.job) >= 0 else {}
 	if board and (job.is_empty() or not WorkBoard.active(job)):
 		d.job = board.post(sim, _job_title(d), KINDS.freight.skill, d.station, KINDS.freight.work, 1, "freight_stacks")
+	if board:
+		board.request(sim, int(d.job))   # a delivery is brought in without being asked
 
 
 # Ogre has cleared the stacks: the oldest crate goes to the loading bay for a rail unit.
@@ -425,6 +429,7 @@ func _lift_crate(sim: FacilitySim, who: String) -> void:
 	if not crates.is_empty():
 		var d: Dictionary = devices["freight_stacks"]
 		d.job = board.post(sim, _job_title(d), KINDS.freight.skill, d.station, KINDS.freight.work, 1, "freight_stacks")
+		board.request(sim, int(d.job))
 
 
 # "crate:haul:<order>" -> unpack at the workbench -> "crate:unpack:<order>" -> in stock.
@@ -526,8 +531,10 @@ func inspect_text(sim: FacilitySim, id: String) -> String:
 		var req := sim.get_system("requisitions") as Requisitions
 		lines.append("Repairs use: %s (%d in stock)." % [req.item(k.part).get("name", k.part) if req else k.part,
 			int(req.inventory.get(k.part, 0)) if req else 0])
-	if not job.is_empty() and job.status == "parts":
-		lines.append("STOPPED: waiting for the part. Order it in Requisitions.")
+	if not job.is_empty() and not board.missing_part(sim, job).is_empty():
+		lines.append("NO PART IN STOCK: order one (Requisitions), or patch it without.")
+	elif not job.is_empty() and not job.get("requested", false):
+		lines.append("Nobody's been asked to fix it: order maintenance (Cameras: click it).")
 	return "\n".join(lines)
 
 

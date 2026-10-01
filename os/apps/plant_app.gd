@@ -1,10 +1,8 @@
 # Plant: the facility's vital signs. Throughput (the pods' average sync),
 # coolant, heat, dock power, and every device's state with its open job.
-# Pick a device to act on it:
-#   Inspect (10 min)        how fast it's wearing, when it needs work, who's on it
-#   Request maintenance     post the job before it becomes an alarm (5 min)
-# Repairs use spare parts from Requisitions stock; a job with no part in
-# stock stops halfway ("waiting for part").
+# Pick a device to Inspect it (30 min: how fast it's wearing, when it needs
+# work, who's on it, the part it needs). Ordering maintenance is done in
+# Cameras: click the thing.
 class_name PlantApp
 extends OSApp
 
@@ -16,8 +14,6 @@ var docks: Label
 var tree: Tree
 var detail: Label
 var inspect_button: Button
-var service_button: Button
-var patch_button: Button
 var selected := ""
 var _signature := ""
 var _rebuilding := false
@@ -94,11 +90,7 @@ func build() -> void:
 	var row := HBoxContainer.new()
 	add_child(row)
 	inspect_button = _button(row, "Inspect (30 min)", func(): detail.text = Supervisor.inspect_device(selected))
-	service_button = _button(row, "Request maintenance (5 min)", func(): _result(Supervisor.request_maintenance(selected), "Maintenance requested."))
-	patch_button = _button(row, "Patch without the part (5 min)", func():
-		var d := (sim().get_system("plant") as FacilityPlant).device(selected)
-		_result("" if Supervisor.patch_job(int(d.get("job", -1))) else "Nothing's waiting for a part there.", "Patching it. It won't hold long."))
-	patch_button.tooltip_text = "Finish a repair that's stopped for a part, without it. The device will fail again before long."
+	row.add_child(OSTheme.label("To fix something: Cameras, click it.", 12, OSTheme.TEXT_DIM))
 	_update_buttons()
 
 
@@ -114,22 +106,8 @@ func _button(row: HBoxContainer, text: String, action: Callable) -> Button:
 	return b
 
 
-func _result(why: String, ok_text: String) -> void:
-	detail.text = ok_text if why.is_empty() else why
-
-
 func _update_buttons() -> void:
-	var none := selected.is_empty()
-	for b in [inspect_button, service_button]:
-		b.disabled = none
-	if none or sim() == null:
-		return
-	var plant := sim().get_system("plant") as FacilityPlant
-	var d := plant.device(selected)
-	service_button.visible = FacilityPlant.KINDS.get(d.get("kind", ""), {}).has("drift")
-	var board := sim().get_system("work") as WorkBoard
-	var job := board.get_job(int(d.get("job", -1))) if board and int(d.get("job", -1)) >= 0 else {}
-	patch_button.visible = not job.is_empty() and job.status == "parts"
+	inspect_button.disabled = selected.is_empty()
 
 
 func refresh() -> void:

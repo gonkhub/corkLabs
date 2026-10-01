@@ -143,7 +143,7 @@ func _build_end(camp: Campaign) -> void:
 	if reqs and reqs.answered + reqs.ignored > 0:
 		_text("The units asked you %d time%s; you answered %d%s" % [reqs.answered + reqs.ignored, "" if reqs.answered + reqs.ignored == 1 else "s",
 			reqs.answered, (", and ignored %d" % reqs.ignored) if reqs.ignored > 0 else ""], OSTheme.TEXT if reqs.ignored == 0 else OSTheme.WARN)
-	var waiting := (sim.get_system("work") as WorkBoard).waiting_jobs().size()
+	var waiting := (sim.get_system("work") as WorkBoard).waiting_jobs(sim).size()
 	if waiting > 0:
 		_text("%d job%s still waiting for parts. Order before you clock out: the night won't." % [waiting, "" if waiting == 1 else "s"], OSTheme.WARN)
 	var k := Story.knowledge(sim)

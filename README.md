@@ -454,7 +454,8 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
   broken (click: Plant), throughput, and the **facility clock** with the
   shift (never the real clock). No Wait button, on purpose. **REQUESTS n**
-  lights up when the units are asking you something (click: Units).
+  lights up when the units are asking you something (click: Cameras, on the
+  unit that's asking, with its menu open).
 - **Discoveries** (a secret, a new program) pop up as a toast. Some apps
   aren't on the desktop until you find them (Night Run); the start menu shows
   them as "???".
@@ -465,15 +466,13 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, **N night vision**, F filter, M mute. You hear the facility through the open camera (grid: the one under the mouse). Feeds run at a locked 30 fps. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
+| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined and named. **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off, make it urgent; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
 | **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
-| **Units** | The units' **requests** on top (answer them, 5 min each, or they decide for themselves and it hurts them). Each robot: what it's doing, power, software stability, **wear**, standing order, what it's weighing up and why; crated units to activate | Order: recharge, stand by, cancel (5 min); **Diagnose** (30 min); **Book service** (5 min; uses a servo bundle); **Talk** (once you know you can); **remote reboot** (needs the remote-reboot package); **Activate** a crated unit (90 min) |
-| **Requisitions** | The catalogue with what's in stock, WAITING FOR PARTS (jobs stopped for a part), your budget, your orders | Order items (5 min), **Express** (+75%, about a third of the time); deliveries arrive as crates the units bring in |
-| **Work Orders** | The job board (open, waiting for a part, or all with finished) | Order a robot onto a job; raise/lower priority (5 min) |
-| **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs), **Request maintenance** (post the job early, 5 min) |
+| **Requisitions** | The catalogue with what's in stock, WAITING FOR PARTS (repairs that can't be ordered for want of a part), your budget, your orders | Order items (5 min), **Express** (+75%, about a third of the time); deliveries arrive as crates the units bring in |
+| **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs). Fixing things is done in Cameras |
 | **Files** | The OS file system (the same files as the Terminal) | Read files (the first read costs time), decrypt, run programs; hidden files once you know they exist (`ls -a`) |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | The command line you **learn**: `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `talk <unit>` (numbered replies, 0 closes), `requests`/`answer`, `service <unit>`, `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
+| **Terminal** | The command line you **learn** (no orders here: that's Cameras): `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `units` and `jobs` (read-only), `talk <unit>` (opens the unit link in Cameras), `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
 | **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
 
@@ -518,8 +517,13 @@ are archived in `docs/archive/endings.txt` for now).
 
 The facility **fights back**: leaks, the relay, debris, the freight gate,
 three passage doors (stuck = route blocked), seven cameras (NO SIGNAL), the
-corkHQ uplink. **Repairs use spare parts** from stock (a job with no part
-stops halfway). **Units wear out**: worn units slow down and seize up
+corkHQ uplink. **Nothing is fixed until you order it**: a fault posts a job,
+but stable units only work on jobs you've asked for (Cameras: click the
+thing, Order maintenance: `Dispatch` sends the most suitable free unit).
+Units below "stable" stop waiting and pick their own work (and start
+ignoring you). Off duty, a **night autopilot** asks for everything.
+**Repairs use spare parts** from stock, taken when you order the repair (no
+part: order one, or patch it without, and it won't hold). **Units wear out**: worn units slow down and seize up
 (another unit reboots them by hand), and need services (servo bundles).
 The **units ask** for things (UnitRequests); corporate issues **directives**
 with deadlines (Directives); **Pell escalates** as you break rules; and the
@@ -591,7 +595,7 @@ corkpkg installed
 
 Corporate only approves packages up to your **clearance** (1-3), which rises
 with A/B reviews and falls with an F. Three packages already do something:
-`remote-reboot` (the Units app's Reboot button), `route-control` (the
+`remote-reboot` (Remote reboot in a unit's menu), `route-control` (the
 Terminal's `block` / `unblock`), `firmware-stabilizer` (robots' software
 drifts half as fast). The rest (peer-sync, pathfinder-pro,
 predictive-maintenance, self-service, diag-suite, night-watch, overclock)

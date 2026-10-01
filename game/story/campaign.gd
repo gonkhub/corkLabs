@@ -22,6 +22,7 @@ extends RefCounted
 
 const SHIFTS := 3
 const SHIFT_START_HOUR := 6.0
+const SHIFT_END_HOUR := 14.0
 ## A new facility (and every brief) starts this long before the shift.
 const BRIEF_LEAD := 300.0
 const DIR := "res://game/story/"
@@ -89,6 +90,11 @@ func ending_info() -> Dictionary:
 ## Facility time the next shift starts (06:00 on day `shift`).
 func shift_start_time() -> float:
 	return (shift - 1) * 86400.0 + SHIFT_START_HOUR * 3600.0
+
+
+## When this shift's clock runs out (the day schedule's end).
+func shift_end_time() -> float:
+	return (shift - 1) * 86400.0 + SHIFT_END_HOUR * 3600.0
 
 
 # --- Duties ------------------------------------------------------------------------

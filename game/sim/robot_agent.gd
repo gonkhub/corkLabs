@@ -30,8 +30,13 @@
 #
 # DECIDING (utility scores)
 #   Every `think_interval` facility seconds (and whenever something finishes)
-#   it scores every option: each open job it can reach, recharging, standing
-#   by, wandering, and (when unstable) errant options. Highest score wins.
+#   it scores every option: each job it can reach, recharging, standing by,
+#   wandering, and (when unstable) errant options. Highest score wins.
+#   A STABLE unit doesn't pick its own work: it only considers jobs that were
+#   REQUESTED (WorkBoard: the supervisor asked, or the night autopilot) and
+#   the job it was ordered onto, and it always does as it's told. Below
+#   "stable" it has a will of its own (`own_will`): every open job is fair
+#   game, requested or not, and orders count for less and less.
 #   Scores and reasons are kept in `scores` (F1 dev panel, Units app); every
 #   change of mind is journaled.
 #
@@ -98,6 +103,9 @@ const SERVICE_WORK := 480.0
 const WHIM_TIME := 600.0
 ## How much slower idle software drifts between shifts (standby).
 const NIGHT_DRIFT := 0.15
+## How much slower a stable unit's software drifts while it stands by
+## waiting for orders (on duty: that's its job now, but it still frets).
+const WAITING_DRIFT := 0.4
 ## Independence at which errant fixations start.
 const FIXATE_FROM := 0.35
 
@@ -172,6 +180,18 @@ func independence() -> float:
 	return clampf((0.7 - stability) / 0.6, 0.0, 1.0) * traits.independence
 
 
+## Below "stable" it chooses its own work and starts to ignore you.
+func own_will() -> bool:
+	return stability < STATES[0][0]
+
+
+## How far it would travel to a station (m), or -1 if it can't get there.
+func route_length(sim: FacilitySim, station_id: String) -> float:
+	var layout := _layout(sim)
+	var r := _reach_station(layout, _field(layout), station_id)
+	return -1.0 if r.is_empty() else float(r.length)
+
+
 ## Out of action (crashed, rebooting, stalled, seized): it can't think or take orders.
 func offline() -> bool:
 	return activity.kind in ["crashed", "rebooting", "stalled", "seized"]
@@ -207,19 +227,21 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 
 func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 	match event_name:
-		"alarm":
+		"alarm", "job_requested":
 			_think_left = 0.0   # something broke: reconsider now
 		"route_changed":
 			route = []           # re-plan on the next step
 			_route_goal = ""
 			_think_left = 0.0
-		"job_parts":
-			if activity.get("kind", "") == "work" and int(activity.get("job", -1)) == int(data.get("job", -1)):
+		"job_released":
+			# Taken off the queue: put it down.
+			var id := int(data.get("job", -1))
+			if order.get("kind", "") == "job" and int(order.get("job", -1)) == id:
+				order = {}
+			if activity.get("kind", "") == "work" and int(activity.get("job", -1)) == id:
 				activity = {"kind": "idle"}
 				route = []
 				_think_left = 0.0
-				var req := sim.get_system("requisitions") as Requisitions
-				_say(sim, "need_part", {"part": req.item(str(data.part)).get("name", data.part) if req else data.part})
 		"job_done", "job_cancelled":
 			var src := str(data.get("source", ""))
 			if event_name == "job_done" and src == "unit:" + robot_id and activity.kind == "seized":
@@ -250,7 +272,10 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 	var energy := clampf((power - traits.power_reserve) / 0.2, 0.0, 1.0)
 	var hunger := 1.0 + (1.0 - stability) * 0.5
 	var ind := independence()
+	var own := own_will()
 	var listen := traits.obedience * (1.0 - ind)   # what an order is worth right now
+	if not own:
+		listen = maxf(listen, 1.2)   # stable: it does as it's told
 	var current := activity_key()
 	var f := _field(layout)   # travel costs to everywhere, once
 
@@ -263,6 +288,14 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 				continue   # someone else's service
 			if str(j.get("not_by", "")) == sim_id:
 				continue   # it broke this one
+			var requested: bool = j.get("requested", false)
+			var mine: bool = activity.get("kind", "") == "work" and int(activity.get("job", -1)) == int(j.id)
+			if not own and not requested and _ordered_job() != int(j.id) and not mine:
+				continue   # stable: nobody asked for it (but it finishes what it started)
+			if not own and requested and not mine and _ordered_job() != int(j.id) and str(j.claimed_by).is_empty():
+				var better := Dispatch.best_unit(sim, j)
+				if better != null and better != self:
+					continue   # a queued job: leave it to the unit that's best for it
 			if traits.stationary and j.get("rail_only", false):
 				continue   # something to carry somewhere: not a job for a crane bolted to the ceiling
 			var r := _reach_station(layout, f, j.station)
@@ -274,6 +307,11 @@ func evaluate(sim: FacilitySim) -> Array[Dictionary]:
 			var near := 1.0 - traits.distance_aversion * 0.5 * clampf(dist / FAR, 0.0, 1.0)
 			var s := prio * (0.4 + 0.6 * fit) * near * hunger * energy
 			var why := "%s priority, %s skill %d%%, %.0f m away" % [WorkBoard.PRIORITY_NAMES[int(j.priority)], j.skill, _pct(fit), dist]
+			if requested and not own:
+				s += 0.3 * fit * energy   # asked for: worth doing (if it's any good at it)
+				why += ", requested"
+			elif not requested:
+				why += ", its own idea"
 			if energy < 1.0:
 				why += ", power %d%%" % _pct(power)
 			if _ordered_job() == int(j.id):
@@ -515,6 +553,9 @@ func book_service(sim: FacilitySim) -> int:
 	var j := board.get_job(id)
 	j.only = sim_id
 	j.part = "servo_bundle"
+	if not board.request(sim, id).is_empty():
+		board.cancel(sim, id, "no servo bundles in stock")
+		return -2
 	return id
 
 
@@ -793,6 +834,10 @@ func _travel(sim: FacilitySim, goal: String, to_seg: String, to_off: float, dt: 
 		return false
 	if route.is_empty() or _route_goal != goal:
 		var r := layout.plan(seg, off, to_seg, to_off, traits.width)
+		if r.is_empty() and layout.world_pos(seg, off).distance_to(layout.world_pos(to_seg, to_off)) < 0.05:
+			seg = to_seg   # already there, just on the neighbouring segment
+			off = to_off
+			return true
 		if r.is_empty():
 			_give_up(sim, goal)
 			return false
@@ -889,6 +934,8 @@ func _decay(sim: FacilitySim) -> float:
 	var camp := sim.get_system("campaign") as Campaign
 	if camp and not camp.on_duty():
 		night = NIGHT_DRIFT   # no supervisor: idle units sit in low-power standby
+	elif camp and not own_will() and activity.get("kind", "") == "idle":
+		night = WAITING_DRIFT   # stable, waiting to be told: it frets, slowly
 	return traits.stability_decay * night * (0.5 if sw and sw.installed("firmware-stabilizer") else 1.0)
 
 

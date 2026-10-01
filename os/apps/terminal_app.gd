@@ -7,13 +7,14 @@
 #
 # Also here:
 #   the file system    ls, cd, cat, pwd, decrypt, run (Story / VirtualFS)
-#   talk <unit>        a conversation over the unit link: numbered replies
+#   talk <unit>        opens the unit link (the conversation runs in Cameras)
 #   su maint           the "decommissioned" maintenance account, and its
 #                      commands (auditctl, hqctl, unitctl, pkgctl, podctl).
 #                      Every one of them is a policy violation.
 #
-# Orders and duties go through Supervisor like everywhere else, so they cost
-# the same facility time. Up/down arrows walk the command history.
+# Units and jobs are read-only here (units, jobs): orders, requests and
+# conversations happen in Cameras (click the unit). Duties go through
+# Supervisor like everywhere else, so they cost the same facility time. Up/down arrows walk the command history.
 class_name TerminalApp
 extends OSApp
 
@@ -22,7 +23,7 @@ const COMMANDS := {
 	"help": ["help [command]", "the commands you know, or how to use one", "basics"],
 	"status": ["status", "clock, shift, throughput, coolant, alarms", "basics"],
 	"clear": ["clear", "clear the screen", "basics"],
-	"open": ["open <app>", "open an app (cameras, units, work, plant, files, duties...)", "basics"],
+	"open": ["open <app>", "open an app (cameras, plant, files, duties...)", "basics"],
 	"whoami": ["whoami", "who this terminal thinks you are", "basics"],
 	"who": ["who", "who's logged in", "system"],
 	"ps": ["ps", "what's running on this terminal", "system"],
@@ -35,14 +36,7 @@ const COMMANDS := {
 	"log": ["log [lines] [category]", "the facility journal (category: alarm, work, plant, tinker...)", "shift"],
 	"units": ["units", "what each unit is doing, its needs and order", "units"],
 	"jobs": ["jobs", "open jobs on the work board", "units"],
-	"order": ["order <unit> <job#|recharge|standby|cancel>", "give an order (2 min)", "units"],
-	"priority": ["priority <job#> <low|normal|high|critical|+|->", "change a job's priority (2 min)", "units"],
-	"talk": ["talk <unit>", "open the unit link and talk (3 min a line)", "units"],
-	"requests": ["requests", "what the units are asking you", "units"],
-	"answer": ["answer <request#> <option#>", "answer a unit's request (5 min)", "units"],
-	"service": ["service <unit>", "book a service at its dock (uses a servo bundle, 5 min)", "units"],
-	"patch": ["patch <job#>", "finish a job that's waiting for a part without it (it won't hold)", "plant"],
-	"reboot": ["reboot <unit>", "remote reboot (needs remote-reboot)", "units"],
+	"talk": ["talk <unit>", "open the unit link (it opens in Cameras: 3 min a line)", "units"],
 	"plant": ["plant", "every device and its state", "plant"],
 	"routes": ["routes", "passages between rooms: clearance, open or blocked", "plant"],
 	"block": ["block <route> [reason]", "close a passage (needs route-control)", "plant"],
@@ -83,7 +77,7 @@ const PROCESSES := [
 ]
 ## Facility C-7 came online (for uptime and who).
 const FACILITY_EPOCH := "1979-06-30"
-const ALIASES := {"?": "help", "robots": "units", "devices": "plant", "passages": "routes", "prio": "priority",
+const ALIASES := {"?": "help", "robots": "units", "devices": "plant", "passages": "routes", 
 	"cls": "clear", "dir": "ls", "type": "cat", "logout": "exit", "chat": "talk"}
 const ROOT_ACCOUNT := "maint"
 ## Accounts su knows, and their passwords. (Okafor's: Tinker, backwards.)
@@ -101,10 +95,8 @@ var connected := false
 ## Logged in as the maintenance account (this terminal session only).
 var root := false
 var cwd := VirtualFS.HOME
-## "", "password" (su), "talk" (a conversation)
+## "" or "password" (su)
 var mode := ""
-var talk_runner: Dialogue.Runner
-var talk_bot: RobotAgent
 var _pending := ""
 var _history_pos := 0
 
@@ -162,9 +154,6 @@ func _submit(line: String) -> void:
 		_finish_su(line)
 		return
 	line = line.strip_edges()
-	if mode == "talk":
-		_talk_input(line)
-		return
 	if line.is_empty():
 		return
 	history.append(line)
@@ -197,14 +186,7 @@ func _submit(line: String) -> void:
 		"log": _log(args)
 		"units": _units()
 		"jobs": _jobs()
-		"order": _order(args)
-		"priority": _priority(args)
 		"talk": _talk(args)
-		"requests": _requests()
-		"answer": _answer(args)
-		"service": _service(args)
-		"patch": _patch(args)
-		"reboot": _reboot(args)
 		"plant": _plant()
 		"routes": _routes()
 		"block": _block(args, true)
@@ -241,11 +223,8 @@ func _on_input_key(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed):
 		return
 	if event.keycode == KEY_ESCAPE and mode != "":
-		if mode == "talk":
-			_end_talk()
-		else:
-			_print("  (cancelled)")
-			_set_mode("")
+		_print("  (cancelled)")
+		_set_mode("")
 		input.accept_event()
 		return
 	if history.is_empty() or mode != "":
@@ -270,7 +249,6 @@ func _set_mode(m: String) -> void:
 func _prompt_text() -> String:
 	match mode:
 		"password": return "Password:"
-		"talk": return "reply [1-%d, 0 closes] >" % (talk_runner.choices.size() if talk_runner else 0)
 	var where := cwd
 	if where == VirtualFS.HOME or where.begins_with(VirtualFS.HOME + "/"):
 		where = "~" + where.substr(VirtualFS.HOME.length())
@@ -278,8 +256,6 @@ func _prompt_text() -> String:
 
 
 func _prompt_color() -> Color:
-	if mode == "talk" and talk_bot:
-		return OSTheme.category_color(talk_bot.robot_id)
 	return OSTheme.WARN if root else OSTheme.ACCENT
 
 
@@ -391,47 +367,10 @@ func _jobs() -> void:
 			j.skill, WorkBoard.PRIORITY_NAMES[int(j.priority)], int(board.fraction_done(j) * 100.0), who])
 
 
-func _requests() -> void:
-	var reqs := sim().get_system("requests") as UnitRequests
-	if reqs == null or reqs.requests.is_empty():
-		_print("  Nobody's asking for anything.")
-		return
-	for r in reqs.requests:
-		_print("  [color=#%s]#%d %s[/color] (until %s): %s" % [_hex(OSTheme.WARN), r.id, str(r.robot).to_upper(),
-			FacilitySim.format_clock(float(r.expires)), _esc(str(r.text))])
-		for i in (r.options as Array).size():
-			_print("      %d) %s" % [i + 1, r.options[i]])
-	_print("  [color=#%s]answer <request#> <option#>[/color]" % _hex(OSTheme.TEXT_DIM))
 
 
-func _answer(args: PackedStringArray) -> void:
-	if args.size() < 2 or not args[0].trim_prefix("#").is_valid_int() or not args[1].is_valid_int():
-		_error("Usage: answer <request#> <option#>   (see: requests)")
-		return
-	var out: String = Supervisor.answer_request(int(args[0].trim_prefix("#")), int(args[1]) - 1)
-	if out.is_empty():
-		_error("answer: no such request or option")
-	else:
-		_print("  " + _esc(out))
 
 
-func _patch(args: PackedStringArray) -> void:
-	if args.is_empty() or not args[0].trim_prefix("#").is_valid_int():
-		_error("Usage: patch <job#>")
-		return
-	if Supervisor.patch_job(int(args[0].trim_prefix("#"))):
-		_print("  Patching it. It won't hold long.")
-	else:
-		_error("patch: job %s isn't waiting for a part" % args[0])
-
-
-func _service(args: PackedStringArray) -> void:
-	var bot := _bot(args[0]) if not args.is_empty() else null
-	if bot == null:
-		_error("Usage: service <unit>")
-		return
-	var id: int = Supervisor.book_service(bot)
-	_print("  " + (("Service booked for %s: job #%d." % [bot.display_name(), id]) if id >= 0 else "A service is already booked."))
 
 
 func _plant() -> void:
@@ -469,59 +408,10 @@ func _bot(name: String) -> RobotAgent:
 	return sim().get_system("robot_" + name.to_lower()) as RobotAgent
 
 
-func _order(args: PackedStringArray) -> void:
-	if args.size() < 2:
-		_error("Usage: order <unit> <job#|recharge|standby|cancel>")
-		return
-	var bot := _bot(args[0])
-	if bot == null:
-		_error("No unit called '%s'." % args[0])
-		return
-	var what := args[1].to_lower().trim_prefix("#")
-	var r: Dictionary
-	if what.is_valid_int():
-		r = Supervisor.order(bot, "job", int(what))
-	elif what in ["recharge", "standby", "cancel"]:
-		r = Supervisor.order(bot, what)
-	elif what == "stand":
-		r = Supervisor.order(bot, "standby")
-	else:
-		_error("Order what? A job number, recharge, standby or cancel.")
-		return
-	_print("  Order sent to %s%s. (Its answer is on camera.)" % [bot.display_name(), "" if r.ok else ", but it's not doing it"])
 
 
-func _priority(args: PackedStringArray) -> void:
-	if args.size() < 2 or not args[0].trim_prefix("#").is_valid_int():
-		_error("Usage: priority <job#> <low|normal|high|critical|+|->")
-		return
-	var id := int(args[0].trim_prefix("#"))
-	var board := sim().get_system("work") as WorkBoard
-	var j := board.get_job(id)
-	if j.is_empty() or not WorkBoard.active(j):
-		_error("No open job #%d." % id)
-		return
-	var p := WorkBoard.PRIORITY_NAMES.find(args[1].to_lower())
-	if args[1] == "+":
-		p = int(j.priority) + 1
-	elif args[1] == "-":
-		p = int(j.priority) - 1
-	if p < 0 or p > 3:
-		_error("Priority must be low, normal, high, critical, + or -.")
-		return
-	Supervisor.set_priority(id, p)
-	_print("  Job #%d is now %s priority." % [id, WorkBoard.PRIORITY_NAMES[p]])
 
 
-func _reboot(args: PackedStringArray) -> void:
-	var bot := _bot(args[0]) if not args.is_empty() else null
-	if bot == null:
-		_error("Usage: reboot <unit>")
-		return
-	if not Supervisor.has_software("remote-reboot"):
-		_error("reboot: needs the remote-reboot package")
-		return
-	_print("  " + ("Rebooting %s." % bot.display_name() if Supervisor.reboot(bot) else "%s is offline already." % bot.display_name()))
 
 
 func _log(args: PackedStringArray) -> void:
@@ -794,21 +684,16 @@ func _run(args: PackedStringArray) -> void:
 
 ## Opens a conversation (Units' Talk button calls this too).
 func start_talk(robot_id: String) -> void:
-	if mode != "":
-		_end_talk()
-	var bot := _bot(robot_id)
+	var bot := sim().get_system("robot_" + robot_id) as RobotAgent
 	if bot == null:
 		_error("talk: no unit called '%s'" % robot_id)
 		return
-	var r: Dictionary = Supervisor.talk_begin(bot)
-	if r.runner == null:
-		_error(r.error)
+	var cams = desktop.open_app("cameras") if desktop else null
+	if cams == null:
+		_error("talk: the unit link needs the Cameras")
 		return
-	talk_runner = r.runner
-	talk_bot = bot
-	_print("  [color=#%s][unit link open: %s][/color]" % [_hex(OSTheme.TEXT_DIM), bot.display_name().to_upper()])
-	_show_lines(r.lines)
-	_after_lines()
+	_print("  Opening the unit link to %s in Cameras..." % bot.display_name().to_upper())
+	cams.start_talk(robot_id)
 
 
 func _talk(args: PackedStringArray) -> void:
@@ -816,50 +701,6 @@ func _talk(args: PackedStringArray) -> void:
 		_error("Usage: talk <unit>   (%s)" % ", ".join(FacilitySetup.robots(sim()).map(func(b): return b.robot_id)))
 		return
 	start_talk(args[0].to_lower())
-
-
-func _talk_input(line: String) -> void:
-	if line.is_empty():
-		return
-	if line == "0" or line.to_lower() in ["bye", "exit", "quit"]:
-		_end_talk()
-		return
-	if not line.is_valid_int() or int(line) < 1 or int(line) > talk_runner.choices.size():
-		_error("Pick a reply: 1-%d (0 closes the link)." % talk_runner.choices.size())
-		return
-	var i := int(line) - 1
-	_print("  [color=#%s]> %s[/color]" % [_hex(OSTheme.ACCENT), _esc(talk_runner.choices[i].text)])
-	_show_lines(Supervisor.talk_choose(talk_runner, talk_bot, i))
-	_after_lines()
-
-
-func _show_lines(lines: Array) -> void:
-	for l in lines:
-		if l.speaker == "sys":
-			_print("  [color=#%s][i]%s[/i][/color]" % [_hex(OSTheme.TEXT_DIM), _esc(l.text)])
-		else:
-			var speaker := str(l.speaker)
-			if speaker == "unit" and talk_bot:
-				speaker = talk_bot.robot_id   # a fresh unit's script speaks as whoever it is
-			var who: String = "YOU" if speaker == "you" else (talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper())
-			_print("  [color=#%s]%s:[/color] %s" % [_hex(OSTheme.category_color(speaker)), who, _esc(l.text)])
-
-
-func _after_lines() -> void:
-	if talk_runner == null or talk_runner.done or talk_runner.choices.is_empty():
-		_end_talk()
-		return
-	for i in talk_runner.choices.size():
-		_print("    [color=#%s]%d)[/color] %s" % [_hex(OSTheme.ACCENT), i + 1, _esc(talk_runner.choices[i].text)])
-	_set_mode("talk")
-
-
-func _end_talk() -> void:
-	if talk_bot:
-		_print("  [color=#%s][unit link closed][/color]" % _hex(OSTheme.TEXT_DIM))
-	talk_runner = null
-	talk_bot = null
-	_set_mode("")
 
 
 # --- The maintenance account -----------------------------------------------------------

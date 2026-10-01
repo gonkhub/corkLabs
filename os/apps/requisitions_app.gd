@@ -186,7 +186,7 @@ func refresh() -> void:
 	var board := sim().get_system("work") as WorkBoard
 	var need := {}
 	if board:
-		for j in board.waiting_jobs():
+		for j in board.waiting_jobs(sim()):
 			need[j.part] = int(need.get(j.part, 0)) + 1
 	var parts := PackedStringArray()
 	for k in need:

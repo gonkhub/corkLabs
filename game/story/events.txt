@@ -3,7 +3,8 @@
 # always; see Campaign.check: knowledge keys, !key, standing>=70, trust:x>=2 ... with &).
 #   shift | at | condition | action | arguments (separated by |)
 # actions:
-#   hq | sender | kind | text          a corkHQ message (kind: directive notice warning order)
+#   hq | sender | kind | text          a corkHQ message (kind: directive notice warning order reprimand;
+#                                     reprimand = a policy breach was seen: only for those)
 #   say | robot | text                 a robot says it (on camera, and in the Facility Log)
 #   learn | key                        the supervisor learns / a flag is set
 #   fault | device                     a plant fault (pipe_1, relay, gate, door_dock, cam_3, uplink...)
@@ -22,16 +23,16 @@
 1 | 06:02 | | hq | Liaison Pell | directive | Good morning, Supervisor. I'm Pell, your liaison. Today is orientation: your Duties list walks you through the job. Start with your onboarding file (Terminal: ls, then cat welcome.txt).
 1 | 06:50 | !read:/home/supervisor/welcome.txt | hq | Liaison Pell | notice | You haven't opened your onboarding yet. Terminal: cat ~/welcome.txt
 1 | 07:10 | | fault | pipe_1
-1 | 07:11 | | hq | Liaison Pell | notice | A coolant leak in bay 1. Your units will see it on the work board. Make sure they do: Work Orders, or order Hauler onto it.
+1 | 07:11 | | hq | Liaison Pell | notice | A coolant leak in bay 1. Nobody fixes anything until you say so: Cameras, find the bay 1 pipe, click it, Order maintenance.
 1 | 08:20 | | say | tinker | Is that a new voice on the link? The last one used to say good morning.
 1 | 09:00 | | fault | cam_3
 1 | 09:01 | | hq | IT Services | notice | Camera 3 has lost its signal. Camera repairs use a camera module from stock.
-1 | 09:30 | secret:former_staff | hq | Liaison Pell | warning | I can see what you open, Supervisor. Former staff directories are closed for a reason.
+1 | 09:30 | secret:former_staff | hq | Liaison Pell | reprimand | I can see what you open, Supervisor. Former staff directories are closed for a reason.
 1 | 10:20 | | fault | door_dock
-1 | 10:21 | | hq | Liaison Pell | warning | The dock door has stuck. Your units can't reach their chargers until it's freed. Make it the priority.
+1 | 10:21 | | hq | Liaison Pell | notice | The dock door has stuck. Your units can't reach their chargers until it's freed. Make it the priority.
 1 | 10:40 | | say | hauler | New supervisor. Same dark.
 1 | 11:20 | | seize | hauler
-1 | 11:21 | | hq | Liaison Pell | notice | Unit HAULER has seized up. Units wear out: book them services (Units), and a seized unit needs another unit to reboot it by hand.
+1 | 11:21 | | hq | Liaison Pell | notice | Unit HAULER has seized up. Units wear out: book them services (click a unit in Cameras), and a seized unit needs another unit sent to reboot it by hand (click it).
 1 | 11:45 | | say | ogre | ...another... one...
 1 | 12:30 | | directive | output | 85 | 60 | Throughput at 85% or better by 13:30.
 1 | 13:30 | | hq | Liaison Pell | notice | Thirty minutes left. Your end-of-shift report is due.
@@ -56,7 +57,7 @@
 3 | 07:30 | secret:pod3 | say | tinker | You looked in pod 3. I felt it through the rails. What is in there?
 3 | 08:30 | | fault | pipe_3
 3 | 10:00 | | fault | cam_1
-3 | 11:00 | secret:maint_account | hq | Liaison Pell | warning | Someone has been using a decommissioned account on your terminal. I'm sure you know nothing about it.
+3 | 11:00 | secret:maint_account | hq | Liaison Pell | reprimand | Someone has been using a decommissioned account on your terminal. I'm sure you know nothing about it.
 3 | 11:30 | | seize | ogre
 3 | 13:00 | | audit | 25
 3 | 13:01 | | hq | Compliance | notice | Audit complete. Results will be reflected in your review.

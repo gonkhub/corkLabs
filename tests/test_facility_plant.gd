@@ -165,8 +165,14 @@ func _test_save_load() -> void:
 	var pb := _plant(b)
 	var same := pa.device_ids().all(func(i): return is_equal_approx(pa.device(i).value, pb.device(i).value) and pa.device(i).fault == pb.device(i).fault)
 	_check(same and is_equal_approx(pa.coolant, pb.coolant), "the plant saves and loads, and plays out identically")
-	_check(a.journal.tail(30).map(func(e): return e.text) == b.journal.tail(30).map(func(e): return e.text),
-		"with identical journals")
+	var ja := a.journal.tail(30).map(func(e): return e.text)
+	var jb := b.journal.tail(30).map(func(e): return e.text)
+	var diff := ""
+	for i in mini(ja.size(), jb.size()):
+		if ja[i] != jb[i]:
+			diff = "%s  vs  %s" % [ja[i], jb[i]]
+			break
+	_check(ja == jb, "with identical journals " + diff)
 
 
 func _check(ok: bool, what: String) -> void:

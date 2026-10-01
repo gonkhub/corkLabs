@@ -13,7 +13,8 @@
 #     props.build(layout)          # FacilityWorld does this
 #
 # Placeholder shapes, like the robots: swap in real models later, keeping the
-# state colours.
+# state colours, and register the new nodes in `pick_nodes` (what you point
+# at in a camera feed to get a device's menu: FacilityWorld.pick).
 class_name FacilityProps
 extends Node3D
 
@@ -37,6 +38,9 @@ var _bench_part: MeshInstance3D
 var _bench_crate: MeshInstance3D
 var _loading_crate: MeshInstance3D
 var _time := 0.0
+## What can be pointed at in a camera feed: device id (or "bench") -> [Node3D]
+## (every MeshInstance3D under them counts).
+var pick_nodes := {}
 
 
 ## Builds a prop for every plant device at its station, and a charging clamp at each dock.
@@ -60,6 +64,7 @@ func build(layout: FacilityLayout) -> void:
 		var bay := "bay_%d" % (b + 1)
 		_build_bay(bay, _beside_rail(bay, 0.0, 3.5))
 	_build_relay(_by_wall("relay"))
+	_build_uplink(_by_wall("uplink"))
 	_build_bench(_beside_rail("bench", 0.0, 0.0))
 	_build_gate_panel(_beside_rail("gate", 0.0, -3.0))
 	for id in plant.device_ids():
@@ -108,6 +113,11 @@ func _process(delta: float) -> void:
 	(gate[0] as OmniLight3D).light_color = BAD if jammed else OK
 	(gate[0] as OmniLight3D).light_energy = (2.0 * flash) if jammed else 0.4
 	(gate[1] as StandardMaterial3D).emission = BAD if jammed else OK
+	var up: Array = _lamps["uplink"]
+	var down: bool = plant.device("uplink").fault
+	(up[0] as OmniLight3D).light_color = BAD if down else OK
+	(up[0] as OmniLight3D).light_energy = (2.0 * flash) if down else 0.3
+	(up[1] as StandardMaterial3D).emission = BAD if down else OK
 	var relay: Array = _lamps["relay"]
 	var out: bool = plant.device("relay").fault
 	(relay[0] as OmniLight3D).light_color = BAD if out else OK
@@ -199,6 +209,9 @@ func _build_bay(bay: String, at: Vector3) -> void:
 	pipe.position = Vector3(0, 0.25, 0)
 	var filt := _mesh(_box(Vector3(0.6, 0.7, 0.5)), _mat(Color(0.3, 0.32, 0.3)), root)
 	filt.position = Vector3(0.55, 0.35, -0.6)
+	var n := bay.trim_prefix("bay_")
+	_pick("pipe_" + n, pipe)
+	_pick("filter_" + n, filt)
 	var lamp_mat := _mat(OK, 0.2, true)
 	var bulb := _mesh(_sphere(0.08), lamp_mat, root)
 	bulb.position = Vector3(0.55, 0.8, -0.6)
@@ -218,6 +231,7 @@ func _build_bay(bay: String, at: Vector3) -> void:
 		d.position = Vector3(rng.randf_range(-0.5, 0.3), 0.08, rng.randf_range(0.2, 0.7))
 		d.rotation.y = rng.randf() * TAU
 	_debris[bay] = debris
+	_pick(bay, debris)
 	_add_label(bay, at + Vector3(1.1, 2.8, -1.2))
 
 
@@ -240,6 +254,7 @@ func _build_freight(id: String, at: Vector3) -> void:
 		c.position = Vector3(rng.randf_range(-2.8, 2.8), size * 0.4 + (2.0 if i >= 4 else 0.0), rng.randf_range(-2.8, 2.8))
 		c.rotation.y = rng.randf_range(-0.4, 0.4)
 	_freight[id] = crates
+	_pick(id, crates)
 	_add_label(id, at + Vector3(0, 6.0, 0))
 
 
@@ -251,6 +266,7 @@ func _build_pod(id: String, at: Vector3) -> void:
 	pod.position = at + Vector3(0, 1.3, 0)
 	_pods[id] = pod
 	_pod_mats[id] = mat
+	_pick(id, pod)
 	_add_label(id, at + Vector3(0, 3.0, 0))
 
 
@@ -260,6 +276,8 @@ func _build_gate_panel(at: Vector3) -> void:
 	var lamp_mat := _mat(OK, 0.2, true)
 	var bulb := _mesh(_sphere(0.1), lamp_mat, self)
 	bulb.position = at + Vector3(0, 1.5, 0)
+	_pick("gate", post)
+	_pick("gate", bulb)
 	var light := OmniLight3D.new()
 	light.position = at + Vector3(0, 2.0, 0)
 	light.omni_range = 4.0
@@ -271,6 +289,7 @@ func _build_gate_panel(at: Vector3) -> void:
 func _build_relay(at: Vector3) -> void:
 	var panel := _mesh(_box(Vector3(0.2, 1.1, 0.8)), _mat(Color(0.25, 0.27, 0.3), 0.6), self)
 	panel.position = at
+	_pick("relay", panel)
 	var lamp_mat := _mat(OK, 0.2, true)
 	var bulb := _mesh(_sphere(0.07), lamp_mat, self)
 	var inward := -Vector3(at.x, 0, at.z).normalized()
@@ -283,9 +302,31 @@ func _build_relay(at: Vector3) -> void:
 	_add_label("relay", at + Vector3(0, 0.8, 0))
 
 
+# The corkHQ uplink relay: a grey cabinet on the workshop wall with a stub
+# antenna and a lamp (green: linked, red: down).
+func _build_uplink(at: Vector3) -> void:
+	var inward := -Vector3(at.x, 0, at.z).normalized()
+	var box := _mesh(_box(Vector3(0.5, 0.9, 0.5)), _mat(Color(0.32, 0.34, 0.36), 0.6), self)
+	box.position = at
+	var mast := _mesh(_cyl(0.03, 1.0), _mat(Color(0.6, 0.6, 0.62), 0.9), self)
+	mast.position = at + Vector3(0, 0.95, 0)
+	var lamp_mat := _mat(OK, 0.2, true)
+	var bulb := _mesh(_sphere(0.06), lamp_mat, self)
+	bulb.position = at + Vector3(0, 0.3, 0) + inward * 0.27
+	var light := OmniLight3D.new()
+	light.position = bulb.position + inward * 0.3
+	light.omni_range = 2.0
+	add_child(light)
+	_lamps["uplink"] = [light, lamp_mat]
+	for n in [box, mast, bulb]:
+		_pick("uplink", n)
+	_add_label("uplink", at + Vector3(0, 1.7, 0))
+
+
 func _build_bench(at: Vector3) -> void:
 	var top := _mesh(_box(Vector3(1.0, 0.08, 1.4)), _mat(Color(0.4, 0.33, 0.25)), self)
 	top.position = Vector3(at.x, 0.9, at.z)
+	_pick("bench", top)
 	for dx in [-0.4, 0.4]:
 		for dz in [-0.6, 0.6]:
 			var leg := _mesh(_box(Vector3(0.06, 0.9, 0.06)), _mat(Color(0.2, 0.2, 0.2)), self)
@@ -323,6 +364,12 @@ func _add_label(device: String, at: Vector3) -> void:
 	l.no_depth_test = false
 	add_child(l)
 	_labels[device] = l
+
+
+func _pick(id: String, node: Node3D) -> void:
+	if not pick_nodes.has(id):
+		pick_nodes[id] = []
+	pick_nodes[id].append(node)
 
 
 # --- Mesh helpers ------------------------------------------------------------------------

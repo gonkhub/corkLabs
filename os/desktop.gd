@@ -42,8 +42,6 @@ const SNAP_MARGIN := 12.0
 const APPS := [
 	["duties", preload("res://os/apps/duties_app.gd")],
 	["cameras", preload("res://os/apps/cameras_app.gd")],
-	["units", preload("res://os/apps/units_app.gd")],
-	["work", preload("res://os/apps/work_app.gd")],
 	["plant", preload("res://os/apps/plant_app.gd")],
 	["requisitions", preload("res://os/apps/requisitions_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
@@ -284,7 +282,18 @@ func log_on() -> void:
 	_refresh_all()
 	var board := Facility.sim.get_system("work") as WorkBoard
 	toast("Welcome, %s" % user_name(), "Facility time %s. %d open job(s)." % [
-		FacilitySim.format_time(Facility.sim.time()), board.open_jobs().size()], OSTheme.ACCENT, "work")
+		FacilitySim.format_time(Facility.sim.time()), board.open_jobs().size()], OSTheme.ACCENT, "cameras")
+
+
+# REQUESTS: Cameras, on the unit that's asking, with its menu open.
+func _show_request() -> void:
+	var cams = open_app("cameras")
+	var reqs := Facility.sim.get_system("requests") as UnitRequests if Facility.running else null
+	if cams == null or reqs == null or reqs.requests.is_empty():
+		return
+	var robot := str(reqs.requests[0].robot)
+	cams.look_at_unit(robot)
+	cams.open_menu("robot:" + robot)
 
 
 func log_off() -> void:
@@ -833,8 +842,8 @@ func _build_taskbar() -> void:
 	requests_button.focus_mode = Control.FOCUS_NONE
 	requests_button.add_theme_color_override("font_color", OSTheme.WARN)
 	requests_button.add_theme_stylebox_override("normal", OSTheme.box(OSTheme.WARN.darkened(0.75), OSTheme.WARN, 4, 8, 4))
-	requests_button.tooltip_text = "The units are asking you something (Units)"
-	requests_button.pressed.connect(func(): open_app("units"))
+	requests_button.tooltip_text = "The units are asking you something (Cameras: click the unit)"
+	requests_button.pressed.connect(_show_request)
 	requests_button.visible = false
 	row.add_child(requests_button)
 
@@ -900,7 +909,7 @@ func _refresh_taskbar() -> void:
 		if _asked_mark >= 0 and reqs.asked > _asked_mark and not reqs.requests.is_empty():
 			var r: Dictionary = reqs.requests.back()
 			var bot := sim.get_system("robot_" + str(r.robot)) as RobotAgent
-			toast("%s asks" % (bot.display_name() if bot else str(r.robot)), str(r.text), OSTheme.WARN, "units")
+			toast("%s asks" % (bot.display_name() if bot else str(r.robot)), str(r.text), OSTheme.WARN, "cameras")
 		_asked_mark = reqs.asked
 
 

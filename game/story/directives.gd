@@ -8,7 +8,7 @@
 # A directive: {"id", "kind", "target", "text", "due", "reward", "penalty",
 # "posted", "done"}. Kinds and how they're met:
 #   inspect   Plant > Inspect that device            (Supervisor.inspect_device)
-#   diagnose  Units > Diagnose that unit             (Units app)
+#   diagnose  Diagnose that unit                     (its menu in Cameras)
 #   job       that job is done by the deadline        (checked)
 #   output    throughput at or above `target`% at the deadline
 #   report    Duties > File it (a button: 20 minutes)
@@ -25,6 +25,8 @@ const GAP := Vector2(4200.0, 7200.0)
 const FIRST_AFTER := 3000.0
 const MAX_ACTIVE := 2
 const REPORT_MINUTES := 20.0
+## No new directives this close to the end of the shift.
+const LAST_CALL := 2700.0
 
 var sim_id := "directives"
 var active: Array[Dictionary] = []
@@ -50,7 +52,11 @@ func issue(sim: FacilitySim, kind: String, target: String, minutes: float, text:
 	for d in active:
 		if d.kind == kind and str(d.target) == target:
 			return int(d.id)
-	var d := {"id": next_id, "kind": kind, "target": target, "text": text, "due": sim.time() + minutes * 60.0,
+	var due := sim.time() + minutes * 60.0
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and camp.on_duty():
+		due = minf(due, camp.shift_end_time())   # nothing is due after the shift
+	var d := {"id": next_id, "kind": kind, "target": target, "text": text, "due": due,
 		"reward": reward, "penalty": penalty, "posted": sim.time()}
 	next_id += 1
 	posted += 1
@@ -101,7 +107,7 @@ func _generate(sim: FacilitySim) -> void:
 			# Inspect something that's wearing, or anything with a fault.
 			var ids := plant.device_ids().filter(func(i): return plant.device(i).kind in ["pod", "filter", "pipe", "relay", "door", "camera"])
 			var id: String = ids[rng.randi() % ids.size()]
-			issue(sim, "inspect", id, rng.randf_range(45.0, 75.0), "Inspect %s and log its state (Plant)." % plant.device(id).name))
+			issue(sim, "inspect", id, rng.randf_range(45.0, 75.0), "Inspect %s and log its state (Plant, or click it in Cameras)." % plant.device(id).name))
 		options.append(func():
 			var target := clampi(roundi(plant.throughput * 100.0) + 2, 78, 88)
 			issue(sim, "output", str(target), rng.randf_range(60.0, 90.0), "Throughput is %d%%. Have it at %d%% or better." % [roundi(plant.throughput * 100.0), target], 4.0, 8.0))
@@ -109,7 +115,7 @@ func _generate(sim: FacilitySim) -> void:
 		var bots := FacilitySetup.robots(sim).filter(func(b): return not b.offline())
 		if not bots.is_empty():
 			var b: RobotAgent = bots[rng.randi() % bots.size()]
-			issue(sim, "diagnose", b.robot_id, rng.randf_range(45.0, 75.0), "Run diagnostics on unit %s (Units)." % b.display_name().to_upper()))
+			issue(sim, "diagnose", b.robot_id, rng.randf_range(45.0, 75.0), "Run diagnostics on unit %s (Cameras: click it)." % b.display_name().to_upper()))
 	options.append(func():
 		issue(sim, "report", "", rng.randf_range(40.0, 70.0), "File an interim output report (Duties)."))
 	if board:
@@ -168,7 +174,8 @@ func sim_tick(sim: FacilitySim, dt: float) -> void:
 		_next_at = sim.time() + FIRST_AFTER
 	# No new demands while corkHQ can't reach the facility (the uplink is down).
 	var o := sim.get_system("oversight") as Oversight
-	if sim.time() >= _next_at and active.size() < MAX_ACTIVE and not (o and o.uplink_down(sim)):
+	var late_in_shift := camp != null and camp.shift_end_time() - sim.time() < LAST_CALL
+	if sim.time() >= _next_at and active.size() < MAX_ACTIVE and not late_in_shift and not (o and o.uplink_down(sim)):
 		_generate(sim)
 		_next_at = sim.time() + rng.randf_range(GAP.x, GAP.y)
 
@@ -177,8 +184,9 @@ func sim_event(sim: FacilitySim, event_name: String, _data: Dictionary) -> void:
 	if event_name == "shift_start":
 		met = 0
 		missed = 0
-	if event_name == "shift_close":
-		# Whatever's outstanding at the end of the shift is missed.
+	if event_name == "shift_end":
+		# Whatever's outstanding at the end of the shift is missed: now, on
+		# shift, not in the night (shift_close is when the night begins).
 		for d in active.duplicate():
 			_miss(sim, d)
 

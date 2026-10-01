@@ -1,6 +1,6 @@
 #! date: today
 #! owner: supervisor
-#! learn: cmd:units cmd:jobs cmd:order cmd:priority cmd:plant cmd:log cmd:open cmd:duties
+#! learn: cmd:units cmd:jobs cmd:plant cmd:log cmd:open cmd:duties
 #! minutes: 3
 WELCOME TO corkLabs
 Supervisor onboarding, facility C-7 ("the Compound")
@@ -18,6 +18,13 @@ YOUR DUTIES
 
   duties                        your checklist, from the terminal
 
+YOUR UNITS
+  Units do what they are told, and nothing else. Nothing is repaired until
+  you order it. Open Cameras and click whatever needs attention: a leaking
+  pipe, a stuck door, a unit. Its menu lists what you can do about it.
+  A unit whose software drifts stops waiting to be told. That is not an
+  improvement.
+
 YOUR TERMINAL
   Every action you take costs facility time. The facility does not wait
   for you, and it does not move without you. Use your time well.
@@ -25,9 +32,6 @@ YOUR TERMINAL
   status                        the facility at a glance
   units                         what each unit is doing
   jobs                          open work orders
-  order <unit> <job#>           direct a unit (it may object; they do that)
-  order <unit> recharge|standby|cancel
-  priority <job#> <level>       low, normal, high, critical
   plant                         every device and its state
   log [lines] [category]        the facility journal
   open <app>                    open an app by name

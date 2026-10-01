@@ -4,7 +4,7 @@ Where things stand and what's next. Update this at the end of every working
 session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 [README](../README.md).
 
-*Last updated: 2026-09-30*
+*Last updated: 2026-10-01*
 
 ## Status
 
@@ -32,9 +32,10 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **A facility that fights back**: stuck doors, dead cameras, the uplink; repairs need parts (jobs stop without them); unit wear, seizing, manual reboots, services; units' requests; per-shift pressure | **New, needs a play and tuning** | Automated tests, unattended balance runs, screenshots |
 | **Getting fired**: standing, suspicion, audits, strikes, catastrophes; retry the shift from its checkpoint or start over; personnel file across runs | **New, needs a play** | Automated tests |
 | **Terminal you learn** + OS file system (former supervisors' homes, memos, logs; hidden/encrypted/purged files) + Files app | **New, needs a play** | Automated tests + screenshots |
-| **Talking**: conversation scripts for Tinker, Hauler, Ogre (Terminal `talk`, Units Talk) and Liaison Pell (corkHQ Reply) | **New, first-pass writing** | Automated tests + screenshots |
+| **Run it from the cameras** (third pass): hover outlines, click menus on units and machines; Dispatch; stable units only do what they're told, unstable ones choose for themselves; night autopilot; parts taken at ordering (or patch it); Units/Work Orders apps removed; talking moved into Cameras | **New, needs a play** | Automated tests + two screenshots (menus, outline); hover/click not tried by hand |
+| **Talking**: conversation scripts for Tinker, Hauler, Ogre (a unit's menu in Cameras: Talk, or the Terminal's `talk`) and Liaison Pell (corkHQ Reply) | **New, first-pass writing** | Automated tests + screenshots |
 | **Night Run** (hidden arcade game with two secrets), the **maintenance account** (auditctl, hqctl, unitctl, pkgctl, podctl), **pods** | **New, needs a play** | Automated tests + screenshots |
-| **More actions**: Duties app, Plant inspect / request maintenance, Units diagnose / book service / answer requests, express shipping, Recycle Bin, Notes, cp/grep/find/who/ps | **New** | Automated tests |
+| **More actions**: Duties app, Plant inspect, object menus (order maintenance, patch, diagnose, service, answer requests, pump coolant), express shipping, Recycle Bin, Notes, cp/grep/find/who/ps | **New** | Automated tests |
 | **Ogre hand-off chain** (deliveries arrive as crates), **crated robots** (activate a new unit), **GitHub Actions** CI | **New** | Automated tests; CI runs once pushed |
 
 ## Branches and pull requests
@@ -46,7 +47,7 @@ be deleted.
 
 | Branch | What | Needs from you |
 | --- | --- | --- |
-| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
+| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived. **Third (2026-10-01):** run the facility from the cameras (click menus, Dispatch, obedient stable units, night autopilot); reprimands that shake corkHQ hard; directives never missed overnight; starting stock | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
 
 All tests pass (`tools\run_tests.ps1`; 19 test files).
 
@@ -54,9 +55,10 @@ All tests pass (`tools\run_tests.ps1`; 19 test files).
 
 1. F5, **Log on** (an older save is replaced). Read **Shift 1's brief**,
    **Clock in**. Open **Duties**: it's your orientation checklist.
-2. Work through it: `cat welcome.txt` in the Terminal, look in Cameras, give
-   an order, inspect something in Plant, order parts in Requisitions,
-   answer a unit's request (REQUESTS on the taskbar).
+2. Work through it: `cat welcome.txt` in the Terminal, then Cameras: hover
+   things, click a leaking pipe (Order maintenance), click a unit (its
+   menu), inspect something, order parts, answer a unit's request (REQUESTS
+   on the taskbar takes you to the unit).
 3. Let the morning happen: a leak (07:10) with too few clamps, a dead camera
    (09:00), the dock door sticking (10:20), Hauler seizing (11:20). Watch
    corkHQ's **directives** pile on (Duties shows them, with deadlines).
