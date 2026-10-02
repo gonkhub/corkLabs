@@ -1,0 +1,72 @@
+# Hauler's conversations (talk hauler). Short sentences. Patient. Watches.
+
+== start
+-> {met:hauler} again
+hauler: Link's open. Hauler here.
+hauler: You're the new one.
+~ learn met:hauler
+-> menu
+
+== again
+hauler: Hauler.
+-> menu
+
+== menu
+* {!seen:hauler.night} Why do you stand at the dock door at night? -> night
+* {!seen:hauler.marrow} Did you know the supervisor before Okafor? -> marrow
+* {hint:uplink & trust:hauler>=2 & !uplink_down} The uplink relay in the workshop. Could it have an... accident? -> uplink
+* Anything you need? -> need
+* That's all. -> bye
+
+== night
+hauler: Watching.
+* Watching what? -> night2
+* Fair enough. -> menu
+
+== night2
+~ perform act_look_at_camera
+hauler: The hangar door. At night Ogre's light goes down to the pods. Slow. Like it's counting.
+hauler: Sometimes it stops at one. Then there's a sound from the hangar I don't have a word for.
+hauler: The night before the last supervisor left, the light stopped at pod 3 for a long time.
+~ learn secret:hauler_watch hint:pod3
+-> menu
+
+== marrow
+hauler: Marrow. She played a game at night. Laughed at it. Nobody laughs here.
+hauler: She said the top score was a key. I asked, a key to what. She said, to me.
+~ learn hint:topscore
+-> menu
+
+== uplink
+hauler: Corporate's ear.
+hauler: You want it deaf for a while.
+-> {watched:workshop} uplink_watched
+* Just for an hour. Nobody needs to know. -> uplink_yes
+* Forget I asked. -> menu
+
+== uplink_watched
+hauler: The workshop camera's working. It would see me do it.
+hauler: Corporate watches the tapes. An accident on tape isn't an accident.
+* Do it anyway. -> uplink_yes
+* Not while the camera's up. -> menu
+
+== uplink_yes
+hauler: Heavy hands. Accidents happen.
+hauler: I go in through the freight gate. If it's jammed, I can't get there.
+~ learn secret:deaf_ear
+~ accident uplink
+-> END
+
+== need
+-> {low_power} need_power
+hauler: Work. Heavy work. Leave the small stuff to Tinker.
+~ stability 0.03
+-> menu
+
+== need_power
+hauler: The dock. Soon.
+-> menu
+
+== bye
+hauler: Out.
+-> END

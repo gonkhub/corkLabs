@@ -1,0 +1,10 @@
+#! date: today
+#! learn: cmd:podctl
+POD MANIFEST (maintenance view)
+pod  occupant                          since
+1    #44-0917  (name withheld)         1979
+2    #44-2230  (name withheld)         1994
+3    #44-8812  (name withheld)         two days ago
+4    #44-5561  (name withheld)         2011
+
+  podctl list | podctl inspect <pod> | podctl wake <pod>

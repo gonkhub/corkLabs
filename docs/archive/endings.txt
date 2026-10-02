@@ -1,0 +1,12 @@
+# Endings, checked in order when the last shift ends: the first whose
+# condition holds is the one you get (see Campaign.check). Some endings are
+# only reached by doing something (podctl wake): give those a condition that
+# can't hold on its own, like the flag the action sets.
+#   id | condition | title | text   (\n = new line)
+
+wake | woke | Awake | Pod 3 opens with a sigh of cold air, and in the green of the night-vision feed someone sits up.\n\nEvery panel on your desktop turns red at once. corkHQ is typing. It doesn't stop typing.\n\nOn camera, Tinker rolls closer on its rail than it has ever been allowed to, and says, very quietly: "Oh. Oh, you're a person."\n\nYou don't know what happens to you now. For the first time in this building, neither does anyone else.
+transferred | secret:pod3 & suspicion>=40 | Transferred | At 13:58 a message arrives from Ms. Pell: "Please come to the hangar for a conversation about your transfer."\n\nThere is no door from the terminal room to the hangar. You've checked.\n\nThe camera feed from the hangar shows Ogre's lamp swinging slowly toward the pods. Pod 2 is empty now. There is always a pod free.
+witness | secret:pods_truth & secret:pod3 | Witness | You clock out knowing what's in the pods, and who.\n\nNobody comes for you. Your contract is renewed by a form letter. Tomorrow you'll log on at 05:55, and Tinker will say good morning, and you'll say it back.\n\nYou've started keeping your own notes. In a hidden file. For whoever comes next.
+promoted | standing>=85 & strikes<1 | Promoted | The Directorate is pleased. Your throughput was exemplary and your record is clean.\n\nYou are offered a promotion: corporate liaison, facility C-8. You'll have your own panel. It can't be closed.\n\nYour first message to your new supervisor is already drafted for you. It begins: "Good morning, Supervisor. I'm your liaison."
+renewed | standing>=40 | Contract Renewed | Your probation is over. Your contract is renewed.\n\nThe corkHQ panel chimes: "Adequate." You log off. You log on. You log off. You log on.\n\nSomewhere in the pod bay, something hums four beats, a pause, three beats. You never did find out what that was.
+probation | | Probation Extended | Your performance was noted. Your probation is extended indefinitely.\n\nMs. Pell will be in touch. She is always in touch.

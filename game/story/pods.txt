@@ -1,0 +1,8 @@
+# The pods, as the maintenance console sees them (podctl, as maint).
+# Nobody below the Directorate is supposed to read this.
+#   pod | occupant id | name | since | what they're dreaming (\n = new line)
+
+1 | #44-0917 | (record sealed: Directorate order 79-001) | 1979 | An ordinary life. A long one. It has been running since before the Compound had a name.
+2 | #44-2230 | HOLLIS, E. (record: "transferred") | 1994 | An ordinary life: a small house, a garden with too many lights in it.\nLast dream log: "it's so bright out here."
+3 | #44-8812 | OKAFOR, D. (record: "transferred") | two days ago | An ordinary life: an apartment, a commute, a desk.\nLast dream log: "good morning, Tinker."
+4 | #44-5561 | MARROW, R. (record: "transferred") | 2011 | An ordinary life. There is an arcade on the corner of her street. She is winning.

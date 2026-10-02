@@ -107,6 +107,8 @@ static func box(fill: Color, border: Color, radius := 4, pad_x := 0, pad_y := 0)
 static func category_color(cat: String) -> Color:
 	if CATEGORY_COLORS.has(cat):
 		return CATEGORY_COLORS[cat]
+	if CATEGORY_COLORS.has(RobotTraits.model_of(cat)):
+		return CATEGORY_COLORS[RobotTraits.model_of(cat)]
 	return Color("c9b7ff")   # robots
 
 

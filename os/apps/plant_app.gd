@@ -1,5 +1,9 @@
 # Plant: the facility's vital signs. Throughput (the pods' average sync),
 # coolant, heat, dock power, and every device's state with its open job.
+# Pick a device to see its last inspection report, or send a unit to inspect
+# it (it goes, looks and reports back: how fast it's wearing, when it needs
+# work, who's on it, the part it needs). Ordering maintenance is done in
+# Cameras: click the thing.
 class_name PlantApp
 extends OSApp
 
@@ -9,7 +13,11 @@ var coolant_txt: Label
 var heat: Label
 var docks: Label
 var tree: Tree
+var detail: Label
+var inspect_button: Button
+var selected := ""
 var _signature := ""
+var _rebuilding := false
 
 
 func _init() -> void:
@@ -21,11 +29,12 @@ func _init() -> void:
 
 
 ## Things broken right now (leaks, blown fuse, desynced pods): the alarm light.
+## Faults worth the ALARM light (a dead camera isn't one).
 static func active_faults(plant: FacilityPlant) -> int:
 	var n := 0
 	for id in plant.device_ids():
 		var d := plant.device(id)
-		if d.fault or (d.kind == "pod" and float(d.value) <= 0.0):
+		if (d.fault and d.kind != "camera") or (d.kind == "pod" and float(d.value) <= 0.0):
 			n += 1
 	return n
 
@@ -70,7 +79,38 @@ func build() -> void:
 		tree.set_column_title_alignment(i, HORIZONTAL_ALIGNMENT_LEFT)
 	tree.set_column_expand(2, false)
 	tree.set_column_custom_minimum_width(2, 80)
+	tree.item_selected.connect(func():
+		if _rebuilding:
+			return
+		selected = str(tree.get_selected().get_metadata(0))
+		var rep: Dictionary = (sim().get_system("plant") as FacilityPlant).reports.get(selected, {}) if sim() else {}
+		detail.text = "" if rep.is_empty() else "%s's report (%s): %s" % [rep.by, FacilitySim.format_clock(float(rep.t)), str(rep.text).replace(char(10), " ")]
+		_update_buttons())
 	add_child(tree)
+	detail = OSTheme.label("Select a device.", 13, OSTheme.TEXT_DIM)
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(detail)
+	var row := HBoxContainer.new()
+	add_child(row)
+	inspect_button = _button(row, "Send a unit to inspect it", func(): detail.text = str(Supervisor.order_inspection(selected).text))
+	row.add_child(OSTheme.label("To fix something: Cameras, click it.", 12, OSTheme.TEXT_DIM))
+	_update_buttons()
+
+
+func _button(row: HBoxContainer, text: String, action: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(func():
+		action.call()
+		_signature = ""
+		refresh())
+	row.add_child(b)
+	return b
+
+
+func _update_buttons() -> void:
+	inspect_button.disabled = selected.is_empty()
 
 
 func refresh() -> void:
@@ -96,11 +136,12 @@ func refresh() -> void:
 			continue   # empty bays: nothing to show
 		var text := plant.device_text(id)
 		rows.append([d.name, text.substr(20).split("  job")[0].strip_edges(),
-			("#%d" % int(d.job)) if int(d.job) >= 0 else "", _device_color(d)])
+			("#%d" % int(d.job)) if int(d.job) >= 0 else "", _device_color(d), id])
 	var sig := str(rows)
 	if sig == _signature:
 		return
 	_signature = sig
+	_rebuilding = true
 	tree.clear()
 	var root := tree.create_item()
 	for r in rows:
@@ -108,6 +149,11 @@ func refresh() -> void:
 		for c in 3:
 			it.set_text(c, r[c])
 		it.set_custom_color(1, r[3])
+		it.set_metadata(0, r[4])
+		if r[4] == selected:
+			it.select(0)
+	_rebuilding = false
+	_update_buttons()
 
 
 static func _color(v: float, warn: float, bad: float) -> Color:
@@ -117,6 +163,8 @@ static func _color(v: float, warn: float, bad: float) -> Color:
 static func _device_color(d: Dictionary) -> Color:
 	if d.fault or (d.kind == "bay" and int(d.job) >= 0):
 		return OSTheme.ALARM if d.kind != "bay" else OSTheme.WARN
-	if d.kind == "pod" or d.kind == "filter":
-		return _color(float(d.value), 0.75, 0.45)
+	if d.kind in ["waste", "compactor"]:
+		return _color(float(d.value), 0.4, 0.15)   # they fill up every day: only nearly full is a worry
+	if FacilityPlant.KINDS[d.kind].has("drift"):
+		return _color(float(d.value), 0.75, 0.45)   # pods, filters, rail grime...
 	return OSTheme.ACCENT

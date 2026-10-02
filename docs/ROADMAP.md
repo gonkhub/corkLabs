@@ -4,7 +4,7 @@ Where things stand and what's next. Update this at the end of every working
 session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 [README](../README.md).
 
-*Last updated: 2026-09-30*
+*Last updated: 2026-10-01*
 
 ## Status
 
@@ -27,47 +27,85 @@ session. Design reasons live in [DESIGN.md](DESIGN.md); how-to in the
 | **Camera audio**: Feed/Voices/World/UI buses, one listening camera, room-aware 3D sounds, robot motor hum, Cameras mute, Terminal `sound` auditions | **New framework, needs a listen** | Automated tests + screenshot (not checked by ear) |
 | **Corporate**: corkHQ panel (unclosable), shift reviews + budget, Requisitions app, software packages via the Terminal | **New framework, needs a look** | Automated tests + screenshots (chime not checked by ear) |
 | **Ogre**: massive stationary crane core in a new hangar (light cone eye, one crane arm), `stationary`/`reach` traits, freight jobs, two hangar cameras | **New, needs a look** | Automated tests (`test_ogre.gd`) + screenshots; not tried in VR |
+| **Shifts campaign**: three shifts as one timeline (brief, clock in, duties, scripted events, end of shift, the night); shift 1 is a tutorial; **no Wait**; endings archived ("end of this build") | **Reworked, needs a play** | `test_story.gd`, `test_secrets.gd` + screenshots |
+| **Pushback**: corporate directives with deadlines; Pell escalating (warning, explain yourself, Compliance + targeted audit); the uplink blind spot (Hauler's "accident") | **New, needs a play** | Automated tests + screenshots |
+| **A facility that fights back**: stuck doors, dead cameras, the uplink; repairs need parts (jobs stop without them); unit wear, seizing, manual reboots, services; units' requests; per-shift pressure | **New, needs a play and tuning** | Automated tests, unattended balance runs, screenshots |
+| **Getting fired**: standing, suspicion, audits, strikes, catastrophes; retry the shift from its checkpoint or start over; personnel file across runs | **New, needs a play** | Automated tests |
+| **Terminal you learn** + OS file system (former supervisors' homes, memos, logs; hidden/encrypted/purged files) + Files app | **New, needs a play** | Automated tests + screenshots |
+| **Run it from the cameras** (third pass): hover outlines, click menus on units and machines; Dispatch; stable units only do what they're told, unstable ones choose for themselves; night autopilot; parts taken at ordering (or patch it); Units/Work Orders apps removed; talking moved into Cameras | **New, needs a play** | Automated tests + two screenshots (menus, outline); hover/click not tried by hand |
+| **Talking**: conversation scripts for Tinker, Hauler, Ogre (a unit's menu in Cameras: Talk, or the Terminal's `talk`) and Liaison Pell (corkHQ Reply) | **New, first-pass writing** | Automated tests + screenshots |
+| **Night Run** (hidden arcade game with two secrets), the **maintenance account** (auditctl, hqctl, unitctl, pkgctl, podctl), **pods** | **New, needs a play** | Automated tests + screenshots |
+| **Fourth pass + macro pass**: errands, roles, routine work and chores (pod waste, compactor, rails), inspections by units, relay -> uplink, hqctl disable, Terminal parity, ir-vision package, cameras as corporate's eyes, trust from treatment, night-watch + overclock, DevTools | **New, needs a play** | Automated tests (19 files) + simulated play (efficient supervisor: 7/8 seeds finish with 1.5-4 h spare a shift; a heavy snooper gets fired on day 3 in 2/4) |
+| **More actions**: Duties app, Plant inspect, object menus (order maintenance, patch, diagnose, service, answer requests, pump coolant), express shipping, Recycle Bin, Notes, cp/grep/find/who/ps | **New** | Automated tests |
+| **Unit behaviour pass**: Ogre starts broken (Pell, Form C-9, a free core, Hauler + Tinker); Forms app; dialogue checker; units face the camera on the link; a repaired camera's greeting; props (wrench, radio, crate), habits, contextual exchanges; dead Ogre looks dead; Notes pages/find/colours; camera hover cards + pop-out | **New, needs a play** | Automated tests (21 files) + screenshots (greeting, dead Ogre, props, Notes, hover card, pop-out) |
+| **Ogre hand-off chain** (deliveries arrive as crates), **crated robots** (activate a new unit), **GitHub Actions** CI | **New** | Automated tests; CI runs once pushed |
 
 ## Branches and pull requests
 
-Four new branches, **stacked** (each builds on the one before; the first
-three from the 2026-09-29 evening session, the fourth from 2026-09-30). Push all three, then open the PRs in order; merge
-them in order (after #1 is merged, #2's diff on GitHub shows only its own
-commits, and so on).
+Everything up to the dark facility, camera audio and Ogre is merged into
+`main` (PRs #3-#7). The old feature branches (`feature/robot-behaviour` ...
+`feature/dark-facility`, `docs/roadmap-after-merge`, `test/integration`) can
+be deleted.
 
-| Order | Branch | What | Needs from you |
-| --- | --- | --- | --- |
-| 1 | `feature/robot-behaviour` | Robots as facility systems: utility scores, power + purpose, work board, orders + push-back, `RobotView`, dev panel pages. Also carries the earlier unpushed ROADMAP commit from `docs/roadmap-after-merge` | Run the demo; open `robots/*/<id>_traits.tres` in the Inspector |
-| 2 | `feature/facility-content` | `FacilityPlant`: devices, faults, chains, salvage hand-off, shift reports; 3D props coloured by state | Watch the demo for a shift (F7 / Shift+F6); do the props read? |
-| 3 | `feature/desktop-os` | The corkLabs OS (`os/desktop.tscn`); 3D world split into `game/facility_world.tscn`; `Supervisor` actions | Play it: log on, give orders, break things (F9), log off/on |
-| 4 | `feature/os-buildout` (PR #3, contains 1-4) | F5 boots into the OS; Cameras = observation only (PTZ, grid, 4th camera); window snapping/maximise; layout memory; notification centre; Terminal, Settings, Handbook | Click around: drag windows to edges, pan cameras, try `help` in the Terminal |
-| 5 | `feature/rooms-and-speech` | Rooms + rail network with route caveats, bigger Hauler, robot speech framework; Messages/Handbook/demo removed | Watch the camera grid through a Wait; `block`/`unblock` routes in the Terminal; listen to the voices |
-| 6 | `feature/stability-and-corporate` | Software stability, corkHQ, requisitions + budget, software packages; tracker cam removed | Let a robot go unstable (Wait, don't give it work); find the software server; order something |
-| 7 | `feature/camera-audio` (merged, PR #5) | Camera feed audio: bus layout, listener = the camera you watch, `FacilitySound` with room-aware attenuation, motor hum, Mute button (M), feed volume, `sound` auditions | Open the Audio tab in the editor; in Cameras, `sound loop tone 10` in the Terminal and switch cameras; hover grid feeds; press Mute |
-| 8 | `feature/ogre` (merged, PR #7) | Ogre, the stationary crane robot, and its hangar | Watch the Hangar cameras through a Wait; perform for Ogre in the recorder (right hand = crane, left trigger = winch) |
-| 9 | `feature/dark-facility` | Facility lights removed, robot status LEDs, unlit signs; night vision in Cameras (N); feeds locked to 30 fps | Open Cameras: is the dark too dark / NV too bright? Does 30 fps feel right? |
+| Branch | What | Needs from you |
+| --- | --- | --- |
+| `feature/shifts-and-secrets` (2026-09-30, from `main`) | Two passes. **First:** Wait removed; shifts campaign; getting fired; the learned Terminal; file system and lore; conversations; Night Run; maintenance account; Duties/Files/Notes/Bin apps; Reply to Pell; perform cues; crate chain; crated robots; CI. **Second (after your notes):** pacing x3-6; locked homes + trust chains; parts, wear, requests, new failures; directives, Pell escalation, the uplink; shift 1 as orientation; endings archived. **Third (2026-10-01):** run the facility from the cameras (click menus, Dispatch, obedient stable units, night autopilot); reprimands that shake corkHQ hard; directives never missed overnight; starting stock. **Fourth (2026-10-01, from your play notes):** errands, pick the unit, talk and requests on camera, roles, Ogre's hangar machines, routine work and chores, pod waste and the compactor, inspections by units, the relay powering the uplink, hqctl disable, Terminal parity, night vision as a package, balance from simulated play. **Macro pass:** the cameras are corporate's eyes, trust from treatment, packages that all work (night-watch, overclock), remote reboot frees seized units, catalogue cuts, DevTools (`dev`). **Unit behaviour pass:** Ogre broken + Form C-9, dialogue sanity, facing the camera, the camera greeting, props/habits/exchanges, Notes upgrade, camera hover cards + pop-out. **Play-note fixes:** safe DevTools skips, Pell reprimand categories, no orders between units, protected quest lines, units wait for your answer, camera repair spots, cameras not alarms, the gate softlock, Plant colours, `order` known, Reply closes on uplink loss, no Make urgent | Push it; Claude opens the PR. Then play shift 1 (see below) and read [STORY.md](STORY.md) |
 
-`docs/roadmap-after-merge` is now contained in branch 1 and can be deleted
-after that merges. Claude creates the PRs with `gh` once the branches are pushed.
+All tests pass (`tools\run_tests.ps1`; 22 test files; the per-file timeout is 300 s).
 
-All tests pass on each branch (`tools\run_tests.ps1`; 17 test files on the last one).
+## Things to try first (about 45 minutes)
 
-## Things to try first (about 15 minutes)
-
-1. Press **F5** (the game now boots into the OS). Skip the boot text, **Log on**.
-2. Open **Cameras**: drag to pan, scroll to zoom, G for the grid. Open **Units**
-   beside it (drag a window to the screen edge to snap). Press **Wait → 1 hour** (an alarm stops it early) and
-   watch the robots pick work, recharge, get restless.
-3. Press **F9** (dev) a few times to post jobs, or wait for faults. When an
-   **ALARM** toast appears, open **Plant**, then **Work Orders**, and order a
-   robot onto the job. Try ordering Tinker onto heavy work (it refuses), or
-   a robot low on power (it recharges first).
-4. **Messages** shows the robots' answers; **Facility Log** has every
-   decision with its reasons.
-5. Try the **Terminal** (`help`, `status`, `order tinker recharge`).
-6. Log off, close, reopen: it resumes at the same facility minute, with your windows where you left them.
+1. F5, **Log on** (an older save is replaced). Read **Shift 1's brief**,
+   **Clock in**. Open **Duties**: it's your orientation checklist.
+2. Work through it: `cat welcome.txt` in the Terminal, then Cameras: hover
+   things, click a leaking pipe (Order maintenance), click a unit (its
+   menu), inspect something, order parts, answer a unit's request (REQUESTS
+   on the taskbar takes you to the unit).
+3. Let the morning happen: a leak (07:10) with too few clamps, a dead camera
+   (09:00), the dock door sticking (10:20), Hauler seizing (11:20). Watch
+   corkHQ's **directives** pile on (Duties shows them, with deadlines).
+4. Snoop and see what happens: `ls /home` (locked), `cat` the open ones, play
+   Night Run, talk to Tinker more than once. Pell notices, then wants an
+   explanation (Reply), then calls Compliance.
+5. Clock out, and see the night summary in the next brief. Notice what the
+   end-of-shift screen says about directives and the units' requests.
+6. The spoiler map is [STORY.md](STORY.md): the chains, the costs, the
+   pushback, the uplink trick, and the clips to perform in VR.
 
 ## Decisions waiting for you
+
+From the second pass:
+
+- **Is the pressure right?** Shift 1 orientation pressure 0.65, shift 2 1.0,
+  shift 3 1.15 (`Campaign.PRESSURE`); fault rates in `FacilityPlant.KINDS`;
+  starting stock in `Requisitions.START_STOCK`. In unattended test runs the
+  clamps run out mid-morning and coolant dries up by midday without orders;
+  a supervisor who never books services sees seizures pile up by shift 2-3.
+- **Costs**: `Facility.COST` (3/5/15/45 min), reading x3, inspect/diagnose 30,
+  Night Run 30. Enough that a shift can't hold everything?
+- **Pell's thresholds** (`Oversight.ESCALATE`) and how much each level costs.
+- **The uplink trick**: strong (a blind window of 30-60 min). Too strong? Should
+  the repair need a part so blackouts can last longer (riskier)?
+- **Trust**: 3 conversations two hours apart for Okafor's password; Ogre 2,
+  Hauler 2. Too slow / too fast?
+- **Wear**: seizing from 50% wear; units free themselves after 2 h; services
+  reset to 8%. Servo bundles are 200 cr for two.
+- **Trust from treatment** amounts (`Knowledge.nudge_trust` callers): can a
+  caring supervisor reach Okafor's password (trust 3) on day 1? Should they?
+- **Blind spots**: one camera each covers the workshop and the maintenance
+  room, so those are the easiest rooms to blind. Intended?
+- **Endings** are parked in `docs/archive/endings.txt` (memory note too).
+
+From the first pass (still open):
+
+- **The lore**: names (Hollis, Marrow, Vance, Kim, Okafor, Pell), "the pods
+  hold people / transferred = put in a pod", the tone of the files.
+- **Three shifts** enough? **What carries across runs** (only the player's
+  memory, the personnel file, Night Run scores and the Notes app)?
+- **The Terminal's starting commands** (help, status, clear, ls, cd, cat, pwd).
+- **Clips to perform**: seven named in STORY.md, plus ideas for the new systems.
+
+Earlier:
 
 - **Camera audio**: how loud through walls (-30 dB now), whether robot voices
   should become positional too, whether the grid should hear the last-opened
@@ -111,19 +149,18 @@ All tests pass on each branch (`tools\run_tests.ps1`; 17 test files on the last 
 
 ## Next up
 
-0. **Try the rooms and speech framework** (branch 5), then decide what fills
-   the rooms and how robots should sound.
-
-1. **Your pass over the three branches** (above), and tuning traits/plant
-   rates by eye.
-2. **One shift, start to end** (the first playable slice): a shift brief at
-   log on, a goal (throughput/quota), incidents that push the robots over,
-   and an end-of-shift report screen. Most of the pieces now exist.
-3. **Talking to the robots**: grow Messages into dialogue (choices that cost
-   time, robots' opinions of the supervisor, maybe the "trust" need we left
-   out).
-4. **Robots reacting to each other** more directly (a robot noticing another
-   stalled or overloaded; asking for help across rails).
+0. **Use DevTools** (`dev` in the Terminal) to jump around: end shifts,
+   break things, set trust, run any scripted event.
+1. **Play shift 1** as a new supervisor, then a snooping run, and set the
+   pressure/costs/thresholds above.
+2. **The acting pass**: the seven story clips, `act_wave_camera`, the
+   eight habit clips (`idle_*`, see STORY.md), plus a seize, a manual
+   reboot, Hauler's "accident", unpacking a crate.
+3. **More shift 2/3 content**: events, files that appear later, conversation
+   branches that use trust; what the overnight summary should say.
+4. **Endings**, when the loop feels right (start from the archive).
+5. **Sound for the systems**: alarms per failure, Night Run, the uplink going
+   dark, a seized unit.
 
 ## Backlog
 
@@ -131,8 +168,8 @@ All tests pass on each branch (`tools\run_tests.ps1`; 17 test files on the last 
 - Upgrade Godot 4.3 → 4.6+ (needed for the built-in IK modifiers, for reactive IK).
 - Real robot and facility models (rigid parts from Blender); props are placeholders.
 - More robots (a third body type), and rails that connect.
-- Simulation speed: 1 facility hour ≈ 0.4 s to compute (fine now; long waits
-  hitch slightly). Could skip idle ticks if it grows.
+- Simulation speed: 1 facility hour ≈ 0.4 s to compute. The night between
+  shifts (16 h) is spread over frames; could skip idle ticks if it grows.
 - GitHub Actions to run `tests/` on every PR.
 - Use a GitHub noreply email for future commits (commits currently show a personal address; the repo is public).
 

@@ -9,6 +9,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_floor_plan()
 	_test_planning()
 	_test_caveats()
@@ -114,7 +115,7 @@ func _test_rerouting() -> void:
 	var id := board.post(sim, "Recalibrate", "precise", "pods_a", 60.0, 3, "test")
 	sim.advance(5.0)
 	_check(tinker.activity_key() == "work:%d" % id and tinker.route.any(func(leg): return leg.seg == "pod_duct"),
-		"Tinker heads for the pods through the duct")
+		"Tinker heads for the pods through the duct (%s %s %s)" % [tinker.activity_key(), str(board.get_job(id)), str(tinker.scores.slice(0, 3).map(func(o): return "%s %.2f %s" % [o.key, o.score, o.why]))])
 	l.set_blocked(sim, "pod_duct", true, "debris")
 	sim.advance(2.0)
 	_check(tinker.activity_key() == "work:%d" % id and not tinker.route.any(func(leg): return leg.seg == "pod_duct"),

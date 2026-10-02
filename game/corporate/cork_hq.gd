@@ -27,7 +27,8 @@ const SERVER := "cork://pkg.corklabs.int"
 
 var sim_id := "hq"
 ## Newest last: {"n", "t", "sender", "kind", "text", "code"}
-## kind: "directive", "review", "notice", "order", "software", "warning"
+## kind: "directive", "review", "notice", "order", "software", "warning",
+## "reprimand" (you broke policy and corporate saw: the panel shakes hard)
 var messages: Array[Dictionary] = []
 ## How many messages have ever been posted (the panel watches this).
 var posted := 0
@@ -103,6 +104,9 @@ func sim_start(sim: FacilitySim) -> void:
 
 
 func sim_tick(sim: FacilitySim, dt: float) -> void:
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		return   # nobody to nag between shifts
 	_acc += dt
 	if _acc < CHECK_EVERY - 0.001:
 		return
@@ -123,6 +127,9 @@ func sim_event(sim: FacilitySim, event_name: String, data: Dictionary) -> void:
 		"shift_end":
 			_review(sim)
 		"alarm":
+			var camp := sim.get_system("campaign") as Campaign
+			if camp and not camp.on_duty():
+				return   # nobody at the desk to tell
 			if data.has("robot"):
 				var bot := sim.get_system("robot_" + str(data.robot)) as RobotAgent
 				if bot and bot.activity.kind == "crashed":
@@ -149,6 +156,9 @@ func _review(sim: FacilitySim) -> void:
 
 ## Something suspicious (sabotage) was logged: corporate may notice.
 func noticed_damage(sim: FacilitySim, robot: RobotAgent) -> void:
+	var camp := sim.get_system("campaign") as Campaign
+	if camp and not camp.on_duty():
+		return
 	if rng.randf() < 0.5:
 		say(sim, "sabotage", "warning", {"robot": robot.display_name()})
 

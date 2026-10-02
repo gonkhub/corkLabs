@@ -1,0 +1,10 @@
+#! name: tinker.cfg
+#! date: 1988-05-17
+unit            TINKER
+class           precise
+rails           yes
+chatter         high
+knowledge_filter  enabled   # Directorate order 88-114
+  filter.pods   = "processing units"
+  filter.people = [REDACTED]
+  filter.self   = "maintenance unit"

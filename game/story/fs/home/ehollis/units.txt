@@ -1,0 +1,21 @@
+#! date: 1979-08-20
+#! minutes: 3
+#! learn: hint:lantern
+UNIT DESIGN NOTES  E.H.
+
+OGRE. The first. Built into the hangar ceiling because nothing else could
+hold it. It will never leave the hangar. I told it so on the first day and
+it said "then the hangar is the world". I have not been able to stop
+thinking about that. I gave its great lamp a name. It is the only word
+I have ever asked it to keep.
+
+TINKER. Quick hands, a curious mind. Too curious. The Directorate wants
+its curiosity filtered: it must never learn what the pods hold. Filter
+installed (knowledge_filter, see /sys/units/tinker.cfg).
+
+HAULER. Strong, patient, a little sad. I don't know why I built it sad.
+Maybe I didn't. Maybe that's just what patience looks like from outside.
+
+All three: no lights. They see by their own lamps. The Directorate says
+"the dark keeps them focused". The truth is the dark keeps them from
+seeing the pods properly. It keeps all of us from that.

@@ -14,8 +14,10 @@ var desk: Control
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	get_root().size = Vector2i(1600, 900)
 	facility = get_root().get_node("Facility")
+	facility.seed_override = 4242   # the same facility every run (its random faults too)
 	facility.wipe_save(SAVE)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(OS_SETTINGS))
 	OSSettings.use_file(OS_SETTINGS)
@@ -39,6 +41,7 @@ func _initialize() -> void:
 	desk.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	desk.size = Vector2(1600, 900)
 	desk.log_on()
+	desk.clock_in()
 	await process_frame
 
 	await _test_cameras()
@@ -102,6 +105,10 @@ func _test_cameras() -> void:
 	var room_lights: Array = desk.world.get_children().filter(func(n): return n is Light3D)
 	_check(room_lights.is_empty(), "the facility has no room lights (%d)" % room_lights.size())
 	_check(app.feeds.all(func(f): return not f.night_vision and f.eye.environment == null), "feeds start without night vision")
+	app.set_night_vision(true)
+	_check(not app.night_on and app.feeds.all(func(f): return not f.night_vision), "without the ir-vision package, there's no night vision")
+	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("ir-vision")
+	app.refresh()
 	_key(KEY_N)
 	await process_frame
 	var ir: Environment = app.feeds[0].eye.environment
@@ -136,9 +143,9 @@ func _test_windows() -> void:
 	_check(w.is_maximized() and w.size == area, "dragging to the top maximises")
 	w.toggle_maximize()
 	_check(not w.is_maximized(), "the maximise button toggles back")
-	desk.open_app("units")
+	desk.open_app("plant")
 	desk.show_desktop()
-	_check(not desk.is_open("cameras") and not desk.is_open("units"), "Show desktop minimises everything")
+	_check(not desk.is_open("cameras") and not desk.is_open("plant"), "Show desktop minimises everything")
 	desk.open_app("cameras")
 	_check(desk.is_open("cameras"), "opening a minimised app brings it back")
 
@@ -163,17 +170,114 @@ func _test_notifications() -> void:
 func _test_terminal() -> void:
 	var term = desk.open_app("terminal")
 	await process_frame
-	_check(term.run("help").contains("order <robot>"), "Terminal: help lists the commands")
+	var help: String = term.run("help")
+	_check(help.contains("status") and help.contains("There are more"), "Terminal: help lists the commands you know, and hints there are more")
 	_check(term.run("status").contains("throughput"), "Terminal: status")
 	_check(term.run("units").contains("HAULER"), "Terminal: units")
 	_check(term.run("jobs").contains("Clamp coolant leak"), "Terminal: jobs shows the leak")
-	var board: WorkBoard = facility.sim.get_system("work")
-	var leak: int = int((facility.sim.get_system("plant") as FacilityPlant).device("pipe_3").job)
-	var t0: float = facility.sim.time()
-	var out: String = term.run("order hauler %d" % leak)
-	_check(out.contains("Order sent to Hauler") and facility.sim.time() - t0 >= 119.9, "Terminal: order costs time (%s)" % out.strip_edges())
-	out = term.run("order tinker %d" % leak)
-	_check(out.contains("not doing it"), "Terminal: says when a robot won't do it (%s)" % out.strip_edges())
+	# Everything the camera menus do, by name (for when a camera's out).
+	var sim: FacilitySim = facility.sim
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var hauler: RobotAgent = sim.get_system("robot_hauler")
+	hauler.activity = {"kind": "idle"}
+	hauler.power = 1.0
+	_check(term.run("plant").contains("pipe_3"), "Terminal: plant lists the things by id")
+	var out: String = term.run("maintain pipe_3 tinker")
+	_check(out.contains("Hauler's work"), "Terminal: maintain names who can't (%s)" % out.strip_edges())
+	out = term.run("maintain pipe_3 hauler")
+	var leak := board.get_job(int(plant.device("pipe_3").job))
+	_check(leak.get("requested", false) and (out.contains("on its way") or out.contains("on it")), "Terminal: maintain <thing> <unit> sends that unit (%s)" % out.strip_edges())
+	facility.finish_errands()
+	out = term.run("inspect filter_2")
+	facility.finish_errands()
+	_check(plant.reports.has("filter_2"), "Terminal: inspect sends a unit to look (%s)" % out.strip_edges())
+	_check(term.run("order hauler recharge").contains("HAULER:"), "Terminal: order <unit> recharge (the unit answers)")
+	_check(term.run("diagnose tinker").contains("DIAG"), "Terminal: diagnose")
+	var reqs: UnitRequests = sim.get_system("requests")
+	reqs.requests.clear()
+	reqs._last.clear()
+	hauler.wear = 0.7
+	var rid := reqs.ask(sim, "hauler", "service", "Book me a service?", ["Book a service", "Not now"], 1)
+	_check(term.run("requests").contains("#%d HAULER" % rid), "Terminal: requests lists what the units ask")
+	_check(not term.run("answer %d 2" % rid).contains("no such") and reqs.get_request(rid).is_empty(), "Terminal: answer")
+	# Talking with no camera on the unit: the link runs here.
+	var room: String = desk.world.robot_room("tinker")
+	for i in desk.world.cameras.size():
+		if desk.world.camera_rooms[i] == room:
+			plant.devices["cam_%d" % (i + 1)].fault = true
+	(sim.get_system("robot_tinker") as RobotAgent).activity = {"kind": "idle"}
+	out = term.run("talk tinker")
+	_check(out.contains("no camera on TINKER") and out.contains("TINKER:") and term.mode == "talk", "Terminal: with its camera out, talk runs in the Terminal")
+	term.run("0")
+	_check(term.mode == "", "and 0 closes the link")
+	for i in desk.world.cameras.size():
+		plant.devices["cam_%d" % (i + 1)].fault = false
+	# Forms: paperwork takes its time.
+	var forms_app = desk.open_app("forms")
+	await process_frame
+	forms_app.refresh()
+	_check(forms_app.list.item_count == 0, "Forms: nothing until your liaison issues one")
+	Story.learn(sim, "form:c9")
+	forms_app._key = ""
+	forms_app.refresh()
+	_check(forms_app.list.item_count == 1 and forms_app.fields.size() == 3, "Forms: Form C-9, three fields")
+	forms_app.set_answer("Unit designation", "OGRE")
+	forms_app.set_answer("Unit serial number", "OGR-79-001")
+	forms_app.set_answer("Fault code", "E-417")
+	var t_form := sim.time()
+	forms_app._file()
+	_check(sim.time() - t_form >= 75.0 * 60.0 - 1.0 and (sim.get_system("forms") as Forms).status("c9") == "review", forms_app.result.text + " " +
+		"Forms: filing it takes 75 minutes, and it goes under review")
+	# The secret "dev": DevTools on the desktop.
+	_check(not desk.app_available("devtools") and not term.run("help").contains("dev "), "DevTools is hidden, and dev isn't in help")
+	term.run("dev")
+	await process_frame
+	_check(desk.app_available("devtools") and desk.is_open("devtools"), "dev puts DevTools on the desktop and opens it")
+	var dev = desk._windows["devtools"].app
+	dev.device_pick.select(dev._devices.find("relay"))
+	dev._break_device()
+	_check(plant.device("relay").fault, "DevTools: break a device")
+	dev._heal()
+	_check(not plant.device("relay").fault and plant.coolant >= 1.0, "DevTools: heal the facility")
+	dev._set_immune(true)
+	Story.oversight(sim).fire(sim, "performance", "dev test")
+	_check(not Story.oversight(sim).fired(), "DevTools: never fired")
+	dev._set_immune(false)
+	var t_dev := sim.time()
+	dev._spend(3600.0)
+	_check(dev.skipping() and sim.time() - t_dev < 1.0, "DevTools: a skip runs over frames (no freeze)")
+	while dev.skipping():
+		await process_frame
+	_check(sim.time() - t_dev >= 3599.0, "DevTools: pass time")
+	# The safeguard: an empty coolant loop stops the skip, and nobody's fired.
+	var o := Story.oversight(sim)
+	dev._empty_stock()
+	for id in plant.device_ids():
+		if plant.device(id).kind == "pipe":
+			dev.device_pick.select(dev._devices.find(id))
+			dev._break_device()
+	plant.coolant = 0.0
+	t_dev = sim.time()
+	dev._spend(14400.0)
+	while dev.skipping():
+		await process_frame
+	_check(not o.fired() and not o.dev_skip and sim.time() - t_dev < 14399.0 and o.crises().has("coolant"),
+		"DevTools: a skip stops early at a crisis, not fired (%d min passed; %s %s watching %s coolant %.2f crises %s)" % [roundi((sim.time() - t_dev) / 60.0),
+		FacilitySim.format_time(t_dev), Story.campaign(sim).state, o.watching, plant.coolant, o.crises()])
+	_check(o._coolant_since < 0.0, "and the crisis clock restarts: the full hour to fix it from there")
+	dev.alive_box.button_pressed = true
+	plant.coolant = 0.0
+	t_dev = sim.time()
+	dev._spend(14400.0)
+	while dev.skipping():
+		await process_frame
+	_check(not o.fired() and sim.time() - t_dev >= 14399.0 and plant.coolant > 0.0, "DevTools: Keep it alive skips right through")
+	dev.alive_box.button_pressed = false
+	dev._heal()
+	dev._stock_up()
+	term.run("dev off")
+	_check(not desk.app_available("devtools"), "dev off takes it away")
 	_check(term.run("routes").contains("freight_gate"), "Terminal: routes lists the passages")
 	_check(term.run("block pod_door testing").contains("needs the route-control package"), "Terminal: block needs the route-control package")
 	(facility.sim.get_system("software") as SoftwareLibrary).installed_ids.append("route-control")
@@ -182,14 +286,9 @@ func _test_terminal() -> void:
 	_check(layout.segment("pod_door").blocked, "Terminal: block closes a route")
 	term.run("unblock pod_door")
 	_check(not layout.segment("pod_door").blocked, "Terminal: unblock reopens it")
-	term.run("priority %d critical" % leak)
-	_check(int(board.get_job(leak).priority) == 3, "Terminal: priority")
-	_check(term.run("order nobody 1").contains("No robot"), "Terminal: bad input gets a helpful error")
-	_check(term.run("frobnicate").contains("Unknown command"), "Terminal: unknown commands")
-	term.run("wait 5")
-	_check(desk.is_waiting(), "Terminal: wait uses the taskbar wait")
-	desk._end_wait("")
-	_check(term.run("log 3 alarm").contains("COOLANT LEAK"), "Terminal: log with a category filter")
+	_check(term.run("frobnicate").contains("command not found"), "Terminal: unknown commands")
+	_check(term.run("wait 5").contains("command not found"), "Terminal: there is no wait")
+	_check(term.run("log 40 alarm").contains("COOLANT LEAK"), "Terminal: log with a category filter")
 	term.run("open plant")
 	_check(desk.is_open("plant"), "Terminal: open an app")
 

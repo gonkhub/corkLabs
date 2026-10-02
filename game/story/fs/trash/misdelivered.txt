@@ -1,0 +1,17 @@
+#! name: .misdelivered
+#! date: yesterday
+#! owner: corp
+#! shift: 2
+#! restricted: 2
+#! gone_if: bin_emptied
+#! learn: secret:tenure
+MISDELIVERED (routed to supervisor terminal C-7 in error; deleted)
+
+From: Liaison Pell
+To: Directorate of Output
+Re: C-7 supervisor #6
+
+Onboarded. Compliant so far. Reads what they're told not to, as they all do.
+Estimated tenure: three shifts.
+
+Pod 1 is due for rotation. Advise.

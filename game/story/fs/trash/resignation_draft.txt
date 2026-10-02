@@ -1,0 +1,13 @@
+#! date: four days ago
+#! owner: dokafor
+#! restricted: 2
+#! gone_if: bin_emptied
+To: Human Resources
+Re: my resignation
+
+I am writing to resign from my post as supervisor of facility C-7,
+effective at the end of my current shift.
+
+I have asked Ms. Pell where the door is. I have asked her eleven
+times. I would like to be told
+

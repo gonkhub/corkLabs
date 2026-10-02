@@ -1,0 +1,16 @@
+#! date: two days ago
+#! owner: corp
+#! learn: transfer:okafor secret:transferred
+INTERNAL MEMO                                   Human Resources
+To: Incoming supervisor
+Re: Supervisor D. Okafor
+
+Supervisor Dele Okafor has been transferred to Long-Term Processing,
+effective at the end of their last shift.
+
+Their home directory (/home/dokafor) will be purged by IT Services
+during your second shift. Please do not access it before then. There is
+nothing in it you need.
+
+Transfers are routine. Supervisors who are transferred are informed in
+advance.

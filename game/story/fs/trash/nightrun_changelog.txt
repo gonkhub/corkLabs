@@ -1,0 +1,10 @@
+#! date: 2008-12-20
+#! owner: rmarrow
+#! restricted: 2
+#! gone_if: bin_emptied
+NIGHT RUN changelog
+v0.7  crates. the lamp. the dark past the lamp.
+v0.8  high score table that never forgets (like everything else here)
+v0.9  the NO ENTRY shoulder was solid. now it gives, if you lean on it
+      long enough. nobody at corporate will ever lean on anything.
+v1.0  (never)

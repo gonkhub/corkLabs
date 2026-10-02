@@ -10,10 +10,10 @@
 #                  the desktop open apps in windows: drag, snap to screen
 #                  edges, maximise, resize, minimise, close.
 #   Taskbar        start menu, open windows, the alarm light, throughput,
-#                  "Wait" (lets facility time pass, a minute per frame, so you
-#                  see it happen; an alarm or shift report interrupts it),
 #                  and the facility clock (never the real clock). Click the
-#                  clock for the notification centre.
+#                  clock for the notification centre. There is no "wait":
+#                  facility time only moves when the supervisor DOES something
+#                  (orders, duties, reading files, talking, playing...).
 #   Toasts         alarms and shift reports pop up bottom right.
 #   corkHQ         corporate's panel, pinned top-right above everything. It can't
 #                  be closed, moved, resized or muted (CorkHQPanel).
@@ -33,8 +33,6 @@ const TASKBAR_HEIGHT := 40
 const REFRESH_EVERY := 0.5
 const TOAST_SECONDS := 7.0
 const WORLD_SCENE := "res://game/facility_world.tscn"
-## A wait passes this much facility time per frame (1 h takes about a second).
-const WAIT_STEP := 60.0
 ## Notifications kept in the notification centre.
 const NOTIFICATION_HISTORY := 60
 ## Snap zone at the screen edges while dragging a window, in pixels.
@@ -42,15 +40,23 @@ const SNAP_MARGIN := 12.0
 
 ## [id, script] in desktop-icon order.
 const APPS := [
+	["duties", preload("res://os/apps/duties_app.gd")],
+	["forms", preload("res://os/apps/forms_app.gd")],
 	["cameras", preload("res://os/apps/cameras_app.gd")],
-	["units", preload("res://os/apps/units_app.gd")],
-	["work", preload("res://os/apps/work_app.gd")],
 	["plant", preload("res://os/apps/plant_app.gd")],
 	["requisitions", preload("res://os/apps/requisitions_app.gd")],
 	["log", preload("res://os/apps/log_app.gd")],
+	["files", preload("res://os/apps/files_app.gd")],
+	["notes", preload("res://os/apps/notes_app.gd")],
 	["terminal", preload("res://os/apps/terminal_app.gd")],
+	["nightrun", preload("res://os/apps/nightrun_app.gd")],
 	["settings", preload("res://os/apps/settings_app.gd")],
+	["bin", preload("res://os/apps/bin_app.gd")],
+	["devtools", preload("res://os/apps/devtools_app.gd")],
 ]
+## Apps that aren't on the desktop until the supervisor finds them
+## (Knowledge "app:<id>"): a program in the file system, say.
+const HIDDEN_APPS := ["nightrun", "devtools"]
 
 const BOOT_LINES := [
 	"corkLabs firmware 3.1.4  (c) corkLabs Organic Computing",
@@ -79,8 +85,7 @@ var taskbar_buttons: HBoxContainer
 var clock_button: Button
 var output_label: Label
 var alarm_button: Button
-var wait_button: MenuButton
-var stop_wait_button: Button
+var requests_button: Button
 var login: Control
 var boot: Control
 var notice_panel: PanelContainer
@@ -91,6 +96,8 @@ var snap_preview: Panel
 var speech: SpeechDirector
 ## Corporate's panel (exists while logged on).
 var hq_panel: CorkHQPanel
+## Brief / end of shift / dismissal / ending, over everything (while logged on).
+var shift_screen: ShiftScreen
 ## Newest last: {"t": facility time, "heading", "body", "color", "app"}
 var notifications: Array[Dictionary] = []
 var unseen_notifications := 0
@@ -100,9 +107,10 @@ var _refresh_left := 0.0
 var _journal_mark := 0
 var _time := 0.0
 var _cascade := 0
-var _wait_left := 0.0
-var _wait_mark := 0
 var _boot_left := 0.0
+var _learned_mark := -1
+var _asked_mark := -1
+var _icon_key := ""
 
 
 func _ready() -> void:
@@ -139,8 +147,6 @@ func _process(delta: float) -> void:
 		_boot_step(delta)
 	if not Facility.running:
 		return
-	if _wait_left > 0.0:
-		_wait_step()
 	_refresh_left -= delta
 	if _refresh_left <= 0.0:
 		_refresh_left = REFRESH_EVERY
@@ -155,6 +161,8 @@ func _input(event: InputEvent) -> void:
 	if boot.visible and (event is InputEventKey or event is InputEventMouseButton) and event.is_pressed():
 		_finish_boot()
 		get_viewport().set_input_as_handled()
+		return
+	if shift_screen and shift_screen.blocking():
 		return
 	# Clicking anywhere on a window brings it to the front.
 	if event is InputEventMouseButton and event.pressed and not login.visible:
@@ -173,6 +181,8 @@ func _input(event: InputEvent) -> void:
 # Keys nobody else used go to the focused window's app.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed) or login.visible:
+		return
+	if shift_screen and shift_screen.blocking():
 		return
 	if event.keycode == KEY_ESCAPE and notice_panel.visible:
 		notice_panel.visible = false
@@ -258,6 +268,15 @@ func log_on() -> void:
 	hq_panel = CorkHQPanel.new()
 	add_child(hq_panel)
 	move_child(hq_panel, window_layer.get_index() + 1)   # above every window
+	var k := Story.knowledge(Facility.sim)
+	if k:
+		k.forget("root")   # the maintenance account never survives a log off
+		k.forget("as:dokafor")
+		_learned_mark = k.learned_count
+	_rebuild_icons()
+	shift_screen = ShiftScreen.new()
+	shift_screen.desktop = self
+	add_child(shift_screen)
 	_journal_mark = Facility.sim.journal.added
 	login.visible = false
 	if OSSettings.get_value("restore_windows"):
@@ -265,11 +284,19 @@ func log_on() -> void:
 	_refresh_all()
 	var board := Facility.sim.get_system("work") as WorkBoard
 	toast("Welcome, %s" % user_name(), "Facility time %s. %d open job(s)." % [
-		FacilitySim.format_time(Facility.sim.time()), board.open_jobs().size()], OSTheme.ACCENT, "work")
+		FacilitySim.format_time(Facility.sim.time()), board.open_jobs().size()], OSTheme.ACCENT, "cameras")
+
+
+# REQUESTS: Cameras, on the unit that's asking, with its menu open.
+func _show_request() -> void:
+	var cams = open_app("cameras")
+	var reqs := Facility.sim.get_system("requests") as UnitRequests if Facility.running else null
+	if cams == null or reqs == null or reqs.requests.is_empty():
+		return
+	cams.look_at_unit(str(reqs.requests[0].robot))   # it asks when you're watching
 
 
 func log_off() -> void:
-	_end_wait("")
 	save_layout()
 	for id in _windows.keys():
 		_windows[id].closed.disconnect(_on_closed)   # closing for log-off isn't "closed by the player"
@@ -288,12 +315,38 @@ func log_off() -> void:
 	if hq_panel:
 		hq_panel.queue_free()
 		hq_panel = null
+	if shift_screen:
+		shift_screen.queue_free()
+		shift_screen = null
 	if world_viewport:
 		world_viewport.queue_free()
 		world_viewport = null
 		world = null
 	_update_login_text()
 	login.visible = true
+
+
+## Clocks in: the few facility minutes from the brief to the start of the
+## shift (the brief's button; tests use it too).
+func clock_in() -> void:
+	var camp := Story.campaign(Facility.sim) if Facility.running else null
+	if camp == null or camp.state != "pre":
+		return
+	Facility.spend(maxf(camp.shift_start_time() - Facility.sim.time(), 0.0) + 1.0, "Supervisor clocks in")
+
+
+## Dismissed: back to the start of this shift (its checkpoint).
+func retry_shift() -> void:
+	log_off()
+	Facility.restore_checkpoint(save_path)
+	log_on()
+
+
+## A new facility, a new supervisor. (The personnel file remembers.)
+func start_over() -> void:
+	log_off()
+	Facility.wipe_save(save_path)
+	log_on()
 
 
 ## The player's real first name, lightly: their Windows user name.
@@ -324,9 +377,15 @@ func open_app(id: String) -> OSApp:
 	for a in APPS:
 		if a[0] == id:
 			script = a[1]
-	if script == null:
+	var app: OSApp = null
+	if id.begins_with("cam_pop_") and id.trim_prefix("cam_pop_").is_valid_int():
+		# A camera popped out of Cameras into its own window.
+		app = (preload("res://os/apps/camera_pop_app.gd").new() as CameraPopApp).for_camera(int(id.trim_prefix("cam_pop_")))
+	elif script == null or not app_available(id):
 		return null
-	var app: OSApp = script.new()
+	else:
+		app = script.new()
+	Supervisor.did("open:" + id)
 	app.desktop = self
 	var win := OSWindow.new()
 	win.setup(app)
@@ -354,6 +413,23 @@ func open_app(id: String) -> OSApp:
 		app.load_state(saved.state)
 	focus_window(win)
 	return app
+
+
+static func app_title(id: String) -> String:
+	for a in APPS:
+		if a[0] == id:
+			var app: OSApp = a[1].new()
+			var t := app.title
+			app.free()
+			return t
+	return id
+
+
+## Is this app on the desktop yet? (Hidden apps have to be found first.)
+func app_available(id: String) -> bool:
+	if id == "devtools":
+		return bool(OSSettings.get_value("devtools"))   # the Terminal's secret "dev"
+	return not HIDDEN_APPS.has(id) or (Facility.running and Story.knows(Facility.sim, "app:" + id))
 
 
 func focused_window() -> OSWindow:
@@ -475,53 +551,6 @@ func _restore_layout() -> void:
 			_on_minimized(_windows[id])
 
 
-# --- Waiting ------------------------------------------------------------------------
-
-## Lets up to `seconds` of facility time pass, a step per frame, so the
-## robots visibly get on with things. Stops early on an alarm or shift report.
-func start_wait(seconds: float) -> void:
-	if not Facility.running or _wait_left > 0.0:
-		return
-	Facility.sim.note("supervisor", "Waits (up to %s)" % _dur(seconds))
-	_wait_left = seconds
-	_wait_mark = Facility.sim.journal.added
-	wait_button.visible = false
-	stop_wait_button.visible = true
-
-
-func is_waiting() -> bool:
-	return _wait_left > 0.0
-
-
-func _wait_step() -> void:
-	var step := minf(WAIT_STEP, _wait_left)
-	Facility.spend(step, "Supervisor waits", false)
-	_wait_left -= step
-	stop_wait_button.text = "Waiting... %s left  (stop)" % _dur(_wait_left)
-	for e in Facility.sim.journal.added_since(_wait_mark):
-		if e.cat == "alarm" or e.cat == "report":
-			_end_wait("Wait interrupted: %s" % ("alarm" if e.cat == "alarm" else "shift report"))
-			return
-	_wait_mark = Facility.sim.journal.added
-	if _wait_left <= 0.0:
-		_end_wait("")
-
-
-func _end_wait(why: String) -> void:
-	if Facility.running and not why.is_empty() and _wait_left > 0.0:
-		Facility.sim.note("supervisor", why)
-	_wait_left = 0.0
-	if wait_button:
-		wait_button.visible = true
-		stop_wait_button.visible = false
-
-
-static func _dur(seconds: float) -> String:
-	if seconds < 3600.0:
-		return "%d min" % ceili(seconds / 60.0)
-	return "%.1f h" % (seconds / 3600.0)
-
-
 # --- Notifications -----------------------------------------------------------------------
 
 ## Pops a notification up bottom right (if that kind is switched on in
@@ -622,6 +651,23 @@ func _refresh_all() -> void:
 			w.app.refresh()
 	_refresh_taskbar()
 	_check_journal()
+	_check_learned()
+
+
+# Something new learned: a quiet toast (commands, secrets, apps), and apps
+# that have been found appear on the desktop.
+func _check_learned() -> void:
+	var k := Story.knowledge(Facility.sim)
+	if k == null or k.learned_count == _learned_mark:
+		return
+	var fresh := k.learned_count - _learned_mark
+	_learned_mark = k.learned_count
+	for key in k.recent.slice(maxi(0, k.recent.size() - fresh)):
+		if key.begins_with("secret:"):
+			toast("Found", Knowledge.secret_title(key.trim_prefix("secret:")), OSTheme.WARN, "")
+		elif key.begins_with("app:"):
+			toast("New program", "%s is on your desktop." % app_title(key.trim_prefix("app:")), OSTheme.INFO, key.trim_prefix("app:"))
+	_rebuild_icons()
 
 
 func _build_background() -> void:
@@ -664,7 +710,20 @@ func _build_icons() -> void:
 	icons.add_theme_constant_override("h_separation", 8)
 	icons.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(icons)
+	_rebuild_icons()
+
+
+func _rebuild_icons() -> void:
+	var ids := APPS.filter(func(a): return app_available(a[0])).map(func(a): return a[0])
+	var key := ",".join(ids)
+	if key == _icon_key:
+		return
+	_icon_key = key
+	for c in icons.get_children():
+		c.queue_free()
 	for a in APPS:
+		if not ids.has(a[0]):
+			continue
 		var app: OSApp = a[1].new()
 		var icon := DesktopIcon.new()
 		icon.setup(app.icon_text, app.title, app.icon_color)
@@ -753,12 +812,19 @@ func _build_taskbar() -> void:
 	start.flat = false
 	start.add_theme_color_override("font_color", OSTheme.ACCENT)
 	var menu := start.get_popup()
+	var titles: Array[String] = []
 	for i in APPS.size():
 		var app: OSApp = APPS[i][1].new()
+		titles.append(app.title)
 		menu.add_item(app.title, i)
 		app.free()
 	menu.add_separator()
 	menu.add_item("Log off", 100)
+	menu.about_to_popup.connect(func():
+		for i in APPS.size():
+			var found := app_available(APPS[i][0])
+			menu.set_item_disabled(i, not found)
+			menu.set_item_text(i, titles[i] if found else "???"))
 	menu.id_pressed.connect(func(id: int):
 		if id == 100:
 			log_off()
@@ -779,26 +845,19 @@ func _build_taskbar() -> void:
 	alarm_button.visible = false
 	row.add_child(alarm_button)
 
+	requests_button = Button.new()
+	requests_button.focus_mode = Control.FOCUS_NONE
+	requests_button.add_theme_color_override("font_color", OSTheme.WARN)
+	requests_button.add_theme_stylebox_override("normal", OSTheme.box(OSTheme.WARN.darkened(0.75), OSTheme.WARN, 4, 8, 4))
+	requests_button.tooltip_text = "A unit wants a word: it asks when you watch its camera"
+	requests_button.pressed.connect(_show_request)
+	requests_button.visible = false
+	row.add_child(requests_button)
+
 	output_label = OSTheme.mono_label("", 13, OSTheme.TEXT_DIM)
 	output_label.tooltip_text = "Facility throughput: the pods' average sync"
 	output_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(output_label)
-
-	wait_button = MenuButton.new()
-	wait_button.text = "Wait ▾"
-	wait_button.tooltip_text = "Let facility time pass (it only moves when you act).\nAn alarm or a shift report stops the wait."
-	wait_button.flat = false
-	var wm := wait_button.get_popup()
-	for m in [5, 15, 60, 240]:
-		wm.add_item("Wait %s" % ("%d min" % m if m < 60 else "%d hour%s" % [m / 60, "s" if m > 60 else ""]), m)
-	wm.id_pressed.connect(func(m: int): start_wait(m * 60.0))
-	row.add_child(wait_button)
-	stop_wait_button = Button.new()
-	stop_wait_button.focus_mode = Control.FOCUS_NONE
-	stop_wait_button.add_theme_color_override("font_color", OSTheme.WARN)
-	stop_wait_button.pressed.connect(_end_wait.bind("You stop waiting"))
-	stop_wait_button.visible = false
-	row.add_child(stop_wait_button)
 
 	clock_button = Button.new()
 	clock_button.flat = true
@@ -836,10 +895,10 @@ func _refresh_taskbar() -> void:
 	if not Facility.running:
 		return
 	var sim := Facility.sim
-	var shifts := sim.get_system("shifts") as ShiftSchedule
+	var camp := Story.campaign(sim)
 	var shift_text := ""
-	if shifts and shifts.current >= 0:
-		shift_text = "   %s shift" % shifts.current_name()
+	if camp:
+		shift_text = "   Shift %d/%d" % [camp.shift, Campaign.SHIFTS] + ("" if camp.on_duty() else " (off duty)")
 	var dot := "● " if unseen_notifications > 0 and not notice_panel.visible else ""
 	clock_button.text = dot + FacilitySim.format_time(sim.time()) + shift_text
 	clock_button.add_theme_color_override("font_color", OSTheme.WARN if not dot.is_empty() else OSTheme.TEXT)
@@ -850,6 +909,16 @@ func _refresh_taskbar() -> void:
 		var faults := PlantApp.active_faults(plant)
 		alarm_button.visible = faults > 0
 		alarm_button.text = "ALARM  %d" % faults
+	var reqs := sim.get_system("requests") as UnitRequests
+	if reqs:
+		reqs.prune(Facility.sim)
+		requests_button.visible = not reqs.requests.is_empty()
+		requests_button.text = "REQUESTS  %d" % reqs.requests.size()
+		if _asked_mark >= 0 and reqs.asked > _asked_mark and not reqs.requests.is_empty():
+			var r: Dictionary = reqs.requests.back()
+			var bot := sim.get_system("robot_" + str(r.robot)) as RobotAgent
+			toast("%s wants a word" % (bot.display_name() if bot else str(r.robot)), "Watch it on camera to hear it out (REQUESTS on the taskbar).", OSTheme.WARN, "cameras")
+		_asked_mark = reqs.asked
 
 
 func _build_login() -> void:
@@ -903,6 +972,9 @@ func _update_login_text() -> void:
 	var t := _saved_time()
 	info.text = ("Facility on hold since %s.\nIt resumes the moment you log on." % FacilitySim.format_time(t)) if t >= 0.0 \
 		else "No facility on record. A new one will be brought online."
+	var archive := SupervisorArchive.summary()
+	if not archive.is_empty():
+		info.text += "\n\n" + archive
 
 
 # Reads the facility time out of the save without starting a session.

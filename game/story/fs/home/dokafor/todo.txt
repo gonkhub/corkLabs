@@ -1,0 +1,12 @@
+#! date: three days ago
+#! learn: cmd:talk
+TODO
+- morning report (the Directorate reads the first line and nothing else)
+- ask Tinker about pod 3 AGAIN. just type: talk tinker
+  (Pell says units "don't need conversation". Tinker disagrees. So do I.)
+- Hauler's been standing at the dock door at night. why
+- stop playing Marrow's game on shift. /opt/games. Pell can see the logs
+- find out what "Long-Term Processing" is
+- find out what Marrow meant by "the old account still works"
+- water the plant (I don't have a plant. nothing grows in here. no light.)
+- DO NOT sign the transfer form

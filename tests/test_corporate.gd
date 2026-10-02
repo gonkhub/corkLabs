@@ -9,6 +9,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_data()
 	_test_hq_reviews()
 	_test_requisitions()
@@ -36,7 +37,7 @@ func _test_data() -> void:
 	_check(cats.has("Resources") and cats.has("Parts") and cats.has("Robots"), "the catalogue has resources, parts and robots (%s)" % ", ".join(cats))
 	_check(req.catalog.all(func(c): return int(c.price) > 0), "every item has a price")
 	var sw := SoftwareLibrary.new()
-	_check(sw.packages.size() >= 8, "a set of software packages (%d)" % sw.packages.size())
+	_check(sw.packages.size() >= 6 and sw.packages.all(func(p): return p.wired), "a set of software packages, all of them doing something (%d)" % sw.packages.size())
 	var rows := DataTable.parse("# c\na | b | the rest | with | pipes\n\nx | y", PackedStringArray(["one", "two", "rest"]))
 	_check(rows.size() == 2 and rows[0].rest == "the rest | with | pipes" and rows[1].rest == "", "data tables read pipes, comments, short rows")
 
@@ -64,15 +65,31 @@ func _test_requisitions() -> void:
 	var funds0 := req.funds
 	var too_much := req.place(sim, "robot_hauler")
 	_check(not too_much.ok and req.funds == funds0, "you can't order beyond your budget (%s)" % too_much.text)
-	plant.coolant = 0.3
 	var r := req.place(sim, "coolant_canister", 1)
 	_check(r.ok and req.funds == funds0 - 120 and r.order.status == "in transit", "an order is paid for and shipped")
 	_check(hq.messages.back().kind == "order" and str(hq.messages.back().text).contains("shipped"), "corkHQ confirms it")
-	sim.advance(3700.0)
+	sim.advance(3599.0)
+	plant.coolant = 0.3
+	sim.advance(101.0)
 	_check(r.order.status == "delivered" and plant.coolant > 0.65, "it's delivered, and coolant tops up the reservoir (%d%%)" % roundi(plant.coolant * 100))
+	var fuses_before := int(req.inventory.get("fuse_pack", 0))
 	var parts := req.place(sim, "fuse_pack", 2)
 	sim.advance(2.1 * 3600.0)
-	_check(int(req.inventory.get("fuse_pack", 0)) == 2, "parts go into stock")
+	var hauling := (sim.get_system("work") as WorkBoard).jobs.any(func(j): return str(j.source) == "crate:haul:%d" % int(parts.order.id))
+	_check(parts.order.status == "crated" and (plant.crates.size() + int(plant.device("freight_stacks").job >= 0) >= 1 or hauling),
+		"parts arrive as a crate (%s)" % parts.order.status)
+	# The hand-off chain: ordinary parts are left at the loading bay; a rail unit hauls them, Tinker unpacks them.
+	var hours := 0.0
+	while parts.order.status != "unpacked" and hours < 12.0:
+		sim.advance(600.0)
+		hours += 600.0 / 3600.0
+	var texts := sim.journal.entries.map(func(e): return str(e.text))
+	_check(texts.any(func(t): return t.contains("Crate delivered to the loading bay")) and not texts.any(func(t): return t.contains("Ogre lowered the crate")),
+		"ordinary parts are left at the loading bay (no crane needed)")
+	_check(texts.any(func(t): return t.contains("hauled the crate") and not t.contains("Ogre hauled")), "a rail unit hauls it to the workshop")
+	_check(texts.any(func(t): return t.contains("unpacked the crate")), "and it's unpacked at the workbench")
+	_check(int(req.inventory.get("fuse_pack", 0)) >= fuses_before - 1 + 8 and parts.order.status == "unpacked",
+		"then the parts are in stock: two packs of four fuses (%d, after %.1f h)" % [int(req.inventory.get("fuse_pack", 0)), hours])
 	# Needs approval: approved with a decent rating, denied (and refunded) with a poor one.
 	req.funds = 10000
 	hq.grade = "B"
@@ -125,12 +142,14 @@ func _test_panel() -> void:
 	desk.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	desk.size = Vector2(1600, 900)
 	desk.log_on()
+	desk.clock_in()
 	await process_frame
 	await process_frame
 	var panel = desk.hq_panel
 	_check(panel != null and panel.list.get_child_count() >= 3, "the corkHQ panel shows corporate's messages")
 	_check(panel.position.x > 1000 and panel.position.y < 40, "pinned in the top-right corner (%s)" % panel.position)
-	_check(panel.find_children("*", "Button", true, false).is_empty(), "with no buttons: no close, no minimise")
+	var buttons: Array = panel.find_children("*", "Button", true, false)
+	_check(buttons.size() == 1 and buttons[0].text == "Reply", "no close, no minimise: its one button is Reply")
 	_check(panel.get_index() > desk.window_layer.get_index(), "above every window")
 	var hq: CorkHQ = facility.sim.get_system("hq")
 	hq.post(facility.sim, "Test", "notice", "Hello")

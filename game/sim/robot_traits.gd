@@ -55,6 +55,10 @@ extends Resource
 ## Once charging, it stays on the dock until it reaches this.
 @export_range(0.3, 1.0, 0.01) var charge_until := 0.95
 
+## How fast its joints wear (1 = normal). Wear slows a unit and, past half,
+## makes it seize up (RobotAgent.wear).
+@export_range(0.0, 3.0, 0.05) var wear_rate := 1.0
+
 @export_group("Software stability")
 ## Stability lost per idle second (0-1 scale). Robots think the work keeps
 ## THEM running; standing around makes their software drift.
@@ -116,11 +120,27 @@ func skill(kind: String) -> float:
 	return skill_general
 
 
-## robots/<id>/<id>_traits.tres, or plain defaults if the robot has none.
+## robots/<model>/<model>_traits.tres, or plain defaults if the robot has
+## none. A numbered unit ("tinker2", activated from a crate) is the same model
+## with its number on its name ("Tinker 2").
 static func load_for(robot_id: String) -> RobotTraits:
-	var path := "res://robots/%s/%s_traits.tres" % [robot_id, robot_id]
+	var model := model_of(robot_id)
+	var path := "res://robots/%s/%s_traits.tres" % [model, model]
+	var t: RobotTraits
 	if ResourceLoader.exists(path):
-		return load(path) as RobotTraits
-	var t := RobotTraits.new()
-	t.display_name = robot_id.capitalize()
+		t = load(path) as RobotTraits
+	else:
+		t = RobotTraits.new()
+		t.display_name = model.capitalize()
+	if model != robot_id:
+		t = t.duplicate() as RobotTraits
+		t.display_name = "%s %s" % [t.display_name, robot_id.substr(model.length()).trim_prefix("_")]
 	return t
+
+
+## The robot model a unit id is: "tinker2" -> "tinker", "tinker" -> "tinker".
+static func model_of(robot_id: String) -> String:
+	var i := robot_id.length()
+	while i > 1 and robot_id[i - 1] >= "0" and robot_id[i - 1] <= "9":
+		i -= 1
+	return robot_id.substr(0, i).trim_suffix("_")

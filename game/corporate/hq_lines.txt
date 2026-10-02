@@ -20,3 +20,18 @@ check | low | Directorate of Output | Output is below target. Corporate notices 
 crash | | Unit Oversight | Unit {robot} has suffered a critical error. Units are corporate property. Keep them running.
 sabotage | | Unit Oversight | Anomalous damage logged near unit {robot}. Investigate.
 idle_units | | Directorate of Output | Idle units detected. Idle units are wasted capital.
+
+# Liaison Pell escalating (Oversight): pell_<kind>_<level>. Level 2 comes with a
+# directive to explain yourself (her Reply); level 3 sets Compliance on you.
+pell_files_1 | | Liaison Pell | I see you {what}, Supervisor. Former staff files are closed for a reason.
+pell_files_2 | | Liaison Pell | Former staff files. Again. Explain yourself: use Reply.
+pell_files_3 | | Liaison Pell | That's enough. Compliance has been asked to look at your terminal.
+pell_games_1 | | Liaison Pell | There's recreational software running on your terminal ({what}). Close it.
+pell_games_2 | | Liaison Pell | Games. On shift. Explain yourself: use Reply.
+pell_games_3 | | Liaison Pell | Your time is the facility's time. Compliance will be reviewing how you spend it.
+pell_talk_1 | | Liaison Pell | Units don't need conversation, Supervisor. They need direction.
+pell_talk_2 | | Liaison Pell | You talk to the units a great deal. I'd like to know why. Reply.
+pell_talk_3 | | Liaison Pell | Your unit conversations have been forwarded to Compliance.
+pell_maint_1 | | Liaison Pell | Something on your terminal touched a decommissioned account. I'm sure it was an accident.
+pell_maint_2 | | Liaison Pell | The maintenance account. Explain. Now. Reply.
+pell_maint_3 | | Liaison Pell | Compliance is on your terminal. I would stop whatever you're doing.

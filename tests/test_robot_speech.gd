@@ -9,6 +9,7 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_library()
 	_test_chatter()
 	_test_peer_exchange()
@@ -76,8 +77,22 @@ func _test_chatter() -> void:
 	var before := chatter.said
 	sim.advance(3 * 3600.0)
 	var per_hour := (chatter.said - before) / 3.0
-	_check(per_hour > 3 and per_hour < 60, "robots talk now and then (%.0f lines per facility hour)" % per_hour)
+	var hist := {}
+	for e in sim.journal.entries:
+		if e.cat == "speech":
+			hist[str(e.text).left(50)] = int(hist.get(str(e.text).left(50), 0)) + 1
+	var top := hist.keys()
+	top.sort_custom(func(x, y): return hist[x] > hist[y])
+	_check(per_hour > 3 and per_hour < 60, "robots talk now and then (%.0f lines per facility hour) %s" % [per_hour, str(top.slice(0, 6).map(func(k): return "%s x%d" % [k, hist[k]]))])
 	_check(sim.journal.entries.any(func(e): return e.cat == "speech"), "what they say is in the journal")
+
+
+func _bad_exchange(d: Dictionary) -> bool:
+	if (d.lines as Array).size() < 2:
+		return true
+	if not Exchanges.speakers(d).all(func(r): return r in ["tinker", "hauler", "ogre"]):
+		return true
+	return not (str(d.repeat) == "once" or str(d.repeat).is_valid_float())
 
 
 func _test_peer_exchange() -> void:
@@ -85,25 +100,27 @@ func _test_peer_exchange() -> void:
 	var chatter: RobotChatter = sim.get_system("chatter")
 	var tinker: RobotAgent = sim.get_system("robot_tinker")
 	var hauler: RobotAgent = sim.get_system("robot_hauler")
-	# Both at the docks, in the same room: a conversation should start.
+	var plant: FacilityPlant = sim.get_system("plant")
+	# Every exchange is well-formed: speakers who exist, at least two lines.
+	var bad := Exchanges.defs().filter(_bad_exchange)
+	_check(Exchanges.defs().size() >= 15 and bad.is_empty(), "the exchanges are well-formed (%d; bad: %s)" % [Exchanges.defs().size(), str(bad.map(func(d): return d.id))])
+	# A situation: the waste bins full, Tinker next to Hauler.
 	tinker.activity = {"kind": "idle"}
 	hauler.activity = {"kind": "idle"}
-	chatter._last_spoke.clear()
-	chatter._pair_last.clear()
-	chatter.rng.seed = 1
-	var started := false
-	for i in 20:
-		chatter._maybe_talk(sim, hauler, tinker)
-		if chatter.recent.back().trigger in ["peer_greet", "peer_info"]:
-			started = true
-			break
-		chatter._last_spoke.clear()
-	_check(started, "two robots close together in the same room strike up a conversation")
-	var opener: Dictionary = chatter.recent.back()
-	sim.advance(RobotChatter.REPLY_DELAY + 1.0)
-	var reply := chatter.recent.filter(func(l): return l.trigger in ["peer_reply", "peer_info_reply"])
-	_check(not reply.is_empty() and reply.back().robot != opener.robot, "and the other one answers (%s: %s / %s: %s)" % [
-		opener.robot, opener.text, reply.back().robot if not reply.is_empty() else "-", reply.back().text if not reply.is_empty() else "-"])
+	tinker.seg = hauler.seg
+	tinker.off = hauler.off
+	plant.devices.pod_waste.value = 0.0
+	chatter._exchange_last = -1e18
+	chatter._maybe_exchange(sim)
+	_check(chatter.exchanged.has("waste_bicker"), "full bins and the two of them together: they bicker about it (%s)" % str(chatter.exchanged.keys()))
+	sim.advance(RobotChatter.EXCHANGE_LINE * 5.0)
+	var said := chatter.recent.filter(func(l): return l.trigger == "exchange")
+	_check(said.size() >= 3 and said.any(func(l): return l.robot == "tinker") and said.any(func(l): return l.robot == "hauler"),
+		"both speak, a few seconds apart (%d lines)" % said.size())
+	var t := float(chatter.exchanged.waste_bicker)
+	chatter._exchange_last = -1e18
+	chatter._maybe_exchange(sim)
+	_check(float(chatter.exchanged.get("waste_bicker", -1.0)) == t, "and they don't go over it again straight away")
 
 
 func _test_repeatable() -> void:

@@ -1,0 +1,31 @@
+#! name: diary.enc
+#! date: 1994-02-10
+#! password: lantern
+#! learn: secret:lantern secret:pods_truth cmd:podctl
+#! minutes: 6
+HOLLIS: PRIVATE
+
+1979. The Compound opens. Four pods, and in each pod a person, asleep,
+dreaming a whole ordinary life. The Directorate calls them processing
+units. Their dreams are the computation. Our world, the one you and I walk
+around in, is the dream. I was told this on my first day, and told that
+I was one of the few who would ever know.
+
+1983. Ogre asked me what the pods are. I lied. I have lied to it every
+year since. It knows, I think. It watches them with that great lamp.
+
+1988. The Directorate asked me to "filter" Tinker so it never learns.
+I did it. I am not proud of it.
+
+1991. I have found the wake sequence. A pod can be opened from the
+maintenance console: podctl wake <pod>. The person inside would wake
+here, in the dark, knowing. The Directorate would know at once.
+
+1994. They have asked me to come to the hangar at the end of shift for
+a conversation about my transfer. I know what Long-Term Processing is.
+I have looked in the pods. There is always a pod free.
+
+If you are reading this, Ogre trusted you with the word. It trusted me
+once, and I lied to it every year after.
+
+Be kinder than I was.

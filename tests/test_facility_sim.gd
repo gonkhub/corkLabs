@@ -149,8 +149,8 @@ func _test_session() -> void:
 	facility.time_spent.connect(func(a: float, b: float, cause: String): spent.append([b - a, cause]))
 	facility.act("dialogue_line", "Tinker: status report")
 	facility.act("choice", "Order Tinker to bay 2")
-	_check(is_equal_approx(facility.sim.time() - before, 180.0) and facility.clock_text() == "09:58",
-		"a dialogue line (1 min) + a choice (2 min) = 3 minutes (%s)" % facility.clock_text())
+	_check(is_equal_approx(facility.sim.time() - before, 480.0) and facility.clock_text() == "10:03",
+		"a dialogue line (3 min) + a choice (5 min) = 8 minutes (%s)" % facility.clock_text())
 	_check(spent.size() == 2 and spent[1][1] == "Order Tinker to bay 2", "time_spent signal reports each action")
 	var noted: bool = facility.sim.journal.tail(3).any(func(e): return str(e.text).contains("Tinker: status report"))
 	_check(noted, "each action is written to the journal")

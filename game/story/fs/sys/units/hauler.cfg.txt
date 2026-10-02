@@ -1,0 +1,9 @@
+#! name: hauler.cfg
+#! date: 1981-02-02
+unit            HAULER
+class           heavy
+rails           yes
+chatter         low
+knowledge_filter  enabled
+  filter.pods   = "processing units"
+note            unit reports "watching" at night. Not a fault. Do not fix.

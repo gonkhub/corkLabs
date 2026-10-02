@@ -61,6 +61,15 @@ var _led_time := 0.0
 ## Motor hum while it rides (a FacilitySound: heard through the cameras).
 var motor: FacilitySound
 var _motor_level := 0.0
+## The camera greeting (it just repaired a camera): seconds in, which camera.
+var _greet_t := -1.0
+var _greet_cam := -1
+var _greet_back := 0.0
+## Greeting timeline (real seconds): close-up, back away, wave, done.
+const GREET_HOLD := 1.6
+const GREET_BACK := 1.0
+const GREET_WAVE := 2.2
+const GREET_BACK_M := 1.0
 
 
 func setup(id: String, facility_layout: FacilityLayout) -> void:
@@ -92,6 +101,9 @@ func setup(id: String, facility_layout: FacilityLayout) -> void:
 		position = layout.world_pos(seg, off)
 
 
+var _perform_seen := 0
+
+
 func _ready() -> void:
 	_rng.randomize()
 
@@ -116,6 +128,13 @@ func _process(delta: float) -> void:
 	if a == null:
 		return
 	_update_led(a, delta)   # first: whatever else happens this frame, the LED shows its state
+	_show_dead(a.activity.kind == "broken")
+	if int(a.perform.n) != _perform_seen:
+		_perform_seen = int(a.perform.n)
+		if a.perform.has("cam"):
+			_start_greet(int(a.perform.cam))   # the clip plays in the greeting, after the close-up
+		elif actor and not str(a.perform.clip).is_empty():
+			actor.play_action(str(a.perform.clip))   # quietly nothing if it hasn't been performed yet
 	if not _snapped:
 		seg = a.seg
 		off = a.off
@@ -124,7 +143,8 @@ func _process(delta: float) -> void:
 		seg = a.seg
 		off = a.off
 		position = layout.world_pos(seg, off)
-		_slew(a, delta)
+		if not _face_camera(a, delta):
+			_slew(a, delta)
 		rotation.y = _yaw
 		_perform(a, delta)
 		return
@@ -132,12 +152,93 @@ func _process(delta: float) -> void:
 	var pos := layout.world_pos(seg, off)
 	var moved := pos - position
 	position = pos
-	if Vector2(moved.x, moved.z).length() > 0.001:
+	if not _face_camera(a, delta) and Vector2(moved.x, moved.z).length() > 0.001:
 		_yaw = lerp_angle(_yaw, atan2(-moved.x, -moved.z), clampf(6.0 * delta, 0.0, 1.0))
 	rotation.y = _yaw
+	_greet(delta)
 	_swing(delta)
 	_motor_sound(moved.length() / maxf(delta, 0.0001), delta)
 	_perform(a, delta)
+
+
+# A broken unit (Ogre's dead core): no animation, the eye shut and dark.
+var _dead := false
+
+
+func _show_dead(dead: bool) -> void:
+	if actor == null:
+		return
+	var rig := actor.rig
+	if dead != _dead:
+		_dead = dead
+		if actor.tree:
+			actor.tree.active = not dead
+		var lens := rig.get_node_or_null("Core/Eye/Lens") if rig else null
+		if lens is Node3D:
+			(lens as Node3D).visible = not dead
+	if not dead or rig == null:
+		return
+	# Every frame: the rig would put its eye back otherwise.
+	var glow := rig.get_node_or_null("Core/Eye/Glow")
+	if glow is Light3D:
+		(glow as Light3D).light_energy = 0.0
+	var lid := rig.get_node_or_null("Core/Eye/LidTop")
+	if lid is Node3D:
+		(lid as Node3D).rotation.x = -deg_to_rad(85.0)
+
+
+# On the link, or greeting a camera: turn to face it. Returns true if it is.
+func _face_camera(a: RobotAgent, delta: float) -> bool:
+	var w := get_parent() as FacilityWorld
+	if w == null:
+		return false
+	var cam := _greet_cam if _greet_t >= 0.0 else -1
+	if cam < 0 and a.activity.kind == "link":
+		cam = w.nearest_camera(global_position, w.robot_room(robot_id))
+	if cam < 0 or cam >= w.cameras.size():
+		return false
+	var to := w.cameras[cam].global_position - global_position
+	_yaw = lerp_angle(_yaw, atan2(-to.x, -to.z), clampf(5.0 * delta, 0.0, 1.0))
+	return true
+
+
+# A unit that just repaired a camera (from the rail right under it): the
+# camera comes back on looking at it, no zoom; it backs away a little, and waves.
+func _start_greet(cam: int) -> void:
+	var w := get_parent() as FacilityWorld
+	if w == null or cam < 0 or cam >= w.cameras.size():
+		return
+	_greet_cam = cam
+	_greet_t = 0.0
+	_greet_back = 0.0
+	w.cameras[cam].frame(actor if actor else self, -1.0, GREET_HOLD + GREET_BACK + GREET_WAVE)
+
+
+func _greet(delta: float) -> void:
+	if _greet_t < 0.0:
+		return
+	var was := _greet_t
+	_greet_t += delta
+	var w := get_parent() as FacilityWorld
+	var cam: SecurityCamera = w.cameras[_greet_cam] if w and _greet_cam < w.cameras.size() else null
+	# Back away from the lens.
+	if _greet_t > GREET_HOLD and _greet_t <= GREET_HOLD + GREET_BACK:
+		_greet_back = GREET_BACK_M * smoothstep(GREET_HOLD, GREET_HOLD + GREET_BACK, _greet_t)
+	# Wave: the recorded clip if there is one, else a little happy wobble.
+	if was <= GREET_HOLD + GREET_BACK and _greet_t > GREET_HOLD + GREET_BACK:
+		if actor and actor.action_names.has("act_wave_camera"):
+			actor.play_action("act_wave_camera")
+	var in_wave := _greet_t - GREET_HOLD - GREET_BACK
+	if in_wave > 0.0 and in_wave < GREET_WAVE and not (actor and actor.action_names.has("act_wave_camera")):
+		swing.rotation.z = sin(in_wave * 9.0) * 0.18 * (1.0 - in_wave / GREET_WAVE)
+	if _greet_t > GREET_HOLD + GREET_BACK + GREET_WAVE:
+		_greet_back = move_toward(_greet_back, 0.0, delta * 1.5)
+		if _greet_back <= 0.0:
+			_greet_t = -1.0
+			_greet_cam = -1
+	# The step back is along its own facing (towards the camera is forward).
+	if _greet_back > 0.0:
+		position += global_transform.basis.z * _greet_back
 
 
 # Working at a job: perform work clips, with short pauses between.

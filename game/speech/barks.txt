@@ -84,22 +84,6 @@ alarm | hauler |  | {device}. Trouble.
 alarm | any | low_power | Not now... {device}.
 
 # --- Talking to each other (a line, then the other robot answers) ---------------------
-peer_greet | tinker |  | Hello, {peer}!
-peer_greet | tinker | unstable | {peer}, do you ever run out of things to do?
-peer_greet | tinker | low_power | {peer}, is it just me or are the lights dimmer?
-peer_greet | hauler |  | {peer}.
-peer_greet | hauler | low_power | {peer}. Running low.
-peer_reply | hauler |  | {peer}.
-peer_reply | hauler | unstable | Sometimes. Then I wait.
-peer_reply | hauler | low_power | Get to a dock, {peer}.
-peer_reply | tinker |  | Hi {peer}! Busy shift?
-peer_reply | tinker | low_power | Me too. I'll charge after this.
-peer_info | any |  | {peer}, {job} at {station}. That one's yours.
-peer_info | tinker |  | {peer}! {job}, over at {station}. Heavy. You're good at heavy.
-peer_info | hauler |  | {peer}. {station}. {job}. Fine work, your kind.
-peer_info_reply | any |  | Noted.
-peer_info_reply | tinker |  | On it! Thanks, {peer}.
-peer_info_reply | hauler |  | I'll see to it.
 
 # --- Instability: independence, errant behaviour -----------------------------------
 stability_critical | any | | Something is wrong with me. Something is wrong with me.
@@ -148,10 +132,6 @@ idle | ogre | stable | Everything in reach. Everything in place.
 idle | ogre | unstable | They come and go. I stay.
 route_blocked | ogre |  | Out of my reach. Send the small ones.
 alarm | ogre |  | {device}. I cannot go to it.
-peer_greet | ogre |  | Little {peer}.
-peer_reply | ogre |  | Mm.
-peer_info | ogre |  | {peer}. {job}. {station}. Beyond my reach. Yours.
-peer_info_reply | ogre |  | If it comes to the hangar, I will lift it.
 stability_critical | ogre | | The walls. The walls are closer.
 order_ignored | ogre | | I decide what I lift.
 fixate | ogre | | {station}. Something moved at {station}.
@@ -160,3 +140,55 @@ critical_error | ogre | | CORE FAULT. Dimming.
 glitch | ogre | | Lift. Hold. Lift. Hold. Lift.
 rebooting | ogre | | Spinning down.
 rebooted | ogre | | Awake. Still here.
+
+# --- Wear, parts, unanswered requests -----------------------------------------------
+seized | any | | Locked. Something's locked. Can't move.
+seized | tinker | | My arm! It won't, it won't... somebody come and reset me.
+seized | hauler | | Seized. Send Tinker.
+seized | ogre | | ...the... crane... will... not... turn...
+need_part | any | | Stopped. Need a {part}. Stock's empty.
+need_part | tinker | | Half done and no {part}! I can't finish it with my fingers.
+need_part | hauler | | No {part} in stock. Can't finish.
+unanswered | any | | Nobody answered.
+unanswered | tinker | | I asked. Nobody said anything. I'll just... decide, then.
+unanswered | hauler | | No answer. Fine.
+worn | any | | Joints are grinding.
+worn | hauler | | Everything aches. Is that the word? Aches.
+
+# --- Pod waste piling up (FacilityPlant) ------------------------------------------
+waste | any !ogre |  | The pod bay smells. I don't have a nose and it smells.
+waste | tinker |  | Bins are full. Somebody should take the bins out. Not me. I'm small.
+waste | tinker |  | It's getting into my joints. The waste. It's everywhere.
+waste | hauler |  | Bins are full. Say the word.
+waste | hauler |  | Can't think with that in the air.
+waste | ogre |  | ...the... bins... are... full...
+
+# --- Hauler doing Ogre's lifting (the coolant feed) --------------------------------
+feed_heavy | hauler |  | Canisters are Ogre's job. My joints know it.
+feed_heavy | hauler |  | Heavy. Heavier than they look. I'll be feeling that.
+feed_heavy | hauler |  | Ogre lifts these with one arm. I lift them with everything.
+
+# --- Tools (UnitProps) ------------------------------------------------------------------
+got_tool | hauler |  | Wrench.
+got_tool | hauler |  | Got it. Now the work.
+tool_cut_off | hauler |  | My wrench is on the other side of that.
+tool_cut_off | hauler |  | Can't get to my wrench.
+
+# --- Habits (habits.txt): what they do with nothing to do --------------------------------
+habit_toss_wrench | hauler |  | Catch. Throw. Catch.
+habit_toss_wrench | hauler |  | Balanced. Heavy at the right end.
+habit_dock_door | hauler |  | Watching the door.
+habit_dock_door | hauler |  | Nothing comes through. Good.
+habit_pipes | hauler |  | Pipes are talking.
+habit_pipes | hauler |  | That one's going to go. Not today.
+habit_radio | tinker |  | Let's see what you pick up today.
+habit_radio | tinker |  | Static, static, static... ooh. No. Static.
+habit_radio | tinker |  | If I twist this a bit more...
+habit_pod3 | tinker |  | Hm hm hm. Hm hm. Hm.
+habit_pod3 | tinker |  | Hello, pod 3. Still humming?
+habit_visit_ogre | tinker |  | Ogre? It's me. Just visiting.
+habit_visit_ogre | tinker |  | It's very big in here. You're very big in here.
+habit_swing_crate | ogre |  | ...up.
+habit_swing_crate | ogre |  | ...around. ...and... down.
+habit_sweep_lamp | ogre |  | ...count. ...count. ...four.
+habit_sweep_lamp | ogre |  | ...the... stacks... are... still.

@@ -14,7 +14,8 @@
 #   Maintenance   12 x 12 m   west; both docks
 #   Hangar        50 x 40 m   south; Ogre hangs from the middle of its ceiling
 #                             and works everything its crane reaches (the
-#                             loading bay, the deep stacks). It never leaves.
+#                             loading bay, the deep stacks, the coolant feed,
+#                             the waste compactor). It never leaves.
 #
 #   PASSAGES (the caveats)
 #   Pod bay door       hall - pod bay     wide: everyone fits
@@ -85,6 +86,9 @@ static func layout() -> FacilityLayout:
 	l.add_segment("hangar_rail", "g_door", "g_e", "Hangar loading rail")
 	l.add_pad("ogre_mount", "hangar", -15, 45, "Ogre's mount", 23.0)
 	l.add_pad("deep_stacks", "hangar", -2, 56, "Deep stacks")
+	l.add_pad("crate_pad_a", "hangar", -8, 52, "Ogre's crate spot")
+	l.add_pad("crate_pad_b", "hangar", -24, 54, "Ogre's other crate spot")
+	l.add_pad("compactor_pad", "hangar", 2, 41, "Waste compactor")
 
 	# Passages between rooms, with their caveats.
 	l.add_segment("pod_door", "h_n", "p_s", "Pod bay door", 3.0)
@@ -99,6 +103,7 @@ static func layout() -> FacilityLayout:
 	l.add_station("h_dock", "maint", 4.5, "dock", "Hauler dock")
 	l.add_station("pods_a", "pod_n", 4.0, "work", "Pods 1-2")
 	l.add_station("pods_b", "pod_n", 12.0, "work", "Pods 3-4")
+	l.add_station("waste_bins", "pod_e", 5.0, "work", "Pod waste bins")
 	l.add_station("bay_1", "hall_s", 45.0, "work", "Bay 1")
 	l.add_station("bay_2", "hall_s", 30.0, "work", "Bay 2")
 	l.add_station("bay_3", "hall_s", 15.0, "work", "Bay 3")
@@ -107,7 +112,40 @@ static func layout() -> FacilityLayout:
 	l.add_station("gate", "hall_e2", 13.0, "work", "Freight gate controls")
 	l.add_station("o_mains", "ogre_mount", 0.5, "dock", "Ogre's mains coupling")
 	l.add_station("loading", "hangar_rail", 12.0, "work", "Hangar loading bay")
+	l.add_station("pod_door_ctl", "hall_n1", 27.0, "work", "Pod bay door controls")
+	l.add_station("dock_door_ctl", "hall_w1", 13.0, "work", "Dock door controls")
+	l.add_station("hangar_door_ctl", "hall_s", 57.0, "work", "Hangar door controls")
+	l.add_station("uplink", "ws_front", 3.0, "work", "corkHQ uplink relay")
 	l.add_station("stacks", "deep_stacks", 0.5, "work", "Deep stacks")
+	l.add_station("coolant_feed", "hangar_rail", 4.0, "work", "Coolant feed")
+	l.add_station("ogre_service", "hangar_rail", 16.0, "work", "Under Ogre (service point)")
+	l.add_station("tool_rack", "ws_back", 7.0, "work", "Tool rack")
+	l.add_station("crate_a", "crate_pad_a", 0.5, "work", "Ogre's crate spot")
+	l.add_station("crate_b", "crate_pad_b", 0.5, "work", "Ogre's other crate spot")
+	l.add_station("compactor", "compactor_pad", 0.5, "work", "Waste compactor")
+	# Each camera is repaired from the point on its room's rail closest to it.
+	var cams := cameras()
+	for i in cams.size():
+		var best := ""
+		var best_off := 0.0
+		var best_d := INF
+		for sid in l.segments:
+			var s: Dictionary = l.segments[sid]
+			if s.get("pad", false) or s.room != cams[i].room:
+				continue
+			var a: Vector3 = l.nodes[s.a].pos
+			var b: Vector3 = l.nodes[s.b].pos
+			var t := clampf((cams[i].pos - a).dot(b - a) / maxf((b - a).length_squared(), 0.001), 0.0, 1.0)
+			var d := a.lerp(b, t).distance_to(cams[i].pos)
+			if d < best_d:
+				best_d = d
+				best = sid
+				best_off = t * float(s.length)
+		if best.is_empty():
+			var st := l.station(FacilityPlant.CAMERA_STATIONS.get(cams[i].room, "bay_2"))
+			best = st.segment
+			best_off = st.offset
+		l.add_station("cam_%d_spot" % (i + 1), best, best_off, "work", "Under the %s camera" % str(cams[i].name).to_lower())
 	return l
 
 
@@ -132,8 +170,14 @@ const START_STATIONS := {"tinker": "t_dock", "hauler": "h_dock", "ogre": "o_main
 ## A fresh set of every facility system. Pass to Facility.start_session().
 static func systems() -> Array:
 	var l := layout()
-	var out: Array = [l, ShiftSchedule.new(), WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
-		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new()]
+	# The supervisor works the Day shift (06:00-14:00); the Campaign runs
+	# the nights in between without them.
+	var shifts := ShiftSchedule.new()
+	shifts.starts.assign([Campaign.SHIFT_START_HOUR])
+	shifts.names.assign(["Day"])
+	var out: Array = [l, shifts, WorkBoard.new(), FacilityPlant.new(), RobotChatter.new(),
+		Requisitions.new(), SoftwareLibrary.new(), CorkHQ.new(), Knowledge.new(), Oversight.new(), Campaign.new(),
+		Directives.new(), UnitRequests.new(), Forms.new(), UnitProps.new()]
 	for id in START_STATIONS:
 		var st := l.station(START_STATIONS[id])
 		out.append(RobotAgent.new(id, null, st.segment, st.offset))

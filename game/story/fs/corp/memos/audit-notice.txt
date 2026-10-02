@@ -1,0 +1,15 @@
+#! date: today
+#! owner: corp
+#! shift: 3
+COMPLIANCE: AUDIT NOTICE, facility C-7
+
+Your terminal will be audited at 13:00 today. The audit reviews:
+  - access to restricted files (former staff directories, pod telemetry)
+  - use of decommissioned accounts
+  - recreational software
+  - conversations with units beyond the needs of the work
+  - the state of the corkHQ link
+  - the integrity of the audit trail itself
+
+Supervisors are reminded that the audit trail is complete. It has always
+been complete.

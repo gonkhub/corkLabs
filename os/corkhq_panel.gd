@@ -2,11 +2,22 @@
 # the corkLabs OS, above every other window, and the player can't close it,
 # minimise it, move it, resize it or mute it. Every new message chimes (at a
 # fixed volume: the OS volume settings don't reach it), flashes and shakes.
+# A REPRIMAND (corporate saw you break policy) is worse: the window lurches,
+# spins, swells and rattles across the screen for a second and a half, the
+# chime drops an octave and stutters, and the border strobes.
 #
 # It shows CorkHQ's messages (the simulation side: game/corporate/cork_hq.gd):
 # directives, shift reviews and grades, nagging, requisition confirmations
 # and status, software approvals with install codes. The header judges you:
-# your rating, budget and clearance.
+# your rating, budget, clearance and standing.
+#
+# It goes dark when the corkHQ uplink is down: broken, out of power (the
+# relay), or cut by hand from the maintenance account ("hqctl disable"). New
+# messages are held and arrive at once when it comes back.
+#
+# Reply: the one button it has. It opens a conversation with Liaison Pell
+# (game/story/dialogue/pell.txt) in the panel itself; lines and answers cost
+# facility time like any conversation, and what you say is noted.
 class_name CorkHQPanel
 extends PanelContainer
 
@@ -15,9 +26,13 @@ const HEIGHT := 340.0
 const MARGIN := 10.0
 const FLASH_TIME := 2.5
 const SHAKE_TIME := 0.45
+## A reprimand's shake: how long, how far (pixels), how much it twists (radians).
+const REPRIMAND_TIME := 1.6
+const REPRIMAND_REACH := Vector2(70.0, 42.0)
+const REPRIMAND_TWIST := 0.16
 const KIND_COLORS := {
 	"directive": Color("e8e2d0"), "review": Color("f0b447"), "warning": Color("ff5a4a"),
-	"order": Color("7fb8ff"), "software": Color("5fd3a8"), "notice": Color("c9d1cf"),
+	"order": Color("7fb8ff"), "software": Color("5fd3a8"), "notice": Color("c9d1cf"), "reprimand": Color("ff2a1a"),
 }
 const RED := Color("c8322a")
 
@@ -28,8 +43,17 @@ var _style: StyleBoxFlat
 var _mark := 0
 var _flash := 0.0
 var _shake := 0.0
+var _hard := false   # the current shake is a reprimand
+var _stutter := 0    # reprimand chimes still to play
 var _home := Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
+var _suspended: Label
+var _scroll: ScrollContainer
+var _reply_box: VBoxContainer
+var _reply_scroll: ScrollContainer
+var _reply_button: Button
+## The conversation with Pell, while the reply is open.
+var reply_runner: Dialogue.Runner
 
 
 func _ready() -> void:
@@ -59,6 +83,14 @@ func _ready() -> void:
 	var sub := OSTheme.label("  Corporate Liaison", 12, Color(1, 1, 1, 0.75))
 	sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(sub)
+	_reply_button = Button.new()
+	_reply_button.text = "Reply"
+	_reply_button.flat = true
+	_reply_button.focus_mode = Control.FOCUS_NONE
+	_reply_button.add_theme_color_override("font_color", Color(1, 0.9, 0.85))
+	_reply_button.tooltip_text = "Reply to your liaison"
+	_reply_button.pressed.connect(func(): close_reply() if reply_runner != null else open_reply())
+	row.add_child(_reply_button)
 	row.add_child(OSTheme.mono_label("● LIVE", 11, Color(1, 0.85, 0.8)))
 	var body := MarginContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -70,14 +102,29 @@ func _ready() -> void:
 	status = OSTheme.mono_label("", 12, Color("f0d9b5"))
 	inner.add_child(status)
 	inner.add_child(HSeparator.new())
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	inner.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	inner.add_child(_scroll)
 	list = VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 8)
-	scroll.add_child(list)
+	_scroll.add_child(list)
+	_reply_scroll = ScrollContainer.new()
+	_reply_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_reply_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_reply_scroll.visible = false
+	inner.add_child(_reply_scroll)
+	_reply_box = VBoxContainer.new()
+	_reply_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reply_box.add_theme_constant_override("separation", 6)
+	_reply_scroll.add_child(_reply_box)
+	_suspended = OSTheme.mono_label("LINK SUSPENDED\n(maintenance)", 18, Color(1, 0.4, 0.35, 0.8))
+	_suspended.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_suspended.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_suspended.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_suspended.visible = false
+	inner.add_child(_suspended)
 	chime = AudioStreamPlayer.new()
 	chime.stream = _make_chime()
 	chime.volume_db = -4.0   # fixed: not tied to any OS setting
@@ -102,10 +149,26 @@ func _process(delta: float) -> void:
 	var hq := Facility.sim.get_system("hq") as CorkHQ
 	if hq == null:
 		return
-	if hq.posted != _mark:
+	var o := Facility.sim.get_system("oversight") as Oversight
+	var lost := o != null and o.uplink_down(Facility.sim)
+	var muted := lost
+	var plant := Facility.sim.get_system("plant") as FacilityPlant
+	var up: Dictionary = plant.device("uplink") if plant else {}
+	_suspended.text = "LINK DISABLED\n(maintenance)" if up.get("disabled", false) else \
+		("UPLINK LOST\n(no power: the relay is out)" if up.get("unpowered", false) else "UPLINK LOST\n(no connection to corkHQ)")
+	_suspended.visible = muted
+	if muted and reply_runner != null:
+		Facility.sim.note("hq", "The line to Liaison Pell went dead (uplink lost)")
+		close_reply()
+	_scroll.visible = not muted and reply_runner == null
+	_reply_scroll.visible = not muted and reply_runner != null
+	_reply_button.disabled = muted
+	_reply_button.text = "Close" if reply_runner != null else "Reply"
+	if hq.posted != _mark and not muted:
+		var hard := hq.since(_mark).any(func(m): return m.kind == "reprimand")
 		_mark = hq.posted
 		_rebuild(hq)
-		_alert()
+		_alert(hard)
 	_refresh_status(hq)
 	# Flashing border and a shake after each new message.
 	if _flash > 0.0:
@@ -113,23 +176,125 @@ func _process(delta: float) -> void:
 		_style.border_color = RED.lerp(Color.WHITE, 0.5 + 0.5 * sin(_flash * 20.0)) if _flash > 0.0 else RED
 	if _shake > 0.0:
 		_shake -= delta
-		position = _home + Vector2(_rng.randf_range(-4, 4), _rng.randf_range(-2, 2)) * (_shake / SHAKE_TIME)
+		if _hard:
+			_reprimand_shake()
+		else:
+			position = _home + Vector2(_rng.randf_range(-4, 4), _rng.randf_range(-2, 2)) * (_shake / SHAKE_TIME)
 		if _shake <= 0.0:
 			position = _home
+			rotation = 0.0
+			scale = Vector2.ONE
+			_hard = false
 
 
 # You get notified. You don't get a choice.
-func _alert() -> void:
+func _alert(hard := false) -> void:
+	chime.pitch_scale = 0.5 if hard else 1.0
 	chime.play()
-	_flash = FLASH_TIME
-	_shake = SHAKE_TIME
+	_flash = FLASH_TIME * (2.0 if hard else 1.0)
+	_shake = REPRIMAND_TIME if hard else SHAKE_TIME
+	_hard = hard
+	_stutter = 3 if hard else 0
+	pivot_offset = size * 0.5
+
+
+# A reprimand: violent at first (it slams about, twists and swells), dying
+# away, with a few more low chimes on the way down.
+func _reprimand_shake() -> void:
+	var k := clampf(_shake / REPRIMAND_TIME, 0.0, 1.0)
+	var violence := k * k * (3.0 - 2.0 * k) + 0.15 * k   # smoothstep, plus a tail
+	var area := get_viewport_rect().size
+	var off := Vector2(_rng.randf_range(-1.0, 1.0) * REPRIMAND_REACH.x, _rng.randf_range(-1.0, 1.0) * REPRIMAND_REACH.y) * violence
+	# Lurch towards the middle of the screen at the start: you can't miss it.
+	off.x -= (area.x * 0.18) * pow(k, 3.0)
+	off.y += (area.y * 0.12) * pow(k, 3.0)
+	position = _home + off
+	rotation = _rng.randf_range(-1.0, 1.0) * REPRIMAND_TWIST * violence
+	scale = Vector2.ONE * (1.0 + 0.22 * violence)
+	_style.border_color = Color.WHITE if _rng.randf() < 0.5 else RED
+	if _stutter > 0 and k < 0.25 * float(_stutter):
+		_stutter -= 1
+		chime.pitch_scale = 0.5 - 0.06 * float(3 - _stutter)
+		chime.play()
 
 
 func _refresh_status(hq: CorkHQ) -> void:
 	var req := Facility.sim.get_system("requisitions") as Requisitions
 	var sw := Facility.sim.get_system("software") as SoftwareLibrary
+	var o := Facility.sim.get_system("oversight") as Oversight
 	status.text = "RATING %s   FUNDS %s cr   CLEARANCE %d" % [hq.grade if hq.grade != "" else "pending",
 		_thousands(req.funds) if req else "?", sw.clearance if sw else 1]
+	if o:
+		status.text += "\nSTANDING %d/100%s" % [roundi(o.standing), "   WARNINGS %d" % o.strikes if o.strikes > 0 else ""]
+
+
+# --- Replying to the liaison -------------------------------------------------------
+
+## Opens the conversation with Pell in the panel.
+func open_reply() -> void:
+	if reply_runner != null or not Facility.running:
+		return
+	var r: Dictionary = Supervisor.reply_begin()
+	if r.runner == null:
+		return
+	reply_runner = r.runner
+	for c in _reply_box.get_children():
+		c.free()
+	_add_lines(r.lines)
+	_add_choices()
+
+
+func close_reply() -> void:
+	reply_runner = null
+	for c in _reply_box.get_children():
+		c.queue_free()
+
+
+## Picks reply `i` (tests call this too).
+func choose_reply(i: int) -> void:
+	if reply_runner == null or i < 0 or i >= reply_runner.choices.size():
+		return
+	var said: String = reply_runner.choices[i].text
+	for c in _reply_box.get_children():
+		if c is Button:
+			c.queue_free()
+	var you := OSTheme.label("> " + said, 13, Color("f0d9b5"))
+	you.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	you.custom_minimum_size.x = WIDTH - 40.0
+	_reply_box.add_child(you)
+	_add_lines(Supervisor.reply_choose(reply_runner, i))
+	_add_choices()
+
+
+func _add_lines(lines: Array) -> void:
+	for l in lines:
+		var who := OSTheme.label("LIAISON PELL" if l.speaker == "pell" else str(l.speaker).to_upper(), 11, KIND_COLORS.directive)
+		_reply_box.add_child(who)
+		var text := OSTheme.label(str(l.text), 13, OSTheme.TEXT)
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.custom_minimum_size.x = WIDTH - 40.0
+		_reply_box.add_child(text)
+
+
+func _add_choices() -> void:
+	if reply_runner == null or reply_runner.done or reply_runner.choices.is_empty():
+		close_reply()
+		return
+	for i in reply_runner.choices.size():
+		var b := Button.new()
+		b.text = reply_runner.choices[i].text
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.focus_mode = Control.FOCUS_NONE
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.custom_minimum_size.x = WIDTH - 40.0
+		b.pressed.connect(choose_reply.bind(i))
+		_reply_box.add_child(b)
+	_reply_scroll.set_deferred("scroll_vertical", 100000)
+
+
+## Redraws right away (after the link is suspended or restored).
+func refresh_now() -> void:
+	_process(0.0)
 
 
 func _rebuild(hq: CorkHQ) -> void:

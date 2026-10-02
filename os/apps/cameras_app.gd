@@ -1,13 +1,29 @@
-# Cameras: observe the facility. Nothing in here changes the facility or
-# costs facility time; it's only for looking. Orders and the like live in
-# the other apps.
+# Cameras: watch the facility, and run it. Looking is free (panning,
+# zooming, switching cameras); acting costs facility time like everywhere.
+#
+#   Point and click  hover a robot or a device in the single view: it's
+#                 outlined and named. Left-click (no drag) opens its menu at
+#                 the cursor (ObjectMenu): order maintenance, talk, send a
+#                 unit to a job, recharge, diagnose, service...
+#   Requests      a unit that wants something pings (a toast, REQUESTS on the
+#                 taskbar, "ASKING" on its camera's caption). When you're
+#                 looking at the feed it's in, it asks out loud, on camera,
+#                 and your answers are buttons under the picture (like a
+#                 conversation). Look away and it waits.
+#   Talking       Talk (any unit's menu) opens the unit link here. There's
+#                 no transcript: its words float over it on camera, one line
+#                 after another, and your replies are buttons under the
+#                 picture. System lines ("the link is quiet") show as the
+#                 feedback line.
 #
 #   Single view   one camera, and you drive its pan/tilt/zoom head:
 #                 drag to pan/tilt, scroll to zoom, double-click to reset
 #                 (or arrow keys, + / -, Home). Auto-track follows a robot.
 #   Grid view     every camera at once; click one to open it.
 #   Night vision  the facility is dark (it was built for robots); N switches
-#                 every feed to infrared.
+#                 every feed to infrared, once the cameras have the infrared
+#                 firmware (the "ir-vision" package from the Cork package
+#                 server: corkpkg in the Terminal).
 #   Keys          1-9 camera, G grid/single, N night vision, F CCTV filter, M mute.
 #   Robots' speech floats over them in any feed that can see them.
 #   Sound         you hear the facility through one camera at a time: the
@@ -28,9 +44,28 @@ var single_button: Button
 var grid_button: Button
 var track_button: Button
 var reset_button: Button
+var pop_button: Button
+var view_sep: VSeparator
 var night_button: CheckBox
 var mute_button: Button
 var hint: Label
+## The last action's result, the object menu.
+var feedback: Label
+var menu: PopupMenu
+var _menu_entries: Array = []      # menu item id -> entry
+## The conversation over the unit link, while one is open.
+var talk_box: PanelContainer
+## What the unit is asking, written out under the picture (so it can't be missed).
+var talk_said: Label
+var _spoken := {}   # request ids already said out loud
+var talk_choices: HFlowContainer
+## Everything said over the link so far, "WHO: text" (tests read it; the
+## player sees it on camera).
+var talk_heard: PackedStringArray = []
+## The unit request being asked on camera right now (id, or -1).
+var asking := -1
+var talk_runner: Dialogue.Runner
+var talk_bot: RobotAgent
 
 
 func _init() -> void:
@@ -48,7 +83,8 @@ func build() -> void:
 	var views := ButtonGroup.new()
 	single_button = _toggle(row, "Single", views, func(): set_grid(false))
 	grid_button = _toggle(row, "Grid", views, func(): set_grid(true))
-	row.add_child(VSeparator.new())
+	view_sep = VSeparator.new()
+	row.add_child(view_sep)
 	var cams := ButtonGroup.new()
 	if world:
 		for i in world.cameras.size():
@@ -68,6 +104,12 @@ func build() -> void:
 		if c:
 			c.set_auto_track(on))
 	row.add_child(track_button)
+	pop_button = Button.new()
+	pop_button.text = "Pop out"
+	pop_button.focus_mode = Control.FOCUS_NONE
+	pop_button.tooltip_text = "This camera in a window of its own (P)"
+	pop_button.pressed.connect(pop_out)
+	row.add_child(pop_button)
 	reset_button = Button.new()
 	reset_button.text = "Reset view"
 	reset_button.focus_mode = Control.FOCUS_NONE
@@ -103,6 +145,14 @@ func build() -> void:
 	body = Control.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(body)
+	_build_talk()
+	feedback = OSTheme.label("", 13, OSTheme.ACCENT)
+	feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	feedback.visible = false
+	add_child(feedback)
+	menu = PopupMenu.new()
+	menu.id_pressed.connect(_on_menu)
+	add_child(menu)
 	hint = OSTheme.label("", 12, OSTheme.TEXT_DIM)
 	hint.clip_text = true   # a long hint never sets how narrow the window can be
 	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -121,7 +171,13 @@ func set_grid(on: bool) -> void:
 	_rebuild()
 
 
+## Can the cameras see in the dark yet (the ir-vision package)?
+static func has_ir() -> bool:
+	return Supervisor.has_software("ir-vision")
+
+
 func set_night_vision(on: bool) -> void:
+	on = on and has_ir()
 	night_on = on
 	night_button.set_pressed_no_signal(on)
 	for f in feeds:
@@ -192,7 +248,7 @@ func _rebuild() -> void:
 		f.set_anchors_preset(Control.PRESET_FULL_RECT)
 		body.add_child(f)
 		listen_to(f)
-		hint.text = "Drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: arrows, + / -, Home, 1-9 camera, G grid, N night vision, F filter, M mute"
+		hint.text = "Click a unit or a machine for its menu · drag to pan/tilt · scroll to zoom · double-click to reset.   Keys: 1-9 camera, G grid, N night vision, F filter, M mute"
 	refresh()
 
 
@@ -202,11 +258,24 @@ func _feed(i: int, interactive: bool) -> CCTVFeed:
 	f.speech = desktop.speech if desktop else null
 	f.set_filter(filter_on)
 	f.set_night_vision(night_on)
+	f.describe = func(id: String) -> String: return ObjectMenu.describe(sim(), id)
+	f.info = func(id: String) -> Dictionary: return ObjectMenu.info(sim(), id)
+	if interactive:
+		f.object_clicked.connect(func(_feed: CCTVFeed, id: String, _at: Vector2):
+			if not id.is_empty():
+				open_menu(id))
 	feeds.append(f)
 	return f
 
 
 func refresh() -> void:
+	_check_requests()
+	var ir := has_ir()
+	night_button.disabled = not ir
+	night_button.tooltip_text = "See by the cameras' own infrared light (N)" if ir else \
+		"The cameras have no infrared firmware. Request the ir-vision package (Terminal: connect, then corkpkg)."
+	if night_on and not ir:
+		set_night_vision(false)
 	var c := _camera()
 	var single := not grid_mode and c != null
 	var w := _world()
@@ -217,7 +286,19 @@ func refresh() -> void:
 	_show_mute()
 
 
+## Opens the current camera in a window of its own.
+func pop_out() -> void:
+	if desktop and not grid_mode:
+		desktop.open_app("cam_pop_%d" % cam)
+
+
 func key_input(event: InputEventKey) -> bool:
+	if event.keycode == KEY_ESCAPE and talk_runner != null:
+		end_talk()
+		return true
+	if event.keycode == KEY_P and not grid_mode:
+		pop_out()
+		return true
 	var c := _camera()
 	match event.keycode:
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
@@ -252,6 +333,237 @@ func key_input(event: InputEventKey) -> bool:
 		_: return false
 	refresh()
 	return true
+
+
+# --- Object menus ----------------------------------------------------------------------
+
+## Opens a thing's menu at the mouse (id from FacilityWorld.pick).
+func open_menu(id: String) -> void:
+	if sim() == null:
+		return
+	menu.clear()
+	for c in menu.get_children():
+		if c is PopupMenu:
+			c.queue_free()
+	_menu_entries.clear()
+	_fill_menu(menu, ObjectMenu.entries(sim(), id), id)
+	menu.reset_size()
+	menu.position = Vector2i(get_global_mouse_position())
+	menu.popup()
+
+
+func _fill_menu(pm: PopupMenu, entries: Array, id: String) -> void:
+	for e in entries:
+		if e.get("sep", false):
+			pm.add_separator()
+			continue
+		if e.has("sub"):
+			var sub := PopupMenu.new()
+			sub.name = "Sub%d" % _menu_entries.size()
+			sub.id_pressed.connect(_on_menu)
+			pm.add_child(sub)
+			_fill_menu(sub, e.sub, id)
+			pm.add_submenu_item(str(e.text), sub.name)
+			continue
+		var n := _menu_entries.size()
+		_menu_entries.append(e.merged({"for": id}))
+		pm.add_item(str(e.text), n)
+		var i := pm.get_item_index(n)
+		pm.set_item_disabled(i, e.get("disabled", false))
+		if not str(e.get("tip", "")).is_empty():
+			pm.set_item_tooltip(i, str(e.tip))
+
+
+func _on_menu(n: int) -> void:
+	if n < 0 or n >= _menu_entries.size():
+		return
+	var e: Dictionary = _menu_entries[n]
+	if e.get("talk", false):
+		start_talk(str(e["for"]).trim_prefix("robot:"))
+		return
+	var act: Callable = e.get("act", Callable())
+	if act.is_valid():
+		var out = act.call()
+		show_feedback(str(out) if out != null else "")
+
+
+## The result of the last thing you did, under the picture.
+func show_feedback(text: String) -> void:
+	feedback.text = text
+	feedback.visible = not text.is_empty()
+
+
+# --- Requests, asked on camera --------------------------------------------------------
+
+# A unit with a request asks when you're looking at the feed it's in.
+func _check_requests() -> void:
+	if sim() == null or talk_runner != null:
+		return
+	var reqs := sim().get_system("requests") as UnitRequests
+	var w := _world()
+	if reqs == null or w == null:
+		return
+	reqs.prune(sim())   # don't ask about something you've already dealt with
+	if asking >= 0:
+		var current := reqs.get_request(asking)
+		if current.is_empty() or grid_mode or w.robot_room(str(current.robot)) != w.camera_rooms[cam]:
+			_stop_asking()   # answered elsewhere, expired, or you looked away: it waits
+		return
+	if grid_mode or cam >= w.camera_rooms.size():
+		return
+	for q in reqs.requests:
+		if w.robot_room(str(q.robot)) == w.camera_rooms[cam]:
+			_ask(q)
+			return
+
+
+func _ask(q: Dictionary) -> void:
+	asking = int(q.id)
+	if desktop and desktop.speech and not _spoken.has(asking):
+		_spoken[asking] = true   # said out loud once; it stays written under the picture
+		desktop.speech.queue_line(str(q.robot), str(q.text))
+	var asker := sim().get_system("robot_" + str(q.robot)) as RobotAgent if sim() else null
+	talk_said.text = "%s asks: %s" % [asker.display_name().to_upper() if asker else str(q.robot).to_upper(), str(q.text)]
+	talk_said.add_theme_color_override("font_color", OSTheme.category_color(str(q.robot)))
+	talk_said.visible = true
+	for c in talk_choices.get_children():
+		c.queue_free()
+	for i in (q.options as Array).size():
+		var b := Button.new()
+		b.text = str(q.options[i])
+		b.focus_mode = Control.FOCUS_NONE
+		b.tooltip_text = "5 min"
+		var n := i
+		b.pressed.connect(func(): answer_request(n))
+		talk_choices.add_child(b)
+	talk_box.visible = true
+
+
+## Answers the request being asked on camera (option index).
+func answer_request(i: int) -> void:
+	if asking < 0:
+		return
+	var out: String = Supervisor.answer_request(asking, i)
+	_stop_asking()
+	show_feedback(out)
+
+
+func _stop_asking() -> void:
+	asking = -1
+	if talk_said:
+		talk_said.visible = false
+	if talk_runner == null:
+		talk_box.visible = false
+		for c in talk_choices.get_children():
+			c.queue_free()
+
+
+## Switches to a camera that can see this unit (one that tracks it, if any).
+func look_at_unit(robot_id: String) -> void:
+	var w := _world()
+	if w == null:
+		return
+	var room := w.robot_room(robot_id)
+	var best := -1
+	for i in w.cameras.size():
+		if w.camera_rooms[i] != room:
+			continue
+		if best < 0 or (w.cameras[i].target and w._trackers.get(i, "") == robot_id):
+			best = i
+	if best >= 0 and (best != cam or grid_mode):
+		show_camera(best)
+
+
+# --- Talking over the unit link ---------------------------------------------------------
+
+func _build_talk() -> void:
+	talk_box = PanelContainer.new()
+	talk_box.add_theme_stylebox_override("panel", OSTheme.box(OSTheme.PANEL_LIGHT, OSTheme.LINE, 4, 10, 8))
+	talk_box.visible = false
+	add_child(talk_box)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	talk_box.add_child(col)
+	talk_said = OSTheme.label("", 13, OSTheme.TEXT)
+	talk_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	talk_said.visible = false
+	col.add_child(talk_said)
+	talk_choices = HFlowContainer.new()
+	talk_choices.add_theme_constant_override("h_separation", 6)
+	talk_choices.add_theme_constant_override("v_separation", 4)
+	col.add_child(talk_choices)
+
+
+## Opens the unit link to a robot (Talk in its menu; the Terminal's talk).
+func start_talk(robot_id: String) -> void:
+	var bot := sim().get_system("robot_" + robot_id) as RobotAgent if sim() else null
+	if bot == null:
+		return
+	end_talk()
+	_stop_asking()
+	look_at_unit(robot_id)
+	var r: Dictionary = Supervisor.talk_begin(bot)
+	if r.runner == null:
+		show_feedback(str(r.get("error", "")))
+		return
+	talk_runner = r.runner
+	talk_bot = bot
+	talk_heard.clear()
+	talk_box.visible = true
+	show_feedback("")
+	_talk_lines(r.lines)
+
+
+func end_talk() -> void:
+	if talk_bot and sim():
+		sim().note("supervisor", "Closes the unit link to %s" % talk_bot.display_name())
+		Supervisor.talk_end(talk_bot)
+	talk_runner = null
+	talk_bot = null
+	talk_box.visible = false
+
+
+# The unit's lines go to the camera feed (queued, so a run of lines plays out
+# one after another over its head); system lines to the feedback line.
+func _talk_lines(lines: Array) -> void:
+	for l in lines:
+		var speaker := str(l.speaker)
+		if speaker == "unit" and talk_bot:
+			speaker = talk_bot.robot_id
+		if speaker == "sys":
+			show_feedback(str(l.text))
+			talk_heard.append(str(l.text))
+		elif speaker != "you":
+			var who: String = talk_bot.display_name().to_upper() if talk_bot and speaker == talk_bot.robot_id else speaker.to_upper()
+			talk_heard.append("%s: %s" % [who, l.text])
+			if desktop and desktop.speech:
+				desktop.speech.queue_line(speaker, str(l.text))
+	for c in talk_choices.get_children():
+		c.queue_free()
+	if talk_runner == null or talk_runner.done or talk_runner.choices.is_empty():
+		end_talk()   # the conversation's over: the link closes (its last words still float on camera)
+		return
+	for i in talk_runner.choices.size():
+		var b := Button.new()
+		b.text = str(talk_runner.choices[i].text)
+		b.focus_mode = Control.FOCUS_NONE
+		var n := i
+		b.pressed.connect(func(): _talk_choose(n))
+		talk_choices.add_child(b)
+	# One way out: the script's own, or (if it offers none here) ours.
+	if not talk_runner.choices.any(func(c): return str(c.target) == "END"):
+		var bye := Button.new()
+		bye.text = "(close the link)"
+		bye.focus_mode = Control.FOCUS_NONE
+		bye.pressed.connect(end_talk)
+		talk_choices.add_child(bye)
+
+
+func _talk_choose(i: int) -> void:
+	if talk_runner == null or talk_bot == null:
+		return
+	talk_heard.append("YOU: %s" % talk_runner.choices[i].text)
+	_talk_lines(Supervisor.talk_choose(talk_runner, talk_bot, i))
 
 
 func _world() -> FacilityWorld:

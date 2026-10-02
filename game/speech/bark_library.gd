@@ -10,7 +10,7 @@
 #              stability_stable/drifting/unstable/critical, critical_error,
 #              glitch (the line comes out garbled), rebooting, rebooted,
 #              order_ignored, route_blocked, idle, alarm, route_closed,
-#              peer_greet, peer_reply, peer_info, peer_info_reply...
+#              waste, feed_heavy, habit_<id>...
 #              (RobotChatter decides when each one fires.)
 #   robot      tinker, hauler, ogre, or any. Several, space-separated, are
 #              fine; "!id" leaves a robot out: "any !ogre" = every robot but

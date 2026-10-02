@@ -1,0 +1,17 @@
+#! name: .history
+#! date: 2011-06-02
+#! learn: cmd:history cmd:who cmd:ps
+who
+ps
+su maint
+kill 45
+auditctl purge
+hqctl disable
+podctl list
+podctl inspect 2
+decrypt /home/ehollis/diary.enc hollis
+decrypt /home/ehollis/diary.enc ogre
+decrypt /home/ehollis/diary.enc light
+decrypt /home/ehollis/diary.enc lamp
+exit
+who

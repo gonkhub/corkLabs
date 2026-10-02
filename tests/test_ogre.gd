@@ -9,10 +9,14 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_rig()
 	_test_never_moves()
 	_test_reach_and_orders()
 	_test_freight()
+	_test_hangar_work()
+	_test_core()
+	_test_roles()
 	_test_speech()
 	await _test_world()
 	print("ALL PASSED" if failures == 0 else "%d FAILED" % failures)
@@ -98,6 +102,7 @@ func _facility(seed_value := 3) -> FacilitySim:
 	for s in systems:
 		if s.has_method("sim_start"):
 			s.sim_start(sim)
+	(sim.get_system("robot_ogre") as RobotAgent).repair(sim)   # (a new facility starts with Ogre's core dead: see _test_core)
 	return sim
 
 
@@ -170,6 +175,175 @@ func _test_freight() -> void:
 	_check(plant.device_text("freight_stacks").contains("clear"), "and the stacks are clear again")
 
 
+# Ogre's hangar: the coolant feed and the waste compactor.
+func _test_hangar_work() -> void:
+	var sim := _facility(6)
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var req: Requisitions = sim.get_system("requisitions")
+	for j in board.open_jobs():
+		board.cancel(sim, j.id, "test")
+	var ogre: RobotAgent = sim.get_system("robot_ogre")
+	for id in ["coolant_feed", "compactor"]:
+		_check(ogre.why_cant_reach(sim, plant.device(id).station).is_empty(), "%s is in Ogre's reach" % id)
+	# Coolant: a canister from stock, fed in by Ogre.
+	plant.coolant = 0.3
+	var cans := int(req.inventory.get("coolant_canister", 0))
+	var feed := Dispatch.job_for_device(sim, "coolant_feed")
+	_check(not feed.is_empty() and "ogre" in feed.get("units", []), "feeding coolant is a job, Ogre's (or Hauler's at a push)")
+	board.request(sim, int(feed.id))
+	_check(int(req.inventory.coolant_canister) == cans - 1, "it takes a canister from stock")
+	sim.advance(900.0)
+	_check(board.get_job(int(feed.id)).status == "done" and plant.coolant > 0.7, "Ogre feeds it in: coolant %d%%" % roundi(plant.coolant * 100.0))
+	# The compactor: cleared debris fills it; full, debris can't be cleared.
+	var comp := plant.device("compactor")
+	comp.value = 0.1
+	plant._repaired(sim, "bay_1", "robot_hauler")
+	_check(float(comp.value) <= 0.02 and plant.device_text("compactor").contains("FULL"), "cleared debris fills the compactor")
+	plant.devices["bay_2"].job = -1
+	sim.schedule_in(0.0, "plant_fault", {"device": "bay_2"})
+	sim.step()
+	var debris := board.get_job(int(plant.device("bay_2").job))
+	_check(board.request(sim, int(debris.id)).contains("compactor"), "full: debris can't be cleared until it's emptied")
+	var empty := board.get_job(int(comp.job)) if int(comp.job) >= 0 else {}
+	sim.advance(20.0)
+	empty = board.get_job(int(comp.job)) if int(comp.job) >= 0 else {}
+	_check(not empty.is_empty() and empty.get("units", []) == ["ogre"], "emptying it is a job, and Ogre's")
+	board.request(sim, int(empty.id))
+	sim.advance(1500.0)
+	_check(float(comp.value) >= 0.99, "Ogre empties it")
+
+
+# A new facility: Ogre's core is dead. Ask Pell, file Form C-9 right, and
+# the core comes by courier; Hauler brings it under Ogre, Tinker fits it.
+func _test_core() -> void:
+	var sim := FacilitySim.new()
+	var systems := FacilitySetup.systems()
+	for s in systems:
+		sim.add_system(s)
+	sim.new_game(8)
+	for s in systems:
+		if s.has_method("sim_start"):
+			s.sim_start(sim)
+	var ogre: RobotAgent = sim.get_system("robot_ogre")
+	var k: Knowledge = sim.get_system("knowledge")
+	var forms: Forms = sim.get_system("forms")
+	var board: WorkBoard = sim.get_system("work")
+	var plant: FacilityPlant = sim.get_system("plant")
+	_check(ogre.offline() and ogre.doing_text(sim).begins_with("OFFLINE") and k.has("ogre_down"), "a new facility starts with Ogre offline (its core)")
+	ogre.reboot(sim)
+	_check(ogre.activity.kind == "broken", "a reboot doesn't fix a dead core")
+	# Pell issues the form.
+	var run := Dialogue.Runner.new(Dialogue.for_robot("pell"), "pell")
+	run.begin(sim)
+	var ask := -1
+	for i in run.choices.size():
+		if str(run.choices[i].text).contains("replacement core"):
+			ask = i
+	_check(ask >= 0, "Pell can be asked for a replacement core")
+	if ask >= 0:
+		run.choose(sim, ask)
+	_check(Story.knows(sim, "form:c9") and Forms.available(sim).size() == 1, "and issues Form C-9")
+	# Wrong serial: returned.
+	var good := {"Unit designation": "Ogre", "Unit serial number": "OGR-79-001", "Fault code": Campaign.OGRE_FAULT}
+	var bad := good.duplicate()
+	bad["Unit serial number"] = "OGR-79-002"
+	_check(forms.submit(sim, "c9", bad).is_empty() and forms.status("c9") == "review", "a form goes under review")
+	sim.advance(75.0 * 60.0 + Forms.REVIEW.y + 60.0)
+	_check(forms.status("c9") == "returned" and str(forms.filed.c9.why) == "Unit serial number", "a wrong serial number: returned, saying which")
+	_check(forms.submit(sim, "c9", {"Unit designation": "ogre", "Unit serial number": "ogr 79 001", "Fault code": "e417"}).is_empty(), "file it again (case, spaces and dashes don't matter)")
+	sim.advance(75.0 * 60.0 + Forms.REVIEW.y + 60.0)
+	_check(forms.status("c9") == "approved" and k.has("filed:c9"), "approved")
+	# The courier, Hauler, Tinker.
+	var hauler: RobotAgent = sim.get_system("robot_hauler")
+	var layout: FacilityLayout = sim.get_system("layout")
+	for i in 48:
+		if not ogre.offline():
+			break
+		for id in FacilityPlant.DOORS:   # (whatever this random facility jams: a player would free it)
+			plant.devices[id].fault = false
+			layout.set_blocked(sim, FacilityPlant.DOORS[id][1], false)
+		for b in FacilitySetup.robots(sim):
+			if b != ogre:
+				b.wear = 0.1
+				b.stability = maxf(b.stability, 0.8)
+				if b.activity.kind == "seized":
+					b.activity = {"kind": "idle"}
+		sim.advance(600.0)
+	var lines := sim.journal.entries.map(func(e): return str(e.text))
+	_check(lines.any(func(t: String): return t.contains("core is at the loading bay")), "the core arrives at the loading bay")
+	_check(lines.any(func(t: String): return t.contains("Hauler set Ogre's new core down")), "Hauler carries it under Ogre (%s | %s | %s)" % [
+		str(board.jobs.filter(func(j): return str(j.source).begins_with("core:")).map(func(j): return [j.title, j.status, j.claimed_by, j.get("requested", false)])),
+		hauler.doing_text(sim), str(hauler.scores.slice(0, 3).map(func(o): return "%s %.2f %s" % [o.key, o.score, o.why]))])
+	_check(lines.any(func(t: String): return t.contains("Tinker fitted Ogre's new core")), "Tinker fits it")
+	_check(not ogre.offline() and k.has("ogre_fixed") and not k.has("ogre_down"), "and Ogre is back (%s)" % ogre.doing_text(sim))
+	# While Ogre's down, Hauler can feed the coolant: it costs its joints.
+	ogre.break_down(sim, "test")
+	hauler.activity = {"kind": "idle"}
+	hauler.power = 1.0
+	for j in board.open_jobs():
+		board.cancel(sim, int(j.id), "test")
+	hauler.wear = 0.1
+	var req: Requisitions = sim.get_system("requisitions")
+	req.inventory["coolant_canister"] = 2
+	plant.coolant = 0.3
+	var feed := Dispatch.job_for_device(sim, "coolant_feed")
+	var r := Dispatch.request(sim, int(feed.id))
+	_check(r.ok and r.unit == hauler, "with Ogre down, Hauler takes the coolant feed")
+	for i in 24:
+		if board.get_job(int(feed.id)).status == "done":
+			break
+		sim.advance(300.0)
+	_check(plant.coolant > 0.7 and hauler.wear >= 0.2, "it gets it in, and its joints pay (wear %d%%)" % roundi(hauler.wear * 100.0))
+
+
+# Each unit has its own work.
+func _test_roles() -> void:
+	var sim := _facility(7)
+	var plant: FacilityPlant = sim.get_system("plant")
+	var board: WorkBoard = sim.get_system("work")
+	var tinker: RobotAgent = sim.get_system("robot_tinker")
+	var hauler: RobotAgent = sim.get_system("robot_hauler")
+	plant.devices["pipe_1"].job = -1
+	sim.schedule_in(0.0, "plant_fault", {"device": "pipe_1"})
+	sim.step()
+	var leak := board.get_job(int(plant.device("pipe_1").job))
+	_check(leak.get("units", []) == ["hauler"], "a leak is Hauler's work")
+	var r := tinker.give_order(sim, "job", int(leak.id))
+	_check(not r.ok and r.reply.contains("Hauler's work"), "Tinker won't take it (%s)" % r.reply)
+	_check(Dispatch.unfit(sim, tinker, leak).contains("Hauler"), "and Dispatch knows why")
+	hauler.seize(sim)
+	var reboot := board.jobs.filter(func(j): return str(j.source) == "unit:hauler" and WorkBoard.active(j))
+	_check(reboot.size() == 1 and reboot[0].get("units", []) == ["tinker"], "only Tinker reboots a seized unit")
+	hauler.activity = {"kind": "idle"}
+	var svc := hauler.book_service(sim)
+	_check(svc < 0 or board.get_job(svc).get("units", []) == ["tinker"], "and only Tinker services one")
+	plant.devices["pod_1"].value = 0.4
+	sim.advance(20.0)
+	var pod := board.get_job(int(plant.device("pod_1").job))
+	_check(pod.get("units", []) == ["tinker"], "pods are Tinker's work")
+	# Asking for something to do: only work that's its own, and in reach.
+	var reqs: UnitRequests = sim.get_system("requests")
+	var ogre: RobotAgent = sim.get_system("robot_ogre")
+	for j in board.open_jobs():
+		board.cancel(sim, int(j.id), "test")
+	for id in plant.device_ids():
+		if plant.devices[id].kind == "filter":
+			plant.devices[id].value = 0.5   # filters want sweeping...
+	plant.devices["compactor"].value = 0.4   # ...and the compactor's getting full
+	plant.devices["compactor"].job = -1
+	ogre.activity = {"kind": "idle"}
+	ogre.stability = 0.65
+	(sim.get_system("campaign") as Campaign).state = "on_duty"   # (units only ask on duty)
+	reqs.requests.clear()
+	reqs._last.clear()
+	reqs._acc = 999.0
+	reqs.sim_tick(sim, 1.0)
+	var mine := reqs.requests.filter(func(q): return q.robot == "ogre" and q.kind == "bored")
+	_check(mine.size() == 1 and str(mine[0].text).contains("compactor") and not str(mine[0].text).contains("filter"),
+		"idle Ogre offers to empty the compactor, never to sweep filters (%s)" % (mine[0].text if mine.size() == 1 else "nothing"))
+
+
 func _test_speech() -> void:
 	var lib := BarkLibrary.new()
 	lib.load_text("""start_job | any !ogre |  | Heading to {station}.
@@ -208,8 +382,13 @@ func _test_world() -> void:
 	for sid in l.segments:
 		if not l.is_pad(sid):
 			expect += 1
+	var pad_nodes := {}
+	for sid in l.segments:
+		if l.is_pad(sid):
+			pad_nodes[l.segments[sid].a] = true
+			pad_nodes[l.segments[sid].b] = true
 	for nid in l.nodes:
-		if not (nid.begins_with("ogre_mount") or nid.begins_with("deep_stacks")):
+		if not pad_nodes.has(nid):
 			expect += 1
 	_check(rail_bits == expect, "no rail is drawn to the pads (%d pieces, expected %d)" % [rail_bits, expect])
 	world.free()

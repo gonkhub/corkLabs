@@ -1,0 +1,67 @@
+# Scripted moments, per shift, at a facility time (HH:MM). They only happen
+# while the supervisor is on duty, and only if the condition holds (empty =
+# always; see Campaign.check: knowledge keys, !key, standing>=70, trust:x>=2 ... with &).
+#   shift | at | condition | action | arguments (separated by |)
+# actions:
+#   hq | sender | kind | text          a corkHQ message (kind: directive notice warning order reprimand;
+#                                     reprimand = a policy breach was seen: only for those)
+#   say | robot | text                 a robot says it (on camera, and in the Facility Log)
+#   learn | key                        the supervisor learns / a flag is set
+#   fault | device                     a plant fault (pipe_1, relay, gate, door_dock, cam_3, uplink...)
+#   seize | robot                      a unit seizes up (needs a manual reboot)
+#   wear | robot | amount              add wear to a unit
+#   directive | kind | target | minutes | text    a corporate demand with a deadline (see directives.gd)
+#   audit | strictness                 an audit right now (strictness adds to the odds)
+#   job | title | skill | station | work seconds
+#   perform | robot | clip             the robot performs a clip, if it's been recorded (see docs/STORY.md)
+#   stability | robot | amount         nudge a robot's software stability
+#   standing | amount | why            suspicion | amount | why
+#   end | ending id                    end the game now
+
+# --- Shift 1: orientation. Things go wrong on purpose, one at a time, so a
+# new supervisor meets each system while Pell walks them through it.
+1 | 06:02 | | hq | Liaison Pell | directive | Good morning, Supervisor. I'm Pell, your liaison. Today is orientation: your Duties list walks you through the job. Start with your onboarding file (Terminal: ls, then cat welcome.txt).
+1 | 06:04 | | hq | IT Services | notice | Unit OGRE has been offline since 03:12: core regulator failure. Replacement components for essential units are requested through your liaison (corkHQ: Reply).
+1 | 06:30 | ogre_down | say | hauler | Ogre's quiet. Somebody has to lift the canisters. Somebody is me.
+1 | 06:50 | !read:/home/supervisor/welcome.txt | hq | Liaison Pell | notice | You haven't opened your onboarding yet. Terminal: cat ~/welcome.txt
+1 | 07:10 | | fault | pipe_1
+1 | 07:11 | | hq | Liaison Pell | notice | A coolant leak in bay 1. Nobody fixes anything until you say so: Cameras, find the bay 1 pipe, click it, Order maintenance.
+1 | 08:20 | | say | tinker | Is that a new voice on the link? The last one used to say good morning.
+1 | 09:00 | | fault | cam_3
+1 | 09:01 | | hq | IT Services | notice | Camera 3 has lost its signal. Camera repairs use a camera module from stock.
+1 | 09:30 | secret:former_staff | hq | Liaison Pell | reprimand | I can see what you open, Supervisor. Former staff directories are closed for a reason.
+1 | 10:20 | | fault | door_dock
+1 | 10:21 | | hq | Liaison Pell | notice | The dock door has stuck. Your units can't reach their chargers until it's freed. Make it the priority.
+1 | 10:40 | | say | hauler | New supervisor. Same dark.
+1 | 11:20 | | seize | hauler
+1 | 11:21 | | hq | Liaison Pell | notice | Unit HAULER has seized up. Units wear out: book them services (click a unit in Cameras), and a seized unit needs another unit sent to reboot it by hand (click it).
+1 | 11:45 | | say | ogre | ...another... one...
+1 | 12:30 | | directive | output | 85 | 60 | Throughput at 85% or better by 13:30.
+1 | 13:30 | | hq | Liaison Pell | notice | Thirty minutes left. Your end-of-shift report is due.
+
+# --- Shift 2: the purge. No more hand-holding.
+2 | 06:02 | | hq | Liaison Pell | directive | IT will purge /home/dokafor at 12:00. Confirm it in Duties. There is nothing in it you need.
+2 | 07:30 | | fault | relay
+2 | 08:40 | | say | tinker | Pod 3 is humming again. Four beats, a pause, three beats.
+2 | 08:40 | | perform | tinker | act_hum_pod3
+2 | 09:10 | | fault | door_pod
+2 | 10:00 | !purged:dokafor | hq | Liaison Pell | notice | The purge is still unconfirmed, Supervisor.
+2 | 10:30 | | seize | tinker
+2 | 11:30 | | fault | cam_6
+2 | 12:00 | !purged:dokafor | learn | purged:dokafor
+2 | 12:00 | | hq | IT Services | notice | Scheduled maintenance complete: /home/dokafor purged. Account dokafor removed.
+2 | 13:00 | | say | hauler | The last one logged off at this hour. Didn't log on again.
+2 | 13:00 | | perform | hauler | act_look_at_camera
+
+# --- Shift 3: audit day.
+3 | 06:02 | | hq | Compliance | directive | Audit day. Your terminal activity will be reviewed at 13:00.
+3 | 07:00 | | fault | gate
+3 | 07:30 | secret:pod3 | say | tinker | You looked in pod 3. I felt it through the rails. What is in there?
+3 | 08:30 | | fault | pipe_3
+3 | 10:00 | | fault | cam_1
+3 | 11:00 | secret:maint_account | hq | Liaison Pell | reprimand | Someone has been using a decommissioned account on your terminal. I'm sure you know nothing about it.
+3 | 11:30 | | seize | ogre
+3 | 13:00 | | audit | 25
+3 | 13:01 | | hq | Compliance | notice | Audit complete. Results will be reflected in your review.
+3 | 13:45 | | say | ogre | ...the... light... stays... on...
+3 | 13:45 | | perform | ogre | act_lamp_to_pods

@@ -14,6 +14,7 @@ var desk: Control
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	get_root().size = Vector2i(1600, 900)
 	facility = get_root().get_node("Facility")
 	facility.wipe_save(SAVE)
@@ -31,6 +32,7 @@ func _initialize() -> void:
 	desk.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	desk.size = Vector2(1600, 900)
 	desk.log_on()
+	desk.clock_in()
 	await process_frame
 
 	await _test_listener()

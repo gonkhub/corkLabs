@@ -1,0 +1,56 @@
+#! date: today
+#! owner: supervisor
+#! learn: cmd:units cmd:jobs cmd:plant cmd:log cmd:open cmd:duties cmd:maintain cmd:inspect cmd:order cmd:requests
+#! minutes: 3
+WELCOME TO corkLabs
+Supervisor onboarding, facility C-7 ("the Compound")
+------------------------------------------------------
+
+Congratulations on your appointment.
+
+You supervise three maintenance units (TINKER, HAULER, OGRE) and the plant
+they keep running. You do not need to understand the plant. You need to
+keep its throughput at or above target, and you need to do your duties.
+
+YOUR DUTIES
+  The Duties app lists what corporate expects of you this shift. Duties
+  take time. Undone duties are noted on your record.
+
+  duties                        your checklist, from the terminal
+
+YOUR UNITS
+  Units do what they are told, and nothing else. Nothing is repaired until
+  you order it. Open Cameras and click whatever needs attention: a leaking
+  pipe, a stuck door, a unit. Its menu lists what you can do about it.
+  A unit whose software drifts stops waiting to be told. That is not an
+  improvement.
+
+YOUR TERMINAL
+  Every action you take costs facility time. The facility does not wait
+  for you, and it does not move without you. Use your time well.
+
+  status                        the facility at a glance
+  units                         what each unit is doing
+  jobs                          open work orders
+  plant                         every device and its state
+
+  Cameras fail. Units don't stop working when they do. Anything you can do
+  by clicking on camera, you can do here:
+  maintain <thing> [unit]       order maintenance on it
+  inspect <thing> [unit]        send a unit to look at it
+  order <unit> <job#>           send a unit to a job (or recharge, standby)
+  requests                      what the units are asking you
+  log [lines] [category]        the facility journal
+  open <app>                    open an app by name
+
+  Type help to see the commands you know.
+
+A NOTE ON YOUR PREDECESSORS
+  The Compound has had several supervisors. Their home directories are
+  retained for records purposes only and are closed to you. Please read
+  the Code of Conduct (/corp/policy/conduct.txt) before the end of your
+  first shift.
+
+Your liaison is Ms. Pell. She will be in touch. She is always in touch.
+
+                                        corkLabs Human Resources

@@ -27,7 +27,7 @@ const TICK := 0.1
 ## Where a brand-new facility's clock starts: Day 1, 05:55 (the first shift
 ## starts at 06:00).
 const START_TIME := 5 * 3600 + 55 * 60
-const SAVE_VERSION := 6   # 3: robots, work board. 4: plant. 5: rooms + rail network, chatter. 6: stability, corporate
+const SAVE_VERSION := 7   # 3: robots, work board. 4: plant. 5: rooms + rail network, chatter. 6: stability, corporate. 7: campaign, knowledge, oversight
 
 signal ticked(tick: int)
 signal event_fired(event_name: String, data: Dictionary)
@@ -155,6 +155,11 @@ func load_data(d: Dictionary) -> void:
 	scheduler.from_data(d.get("scheduler", {}))
 	journal.from_data(d.get("journal", []))
 	var systems: Dictionary = d.get("systems", {})
+	# Units activated during play (from crates) aren't in the standard set:
+	# bring them back before loading.
+	for id in systems:
+		if str(id).begins_with("robot_") and not _systems.has(id):
+			add_system(RobotAgent.new(str(id).trim_prefix("robot_")))
 	for id in _order:
 		var s: Object = _systems[id]
 		if systems.has(id) and s.has_method("sim_load"):

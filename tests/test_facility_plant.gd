@@ -8,9 +8,13 @@ var failures := 0
 
 
 func _initialize() -> void:
+	SupervisorArchive.use_file("user://test_supervisor_archive.json")   # never the real personnel file
 	_test_drift_posts_and_escalates()
 	_test_leak_heats_the_facility()
 	_test_relay_slows_charging()
+	_test_relay_takes_the_uplink()
+	_test_proper_repairs_hold()
+	_test_routine_work()
 	_test_repair_and_salvage_chain()
 	_test_shift_report()
 	_test_save_load()
@@ -68,7 +72,7 @@ func _test_leak_heats_the_facility() -> void:
 	_check(plant.device("pipe_2").fault and fired.has("alarm"), "a leak is a fault and sounds the alarm")
 	var job := _board(sim).get_job(int(plant.device("pipe_2").job))
 	_check(job.get("skill", "") == "heavy" and int(job.get("priority", 0)) == 2, "and posts a heavy, high-priority clamp job")
-	sim.advance(3600.0)
+	sim.advance(5400.0)
 	_check(plant.coolant < 0.6 and plant.heat() > h0 + 1.0, "an unclamped leak drains coolant and heats the facility (coolant %d%%, heat %.1fx)" % [
 		roundi(plant.coolant * 100), plant.heat()])
 	# Pods drift faster when hot.
@@ -142,6 +146,97 @@ func _test_repair_and_salvage_chain() -> void:
 	_check(said, "the hand-off is journaled with both robots")
 
 
+# A blown fuse left alone takes corkHQ's uplink down with it (its battery runs
+# out); a new fuse brings it back.
+func _test_relay_takes_the_uplink() -> void:
+	var sim := _facility()
+	var plant := _plant(sim)
+	var o := sim.get_system("oversight") as Oversight
+	sim.schedule_in(0.0, "plant_fault", {"device": "relay"})
+	sim.advance(60.0)
+	_check(plant.device("relay").fault and not o.uplink_down(sim), "the fuse blows: the uplink runs on its battery")
+	sim.advance(FacilityPlant.UPLINK_BATTERY)
+	_check(o.uplink_down(sim) and plant.device_text("uplink").contains("NO POWER"), "twenty minutes on, the uplink is down (no power)")
+	plant._repaired(sim, "relay", "robot_tinker")
+	sim.advance(1.0)
+	_check(not o.uplink_down(sim), "a new fuse and it's back on mains")
+
+
+# A proper repair holds for hours; a patch doesn't.
+func _test_proper_repairs_hold() -> void:
+	var sim := _facility()
+	var plant := _plant(sim)
+
+	plant.devices["pipe_1"].fault = true
+	plant._repaired(sim, "pipe_1", "robot_hauler")
+	var next := sim.scheduler.peek(400).filter(func(e): return e.name == "plant_fault" and str(e.data.get("device", "")) == "pipe_1")
+	_check(not next.is_empty() and float(next.back().time) - sim.time() >= FacilityPlant.REPAIR_GRACE,
+		"after a proper repair the pipe holds at least %d hours" % int(FacilityPlant.REPAIR_GRACE / 3600.0))
+
+
+# Most work is routine: pod waste (Hauler -> the compactor -> Ogre), rail
+# grime (Tinker). No parts.
+func _test_routine_work() -> void:
+	var sim := _facility(true, 9)
+	var plant := _plant(sim)
+	var board: WorkBoard = sim.get_system("work")
+	var waste := plant.device("pod_waste")
+	var before := float(waste.value)
+	sim.advance(3600.0)
+	_check(float(waste.value) < before, "the pods fill their waste bins as they run (%d%% full)" % roundi((1.0 - float(waste.value)) * 100.0))
+	waste.value = 0.4
+	sim.advance(20.0)
+	var job := board.get_job(int(waste.job))
+	_check(not job.is_empty() and job.get("units", []) == ["hauler"] and not job.has("part"), "taking out the pod waste: Hauler's job, no parts")
+	var comp := plant.device("compactor")
+	comp.value = 1.0
+	plant._repaired(sim, "pod_waste", "robot_hauler")
+	_check(is_equal_approx(float(comp.value), 1.0 - FacilityPlant.WASTE_LOAD), "it goes into the hangar compactor (for Ogre)")
+	# Overflowing bins wear on every unit's software.
+	var tinker := sim.get_system("robot_tinker") as RobotAgent
+	tinker.stability = 0.9
+	waste.value = 0.0
+	plant._waste_stress(sim)
+	_check(tinker.stability < 0.9, "overflowing pod waste wears on the units' software")
+	_check(FacilityPlant.KINDS.filter.get("part", "") == "", "sweeping filters takes no parts any more")
+	# Rail grime slows everyone.
+	plant.devices["rails"].value = 1.0
+	var clean := plant.rail_factor()
+	plant.devices["rails"].value = 0.0
+	_check(plant.rail_factor() < clean and is_equal_approx(plant.rail_factor(), FacilityPlant.GRIME_SLOW), "grimy rails slow the units down")
+	_check(FacilityPlant.KINDS.rails.units == ["hauler"], "cleaning them is Hauler's job")
+	# How fast the bins fill: about once a day (unevenly), averaged over seeds.
+	var fills := []
+	for seed_value in [11, 12, 13, 14, 15, 16]:
+		var t := _facility(false, seed_value)
+		var w := _plant(t).device("pod_waste")
+		w.value = 1.0
+		t.advance(24.0 * 3600.0)
+		fills.append(1.0 - float(w.value))
+	var avg := float(fills.reduce(func(a, b): return a + b, 0.0)) / fills.size()
+	_check(avg > 0.7 and avg < 1.2, "the bins fill about once a day (%d%% on average, %s)" % [roundi(avg * 100.0), str(fills.map(func(f): return roundi(f * 100.0)))])
+	# Chores wait for the supervisor: the night autopilot leaves them.
+	var night := _facility(false, 17)
+	var nboard: WorkBoard = night.get_system("work")
+	var nplant := _plant(night)
+	nplant.devices.pod_waste.value = 0.2
+	night.advance(30.0)
+	var wjob := nboard.get_job(int(nplant.device("pod_waste").job))
+	night.advance(120.0)
+	_check(not wjob.is_empty() and not wjob.get("requested", false), "the night autopilot leaves the pod waste for you")
+	# The compactor: room on day 1, full by day 2 with a load a day (plus debris).
+	var day := _facility(false, 18)
+	var dcomp := _plant(day).device("compactor")
+	_check(float(dcomp.value) >= 0.9, "the compactor starts nearly empty")
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_plant(day)._repaired(day, "bay_1", "robot_hauler")
+	_check(float(dcomp.value) > 0.4, "one load of waste and some debris on day 1: plenty of room (%d%% full)" % roundi((1.0 - float(dcomp.value)) * 100.0))
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_plant(day)._repaired(day, "bay_2", "robot_hauler")
+	_plant(day)._repaired(day, "pod_waste", "robot_hauler")
+	_check(float(dcomp.value) <= 0.05, "by day 2 it's full (%d%%): Ogre's turn" % roundi((1.0 - float(dcomp.value)) * 100.0))
+
+
 func _test_shift_report() -> void:
 	var sim := _facility(true)
 	sim.advance(9 * 3600.0)   # 05:55 -> 14:55: the Day shift ended at 14:00
@@ -164,8 +259,14 @@ func _test_save_load() -> void:
 	var pb := _plant(b)
 	var same := pa.device_ids().all(func(i): return is_equal_approx(pa.device(i).value, pb.device(i).value) and pa.device(i).fault == pb.device(i).fault)
 	_check(same and is_equal_approx(pa.coolant, pb.coolant), "the plant saves and loads, and plays out identically")
-	_check(a.journal.tail(30).map(func(e): return e.text) == b.journal.tail(30).map(func(e): return e.text),
-		"with identical journals")
+	var ja := a.journal.tail(30).map(func(e): return e.text)
+	var jb := b.journal.tail(30).map(func(e): return e.text)
+	var diff := ""
+	for i in mini(ja.size(), jb.size()):
+		if ja[i] != jb[i]:
+			diff = "%s  vs  %s" % [ja[i], jb[i]]
+			break
+	_check(ja == jb, "with identical journals " + diff)
 
 
 func _check(ok: bool, what: String) -> void:

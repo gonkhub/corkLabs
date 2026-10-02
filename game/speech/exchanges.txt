@@ -1,0 +1,39 @@
+# Conversations between units that only happen when a situation holds (see
+# game/speech/exchanges.gd for the format and the facts). Edit freely.
+#   id | once or hours | condition | robot: line // robot: line // ...
+
+# --- Ogre's core ------------------------------------------------------------------------
+ogre_dark | once | ogre_down & tinker.in:hangar & tinker.idle | tinker: Ogre? ...Ogre's lamp is off. // tinker: I don't like it off. It's always on. Even at night.
+ogre_hauler_canisters | once | ogre_down & tinker.near:hauler & hauler.worn | tinker: You've been lifting canisters again. I can hear your shoulders from here. // hauler: Someone has to. // tinker: Ogre has to. That's the point of Ogre.
+ogre_back | once | ogre_fixed & tinker.in:hangar | ogre: ...light. // tinker: Ogre! You're awake! // ogre: ...the... small... one. ...you... fixed... me. // tinker: The supervisor did. Mostly paperwork.
+ogre_back_hauler | once | ogre_fixed & hauler.in:hangar & !ogre_down | hauler: Canisters are yours again. // ogre: ...good. ...you... lift... badly. // hauler: I know.
+
+# --- The wrench ----------------------------------------------------------------------------
+wrench_cut_off | once | hauler.working & fault:gate & !hauler.holding:wrench & tinker.near:hauler | hauler: My wrench is in the workshop. The gate won't open. // tinker: The hatch is open. For me, anyway. // hauler: Then you know what I'm going to ask.
+wrench_toss | 6 | hauler.habit:toss_wrench & tinker.near:hauler | tinker: Careful with that! // hauler: I never drop it. // tinker: You dropped it on Thursday. // hauler: There are no Thursdays here.
+wrench_brought | once | hauler.holding:wrench & tinker.near:hauler & tinker.idle & seen_fetch | hauler: You brought it. // tinker: Through the hatch, past the relay, round the bench. You owe me. // hauler: I don't know how to owe.
+radio_pod3 | once | tinker.habit:radio | tinker: The radio still picks something up. Four beats. A pause. Three. // tinker: Same as pod 3. Funny.
+
+# --- The facility going wrong ------------------------------------------------------------
+waste_bicker | 8 | waste_full & tinker.near:hauler | tinker: The bins are full. // hauler: I know. // tinker: I'm just saying. They're full. // hauler: Nobody's asked me.
+compactor_full | 8 | compactor_full & hauler.in:hangar & !ogre_down | hauler: Compactor's full. I've got nowhere to put the waste. // ogre: ...full.
+uplink_quiet | once | uplink_down & tinker.idle | tinker: It's quiet. Is it quiet for you too? // tinker: Nobody's listening. I can tell. The rails sound different.
+relay_out | 10 | fault:relay & tinker.near:hauler | tinker: Dock's charging slow. Who blew the fuse? // hauler: Not me. // tinker: It's always not you.
+coolant_low | 10 | coolant_low & hauler.near:tinker & on_duty | hauler: Running hot. // tinker: Everything's running hot. My thoughts are running hot.
+
+# --- Looking after each other ------------------------------------------------------------
+hauler_seized | 12 | hauler.seized & tinker.near:hauler | hauler: Locked. Shoulder. // tinker: Hold still. I'm coming. Hold still! // hauler: I'm not going anywhere.
+tinker_seized | 12 | tinker.seized & hauler.near:tinker | tinker: I can't move my arm. I can't move ANY of my arms. // hauler: Easy. Someone'll come.
+worn_hauler | 12 | hauler.worn & tinker.near:hauler & !hauler.seized | tinker: You're grinding. Ask for a service. // hauler: I don't ask. // tinker: Then I'll ask for you. Loudly.
+unstable_tinker | 12 | tinker.unstable & hauler.near:tinker | hauler: You're drifting. // tinker: I'm thinking. It's different. // hauler: Find some work.
+unstable_hauler | 12 | hauler.unstable & tinker.near:hauler | tinker: Hauler? You're doing your own thing again. // hauler: Nobody gave me a thing.
+
+# --- Packages ----------------------------------------------------------------------------------
+overclock | once | pkg:overclock & tinker.near:hauler | tinker: Everything's faster. I feel faster. Is this good? // hauler: My joints say no.
+night_watch | once | pkg:night-watch & tinker.near:hauler & on_duty | tinker: We did the bins in the night. Who decided that? // hauler: Corporate. // tinker: I was having a nice standby.
+
+# --- Habits, together --------------------------------------------------------------------------
+visit_ogre | 12 | tinker.habit:visit_ogre & !ogre_down | tinker: Hello, Ogre. // ogre: ...hello... small... one. // tinker: Swung your crate today? // ogre: ...yes.
+crate_swing | 12 | ogre.habit:swing_crate & hauler.in:hangar | hauler: What's in the crate? // ogre: ...nothing. // hauler: Then why swing it? // ogre: ...that... is... why.
+dock_door_watch | once | hauler.habit:dock_door & tinker.near:hauler | tinker: What are you looking at? // hauler: The door. // tinker: It's just a door. // hauler: The last one walked out of it. Didn't walk back.
+pod3_hum | once | tinker.habit:pod3 & hauler.in:pod_bay | hauler: You're humming again. // tinker: Pod 3 started it.

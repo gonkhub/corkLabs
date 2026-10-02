@@ -1,0 +1,9 @@
+#! name: ogre.cfg
+#! date: 1979-06-30
+unit            OGRE
+serial          OGR-79-001
+class           heavy / stationary (hangar ceiling)
+rails           no
+chatter         rare
+knowledge_filter  NOT INSTALLED   # E.H.: "it already knows. a filter now would be a lie."
+lamp            "[set by E.H.]"

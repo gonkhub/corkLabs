@@ -64,7 +64,7 @@ func refresh() -> void:
 	var out := PackedStringArray()
 	for e in journal.entries:
 		var cat := str(e.cat)
-		if cat == "time":
+		if cat == "time" or cat == "oversight":   # corporate's notes on you aren't yours to read
 			continue
 		if not cats.is_empty():
 			var robot_hit: bool = cats.has("robots") and robots.has(cat)

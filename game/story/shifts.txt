@@ -1,0 +1,6 @@
+# The supervisor's shifts. The brief is shown before each shift starts.
+#   shift | title | brief   (\n = new line)
+
+1 | Shift 1: Orientation | Welcome to facility C-7, Supervisor.\n\nYour shift runs 06:00 to 14:00. Keep facility throughput at or above target. Today is orientation: your Duties list walks you through the job, one system at a time. Start with your onboarding file (open the Terminal, type ls, then cat welcome.txt).\n\nThings will go wrong. They always do. Leaks, doors, cameras, units: your job is to keep it all running, and to answer corporate when corporate asks.\n\nEvery action you take costs facility time. Nothing moves until you do.\n\nFormer staff directories are closed to you.
+2 | Shift 2: The Purge | Good morning, Supervisor.\n\nIT Services will purge the former supervisor's home directory and account (dokafor) at 12:00 today. Please confirm the purge in your Duties before then.\n\nThere is nothing in it you need.\n\nCheck your stock before the morning gets away from you.
+3 | Shift 3: Audit | Good morning, Supervisor.\n\nToday is audit day. Compliance will review your terminal activity at 13:00. Supervisors with nothing to hide have nothing to fear.\n\nThis is your last probationary shift. Make it count.

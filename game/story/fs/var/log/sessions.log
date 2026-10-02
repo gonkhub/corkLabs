@@ -1,0 +1,14 @@
+#! date: today
+#! minutes: 2
+SUPERVISOR SESSIONS (last 20)
+1994-02-11 13:58  ehollis   session ended: TRANSFER
+2003-04-01 05:55  rmarrow   logon
+2011-06-02 13:57  rmarrow   session ended: TRANSFER
+2014-03-03 05:55  tvance    logon
+2014-03-05 11:20  tvance    session ended: TRANSFER
+2017-09-18 05:55  jkim      logon
+2017-09-18 14:00  jkim      session ended: TRANSFER
+2019-01-07 05:55  dokafor   logon
+   ...            dokafor   (2,511 sessions)
+-2 days  13:58    dokafor   session ended: TRANSFER
+today    05:55    supervisor  logon

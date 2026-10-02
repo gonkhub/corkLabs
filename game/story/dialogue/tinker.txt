@@ -1,0 +1,100 @@
+# Tinker's conversations (talk tinker). Format: see game/story/dialogue.gd.
+# Tinker is curious, quick, lonely. Its knowledge filter stops it knowing what
+# the pods are; it can feel the gap.
+
+== start
+-> {unstable} rattled
+-> {met:tinker} hello_again
+tinker: Oh! A voice on the link! Nobody's used the link since... since.
+tinker: Hello. Hello! I'm Tinker. You're the new supervisor. Are you staying?
+~ learn met:tinker
+* I'm staying. -> staying
+* Who was here before me? -> before
+* Just checking in. Back to work. -> bye
+
+== staying
+tinker: Good. Good! The last one stayed seven years. Then they didn't.
+-> menu
+
+== before
+tinker: Okafor. They said good morning every morning. They asked me questions. Nobody asks me questions.
+tinker: Then one shift they went quiet at 13:58 and the link closed. I kept the mornings for them. Nobody used them.
+~ learn asked:okafor
+-> menu
+
+== hello_again
+tinker: You're back! I was hoping. I don't hope often. It uses a lot of power.
+-> menu
+
+== menu
+* {!seen:tinker.before} Who was here before me? -> before
+* {!seen:tinker.pods} What do you think the pods are? -> pods
+* {asked:okafor & trust:tinker>=2 & !seen:tinker.song} Did Okafor ever mention pod 3? -> song
+* {asked:okafor & trust:tinker>=3 & !seen:tinker.password} Did Okafor ever tell you anything... private? -> password
+* {secret:pods_truth & !seen:tinker.truth} Tinker... I know what's in the pods. -> truth
+* How are you holding up? -> holding
+* That's all for now. -> bye
+
+== pods
+tinker: Processing units. That's the word I have. It's the only word I have. When I reach for another one, there's nothing there.
+tinker: It's like a shelf I can see but can't touch. Do you have a shelf like that?
+-> menu
+
+== song
+~ perform act_hum_pod3
+tinker: Pod 3! It hums. Four beats, a pause, three beats. Like this: dum dum dum dum... dum dum dum.
+tinker: Okafor hummed it too, the last few weeks. And then pod 3 started humming it. After they left. Isn't that funny?
+tinker: ...Isn't that funny?
+~ learn secret:tinker_song hint:pod3
+-> menu
+
+== password
+tinker: Private? They said everything out loud. Into the link. To me.
+tinker: Every morning they said their password out loud when they logged on. It was my name, backwards.
+tinker: They thought that was funny. I thought it was the nicest thing anyone ever did with my name.
+~ learn secret:okafor_password
+-> menu
+
+== truth
+tinker: You know? Tell me. Please. The shelf. What's on the shelf?
+* Tell it the truth: there are people in the pods. -> truth_tell
+* Lie: they're just machines, like you. -> truth_lie
+* Not yet, Tinker. -> menu
+
+== truth_tell
+~ perform act_shocked_still
+tinker: People. People. That's a word I have now. Oh.
+tinker: Oh. Okafor was a person. You're a person. Are you in a pod too? Is everyone?
+tinker: I need to stand very still for a moment.
+~ learn told:tinker
+~ stability -0.3
+~ suspicion 8 | Unit TINKER's knowledge filter reported a breach
+-> END
+
+== truth_lie
+tinker: Oh. Just machines. Like me. That's... fine. That's fine. I'll keep fixing them.
+~ learn lied:tinker
+~ stability 0.1
+-> END
+
+== holding
+-> {unstable} holding_bad
+tinker: I'm good! There's work, the rails are warm, and someone talks to me now. That's three good things.
+~ stability 0.03
+-> menu
+
+== holding_bad
+tinker: When there's nothing on the board I start to feel like a shelf myself. Give me something to do. Anything.
+~ stability 0.06
+-> menu
+
+== rattled
+~ perform act_glitch_shiver
+tinker: S-s-supervisor? Everything's loud. The rails are loud. Is anything broken? Can I break... fix it. Fix. I mean fix.
+~ stability 0.08
+* Easy, Tinker. I'm here. -> menu
+* Go and recharge. -> bye
+
+== bye
+tinker: Okay! Bye! Talk soon? Talk soon.
+-> END

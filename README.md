@@ -137,12 +137,18 @@ Facility.spend(900.0, "Hauler clears the jam")            # or any exact amount
 
 and the facility (robots, scheduled events, shifts) plays out through exactly
 that much time. Costs live in `Facility.COST` (`game/sim/facility.gd`):
-dialogue line 1 min, choice 2 min, interaction 5 min, task 15 min.
+dialogue line 3 min, choice 5 min, interaction 15 min, task 45 min (a shift is
+480 minutes: a couple of dozen real actions, so nobody sees everything in a day).
 Animations keep running in real time; the facility's *state* waits for you.
+
+There is **no Wait**: the player can't just let time pass. Time moves when
+they do something that matters: orders, duties, reading a file for the first
+time, a conversation, inspecting a device, a round of Night Run, clocking in.
+(The F1 dev keys still pass time, for testing.)
 
 Closing the game saves it; opening it resumes at the exact saved moment. The
 corkLabs OS clock shows facility time, never the real clock. A new facility
-starts at Day 1 05:55 (first shift at 06:00).
+starts at Day 1 05:55, at the first shift's brief (the shift starts at 06:00).
 
 | Piece | File | Job |
 | --- | --- | --- |
@@ -150,7 +156,10 @@ starts at Day 1 05:55 (first shift at 06:00).
 | `EventScheduler` | `game/sim/event_scheduler.gd` | Events booked at exact facility times; ties fire in booking order |
 | `FacilityLog` | `game/sim/facility_log.gd` | The journal: a timestamped line for everything that happens |
 | `Facility` (autoload) | `game/sim/facility.gd` | Session start/save, `spend()` / `act()`, `clock_text()` |
-| `ShiftSchedule` | `game/sim/shift_schedule.gd` | First real system: Day/Swing/Night shifts, and a template for new systems |
+| `ShiftSchedule` | `game/sim/shift_schedule.gd` | Books shift start/end events. The game uses one shift a day (Day, 06:00-14:00); a template for new systems |
+| `Campaign` | `game/story/campaign.gd` | The supervisor's three shifts: brief, duties, scripted events, end of shift, the night, how hard the facility pushes (see below) |
+| `Directives` | `game/story/directives.gd` | Corporate's timed demands |
+| `UnitRequests` | `game/sim/unit_requests.gd` | What the units ask the supervisor |
 
 **Writing a system** (robots, pipes, pods...): any object with `sim_id`,
 `sim_tick(sim, dt)`, and optionally `sim_start`, `sim_event`, `sim_save`,
@@ -174,7 +183,8 @@ performing what it's doing (work clips at a job, idles otherwise).
 | Need | Goes down | Goes up | When it runs low |
 | --- | --- | --- | --- |
 | **Power** | always a little; more moving, most working | on its dock | below its reserve it drops everything to recharge; at 0 it stalls and limps on emergency cells |
-| **Software stability** | standing idle (robots think the work keeps *them* running), stalling, being overruled by orders | working, finishing jobs, a reboot | it turns **independent and unpredictable** (below) |
+| **Software stability** | standing idle (robots think the work keeps *them* running; slower while waiting for orders), stalling, being overruled, overflowing pod waste | working, finishing jobs, a reboot, a conversation | it turns **independent and unpredictable** (below) |
+| **Wear** | working and riding (more when overclocked) | a service (Tinker, a servo bundle) | slower; past 50% it can **seize** (Tinker reboots it by hand, or remote-reboot, or it frees itself after 2 h) |
 
 **Software stability** is the heart of a robot's reliability:
 
@@ -194,9 +204,28 @@ facility (corkHQ may notice "anomalous damage"); the journal's `sabotage`
 lines say who did it. Tinker (curious, fidgety) turns independent faster and
 is likelier to sabotage than stoic Hauler.
 
+**Roles.** Every kind of work belongs to particular units (`FacilityPlant`
+`KINDS[...].units`, copied onto the job): **Tinker** pods, the relay,
+cameras, the uplink, unpacking, salvaged parts, and it's the only one who
+services or reboots a unit; **Hauler** leaks, filters, debris, the gate,
+pod waste, the rails, hauling; **Ogre** everything in the hangar (freight,
+the coolant feed, the waste compactor); stuck doors are Hauler's or
+Tinker's. A unit refuses someone else's work ("No. That's Hauler's work.").
+
+**Who decides.** A **stable** unit (60%+) doesn't choose its own work: it
+does the jobs you **request** (Cameras: click the thing → Order maintenance,
+pick the unit or let `Dispatch` pick the best free one) and the one you send
+it to, and it always does as it's told. Below stable it has a will of its
+own: it picks any open job, and orders count for less and less. Off duty a
+**night autopilot** requests breakdowns and routine work (not the chores:
+those wait for you, unless the night-watch package is in). An order sends
+the unit on an **errand** (`Facility` errands): no time passes when you
+order; the facility runs on fast-forward for a few real seconds while you
+watch it ride there and work, and stops when the job's done.
+
 **Deciding: utility scores, like a mixer.** Every couple of facility seconds
-a robot scores everything it could do (each reachable job, recharge, stand
-by, wander) and does the best. Job scores come from priority × skill ×
+a robot scores everything it could do (each job it may take, recharge,
+stand by, wander) and does the best. Job scores come from priority × skill ×
 distance × power × hunger for work (low stability makes it hungrier). The F1 robots page shows the top scores
 and the reason; every change of mind goes in the journal with the runner-up:
 
@@ -204,10 +233,10 @@ and the reason; every change of mind goes in the journal with the runner-up:
 06:55  Hauler: work #7 Replace fuse (0.60: high priority, precise skill 35%, 12 m away); next best stand by (0.34)
 ```
 
-**Orders are a strong nudge, not a command.** `agent.give_order(sim, "job", id)`
-(or `"recharge"`, `"standby"`, `"cancel"`) adds the robot's `obedience` to
-that option. Usually it wins, and the robot says "On it." But below its power
-reserve it recharges first, it refuses work it's hopeless at ("No. 'Clear
+**Orders.** `agent.give_order(sim, "job", id)` (or `"recharge"`, `"standby"`,
+`"cancel"`). A stable unit does it ("On it."); an unstable one weighs it
+against its own ideas. Below its power reserve it recharges first (to a safe
+margin, then goes), it refuses work it's hopeless at ("No. 'Clear
 debris' is heavy work; I'm not built for it.") or can't get to ("I can't get
 to Workbench: Freight gate is blocked (jammed)."), and an unstable robot finds
 it hard to stand still. It says its answer on camera; it's also journaled.
@@ -235,6 +264,32 @@ middle of its hangar's ceiling and never leaves. It scores only jobs within
 on its own mains coupling (a dock on its mount), and turns down anything else
 ("I can't get to Bay 2: it's out of my reach, and I don't leave the hangar.").
 In 3D it slowly turns on the spot to bring its crane round over its work.
+
+### Units' lives: props and habits
+
+- **Props** (`UnitProps`, `game/sim/unit_props.gd`): Hauler's **wrench**
+  (lives on the workshop tool rack; Hauler fetches it for leaks, the gate
+  and doors, and puts it back after), Tinker's **radio** (the bench), Ogre's
+  **crate** (it swings it from one spot to the other). Held props follow the
+  unit's hook or claw. If Hauler can't reach its wrench (a stuck door), it
+  asks you to **send Tinker** for it, or makes do (slower).
+- **Habits** (`game/sim/habits.txt`): after 15 idle minutes a stable unit
+  goes and does something it likes (Hauler tosses its wrench, watches the
+  dock door, listens to the pipes; Tinker fiddles with the radio, hums at pod
+  3, visits Ogre; Ogre swings its crate, sweeps its lamp). Each plays an
+  `idle_*` clip once it's recorded.
+- **On the link**, a unit stops and turns to face the nearest camera.
+- **A camera a unit repairs** is repaired from the point on the rail closest
+  to it; the camera comes back on looking at the unit (no zoom), which
+  backs off and waves (`act_wave_camera`, to record).
+- **Units never give each other orders.** Who does what is the supervisor's
+  call. A unit doesn't bring up the same passive topic twice in half an hour
+  (waste: 2 h).
+- **Lines that matter aren't talked over:** a unit's question, story lines,
+  exchanges and answers to orders queue one after another; idle chatter
+  waits. A question is also written under the picture.
+- **A unit that asks about its job** ("finish it, or go and charge?") holds
+  still until you answer, and an errand's clock waits for you.
 
 ## Rooms and routes
 
@@ -333,10 +388,13 @@ framework: the lines and voices are placeholders to replace.
 - **When** (`RobotChatter`, `game/speech/robot_chatter.gd`, a facility
   system): robots report what happens to them (starting and finishing jobs,
   recharging, low power, stalling, moods, wandering, blocked routes, answers
-  to orders); an idle robot sometimes mutters; two robots close together in
-  the same room strike up a **conversation** (one speaks, the other answers a
-  few seconds later), sometimes passing on a job the other is better at;
-  alarms and closed routes get a comment. Urgent things are always said; the
+  to orders); an idle robot sometimes mutters; alarms and closed routes get
+  a comment. A robot doesn't repeat any of its last 12 lines.
+- **Exchanges** (`game/speech/exchanges.txt`, `exchanges.gd`): short
+  contextual conversations between units, picked from what's true right now
+  (`hauler.holding:wrench`, `ogre.broken`, `coolant_low`, `pkg:night-watch`,
+  anything the story knows...), each with its own repeat rule (`once`, or
+  every n hours). Many only happen after something you did. Urgent things are always said; the
   rest depends on each robot's cooldown and chattiness. Everything said goes
   in the journal (`speech`), and talk has its own random numbers, so it never
   changes what else happens.
@@ -411,6 +469,7 @@ placeholders.
 | `game/sounds/` | Sound files to audition by name (drop .wav/.ogg/.mp3 here) |
 | `game/speech/` | Robot speech: `barks.txt` (the lines), `RobotChatter` (when), `BarkLibrary`, `RobotVoice` |
 | `game/corporate/` | Corporate: `CorkHQ`, `Requisitions`, `SoftwareLibrary`, and their data files (`hq_lines.txt`, `catalog.txt`, `packages.txt`) |
+| `game/story/` | The story: `Campaign` (shifts), `Knowledge` (what you've found), `Oversight` (standing, suspicion, audits, dismissal), `VirtualFS` + `fs/` (the OS's files), `Dialogue` + `dialogue/` (conversations), `SupervisorArchive` (across runs), and the data files. See [docs/STORY.md](docs/STORY.md) (spoilers) |
 | `os/` | The corkLabs OS: desktop, windows, theme, and its apps (`os/apps/`) |
 | `addons/corklabs_pipeline/` | The editor Takes panel |
 | `tools/` | Command-line tools (bake all, demo takes, screenshots, test runner) |
@@ -428,7 +487,11 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Log on** opens the real facility (`user://facility_save.json`) exactly
   where you left it, and reopens the windows you had open, where they were.
   The greeting uses your Windows user name (the only thing it reads from the PC).
+  The login screen also shows your **personnel file** (every run so far).
   **Shut down** quits.
+- **Shift screens** cover the desktop between shifts: the **brief** (Clock
+  in), **end of shift** (Clock out: the night passes), **dismissal** (retry
+  the shift, or start over), and the **end of this build**. See "Shifts and the story".
 - **Windows**: open apps from the desktop icons (double-click), the
   **corkLabs** start menu, or a right-click on the desktop. Drag the title
   bar to move; drag to the left/right screen edge to snap to half the screen,
@@ -438,10 +501,13 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 - **Desktop right-click**: show desktop (minimise all), cascade, close all,
   Settings.
 - **Taskbar**: open windows, a blinking **ALARM** light while anything is
-  broken (click: Plant), throughput, **Wait** (let 5 min / 15 min / 1 h / 4 h
-  of facility time pass, a minute per frame so you watch it happen; an alarm
-  or a shift report stops the wait early, and you can stop it yourself), and
-  the **facility clock** with the current shift (never the real clock).
+  broken (click: Plant; a dead camera doesn't count), throughput, and the **facility clock** with the
+  shift (never the real clock). No Wait button, on purpose. **REQUESTS n**
+  lights up when the units are asking you something (click: Cameras, on the
+  unit that's asking, with its menu open).
+- **Discoveries** (a secret, a new program) pop up as a toast. Some apps
+  aren't on the desktop until you find them (Night Run); the start menu shows
+  them as "???".
 - **Notifications**: alarms and shift reports pop up bottom right (each kind
   can be turned off in Settings) and are all kept in the
   **notification centre**: click the clock (a dot means there's something new).
@@ -449,20 +515,30 @@ other flat scenes it restarts itself without VR. The VR recorder is now
 
 | App | What it shows | What you can do |
 | --- | --- | --- |
-| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. **Observation only** | Drag to pan/tilt, scroll to zoom, double-click to reset; arrows, + / -, Home; 1-9 camera, G grid, **N night vision**, F filter, M mute. You hear the facility through the open camera (grid: the one under the mouse). Feeds run at a locked 30 fps. Cameras can auto-track a robot (none do right now). All free: looking costs no time |
-| **Units** | Each robot: what it's doing, power, software stability (and how independent it is), standing order, what it's weighing up and why | Order: recharge, stand by, cancel (2 min); **remote reboot** (needs the remote-reboot package) |
-| **Requisitions** | The catalogue (resources, parts, new robot models), your budget, your orders and their status, stock | Order items (2 min); corporate approves the big ones, corkHQ reports every step |
-| **Work Orders** | The job board (open, or all with finished) | Order a robot onto a job; raise/lower priority (2 min) |
-| **Plant** | Throughput, coolant, heat, dock power, every device's state and job | |
+| **Cameras** | Seven CCTV cameras across the rooms (two in the hangar), one at a time or all in a grid; robots' speech floats over them. A **units bar** (one chip per unit: power, ASKS when it has a request, its state if it's unstable or offline). **This is where you run the facility** | **Hover** a unit or a machine: it's outlined, and a **card** shows what it is and how it's doing (a unit: its state, ON THE LINK / ASKING / HOLDING, what it's doing, power, stability, condition, trust; a machine: FAULT / IN HAND / NO PART..., its sync or room, the job's progress, coolant, the last inspection). **Pop out** (or P) opens the current camera in a window of its own (as many as you like; remembered with the layout; requests and the unit link stay in the main Cameras window). **Left-click** (no drag): its menu at the cursor (`os/object_menu.gd`). A unit: answer its request, **Talk** (once you know you can; the conversation runs under the picture, its words float over it), send it to a job, recharge, stand by, cancel its order, **Diagnose** (30 min), **Book a service** (servo bundle), remote reboot; a seized unit: send someone to reboot it. A machine: **Order maintenance** (the best free unit is sent), call it off; with no part in stock: order / express the part, or **patch it** without; Inspect (30 min); pipes: pump in a coolant canister. The workbench: activate crated units. A dead feed clicks as its own camera. Looking (drag to pan/tilt, scroll to zoom, 1-9, G grid, N night vision, F filter, M mute) is free |
+| **Forms** | corkHQ's paperwork, once someone tells you which form to file (Form C-9: a replacement core for Ogre) | Fill in the fields (from what you've found: `/sys/units/ogre.cfg`, `diagnose`, your Notes) and **File it** (75 min). HQ reviews it 30-60 min later; a wrong field comes back saying which. Paperwork is how big things are paced |
+| **Notes** | Your notebook: kept on your desk (OS settings), across runs; HQ never reads it | **Pages** (+ adds, the first line names it), **Ctrl+F** finds across pages (F3 next), select text and pick a **colour**, a font and size per page |
+| **Duties** | Corporate's checklist for this shift | Do a duty (its minutes); undone ones cost standing at 14:00. Some tick themselves off (read the Code of Conduct) |
+| **Requisitions** | The catalogue with what's in stock, WAITING FOR PARTS (repairs that can't be ordered for want of a part), your budget, your orders | Order items (5 min), **Express** (+75%, about a third of the time); deliveries arrive as crates the units bring in |
+| **Plant** | Throughput, coolant, heat, dock power, every device's state and job (doors, cameras and the uplink too) | Pick a device: **Inspect** (30 min: wear rate, when it needs work, who's on it, the part it needs). Fixing things is done in Cameras |
+| **Files** | The OS file system (the same files as the Terminal) | Read files (the first read costs time), decrypt, run programs; hidden files once you know they exist (`ls -a`) |
 | **Facility Log** | The whole journal with filters (alarms, robots, work, plant, you) | |
-| **Terminal** | A command line: `help`, `status`, `units`, `jobs`, `plant`, `routes`, `log [n] [category]`, and commands you have to learn (`connect`, `corkpkg`: see Corporate) | `order <robot> <job#/recharge/standby/cancel>`, `priority <job#> <level/+/->`, `wait <min>`, `block/unblock <route>` (needs route-control), `open <app>`; up/down for history |
+| **Terminal** | The command line you **learn** (orders are mostly given in Cameras): `help` lists only the commands you know (a new supervisor knows `ls`, `cd`, `cat`, `pwd`, `status`, `clear`, `order`); files, corkHQ, units and a game teach the rest, and typing any real command teaches it | Everything the apps do, plus the file system (`ls -a -l`, `cd`, `cat`, `cp`, `grep`, `find`, `decrypt`, `run`; some folders are locked to other accounts), `units` and `jobs` (read-only), `talk <unit>` (opens the unit link in Cameras), `duties`/`duty <id>`, `whoami`, `who`, `ps`, `history`, and other accounts (`su dokafor`, `su maint`: `auditctl`, `hqctl`, `unitctl`, `pkgctl`, `podctl`, `kill`). Up/down for history, Esc cancels |
+| **Night Run** | Not on the desktop until found (`/opt/games`). A former supervisor's arcade game: a cart on a rail in the dark | Left/right, Space, Esc. Each run costs 10 facility minutes (and is logged). It has secrets |
 | **Settings** | Interface size, fullscreen, boot screen, reopen windows, which pop-ups show, camera sound (mute, feed volume), robot voices + volume, forget window layout | |
+| **DevTools** (hidden) | Typing `dev` in the Terminal puts it on the desktop (`dev off` removes it; kept with the OS settings) | Testing: pass time, end the shift, skip the night (a chunk per frame; a skip never gets you dismissed, stops early when a crisis starts, and restarts the crisis clocks, or tick **Keep it alive** to top up coolant and skip right through); standing, suspicion, funds, never fired; break or fix any device, heal the facility; seize, free, power, stability, wear and trust per unit; stock, packages, commands, secrets; run any scripted event now |
 
 Robots answer orders out loud, on camera; the apps just say the order was sent.
 
 Every supervisor action goes through `Supervisor` (`game/supervisor.gd`),
-which journals it and spends the time (an order or priority change: 2 min).
-Opening apps and looking through cameras is free.
+which journals it and spends the time (an order or priority change: 5 min;
+reading, talking, duties, inspecting, playing: see docs/STORY.md). Opening
+apps and looking through cameras is free.
+
+The **corkHQ panel** has one button: **Reply**, a conversation with Liaison
+Pell inside the panel (it costs time; what you say is noted). While it's
+open the button reads **Close**. If the uplink drops mid-conversation, the
+line goes dead and the reply closes.
 
 OS preferences and the window layout are saved in `user://os_settings.json`
 (`OSSettings`), separate from the facility save: they're the player's
@@ -482,6 +558,67 @@ one `OSTheme` (`os/os_theme.gd`). Adding an app: copy one in `os/apps/`, give
 it an id/title/icon in `_init()`, and add it to `APPS` in `os/desktop.gd`.
 
 `tools/screenshot.gd` can drive it: `--call log_on --call open_app:plant`.
+
+## Shifts and the story
+
+The game is **three shifts** (Day 1-3, 06:00-14:00) in one continuous
+timeline, run by `Campaign` (`game/story/campaign.gd`). Each shift has a
+brief, **duties** (corporate's checklist), **scripted events** (corkHQ
+messages, robot lines, faults, audits, clips to perform) and ends at 14:00
+with a review. Clocking out runs the night (the facility carries on without
+you) up to the next brief. After shift 3: the end of this build (the endings
+are archived in `docs/archive/endings.txt` for now).
+
+Most of the work is **routine**, no parts, just the units' time and a
+little wear: pods drift out of calibration (Tinker), filters clog, pod waste
+fills its bins about once a day and the hangar compactor fills with it
+(Hauler takes the waste down, Ogre empties the compactor; full bins wear on
+every unit's software), rail grime slows everyone (Hauler), freight arrives
+(Ogre). The facility also **breaks**: leaks, the relay (and, 20 minutes
+later, the corkHQ uplink on its battery), debris, the freight gate, three
+passage doors (stuck = route blocked), seven cameras (NO SIGNAL), the
+uplink. A proper repair holds at least 8 hours; a hot facility strains its
+pipes, so neglect spirals. **Nothing is fixed until you order it**: a fault posts a job,
+but stable units only work on jobs you've asked for (Cameras: click the
+thing, Order maintenance: `Dispatch` sends the most suitable free unit).
+Units below "stable" stop waiting and pick their own work (and start
+ignoring you). Off duty, a **night autopilot** asks for everything.
+**Repairs use spare parts** from stock, taken when you order the repair (no
+part: order one, or patch it without, and it won't hold). **Units wear out**: worn units slow down and seize up
+(another unit reboots them by hand), and need services (servo bundles).
+The **units ask** for things (UnitRequests); corporate issues **directives**
+with deadlines (Directives); **Pell escalates** as you break rules; and the
+**uplink** relay, while it's down, blinds corkHQ entirely (talk Hauler into
+an accident, or `hqctl disable` as maint). **The cameras are corporate's
+eyes**: what happens in a room (talking to a unit, a unit wrecking
+something) is only on the record if a working camera covers that room. How
+hard the facility pushes depends on the shift (`Campaign.PRESSURE`:
+orientation is gentler; nights are quiet).
+
+`Oversight` (`game/story/oversight.gd`) is how corporate judges you:
+**standing** (0-100; reviews, duties, crashes; 0 = dismissed for
+performance), **suspicion** (policy violations; hourly audits; two catches =
+dismissed for misconduct) and **catastrophes** (coolant empty 30 min,
+throughput under 30% for an hour). Dismissal offers **retry the shift** (the
+save is checkpointed at every brief: `facility_save_checkpoint.json`) or
+**start over**.
+
+`Knowledge` (`game/story/knowledge.gd`) is what this supervisor has found:
+commands, files read, secrets, story flags. Conditions everywhere (files,
+events, duties, dialogue) check it. It also holds a few numbers: **trust**
+("trust:tinker", 0-5), built by a conversation every two facility hours and
+by how you treat the unit (answering its requests, services, keeping it
+working; ignoring, overruling and leaving it seized cost it).
+
+The OS has a **file system** (`game/story/fs/`, one text file per file, with
+`#!` headers for hidden, encrypted, restricted, appearing, disappearing
+files), former supervisors' home folders, corporate memos, logs, a game.
+Units can be **talked to** (`game/story/dialogue/*.txt`: a small script
+format with choices, conditions and effects).
+
+Everything's data: rewrite any line without touching code. The full map of
+secrets, chains, costs and pushback, and the list of clips to perform in VR, is in
+**[docs/STORY.md](docs/STORY.md)** (spoilers).
 
 ## Corporate: corkHQ, requisitions, software
 
@@ -504,9 +641,10 @@ corporate tops up after every review (more for a better grade), and a
 catalogue in `game/corporate/catalog.txt` (resources, replacement parts, new
 robot models: price, delivery hours, whether corporate must approve it, and
 what happens on delivery). Orders go pending → approved/denied (refunded) →
-in transit → delivered. Placeholders for now: delivered parts go into stock
-and robot units arrive crated; the coolant canister is wired (tops up the
-reservoir).
+in transit → delivered. Parts go into stock (express: couriered straight
+in; standard: a crate the units bring in), crated units are activated at
+the workbench, and coolant canisters are fed into the loop by Ogre (the
+coolant feed in the hangar).
 
 **Software packages** (`SoftwareLibrary`, `game/corporate/packages.txt`):
 unlockables downloaded from the Cork package server **through the
@@ -523,18 +661,18 @@ corkpkg installed
 ```
 
 Corporate only approves packages up to your **clearance** (1-3), which rises
-with A/B reviews and falls with an F. Three packages already do something:
-`remote-reboot` (the Units app's Reboot button), `route-control` (the
-Terminal's `block` / `unblock`), `firmware-stabilizer` (robots' software
-drifts half as fast). The rest (peer-sync, pathfinder-pro,
-predictive-maintenance, self-service, diag-suite, night-watch, overclock)
-are placeholders for robot behaviours and supervisor tools to come. Check
-for one in code with `Supervisor.has_software("id")`.
+with A/B reviews and falls with an F. Every package does something:
+`ir-vision` (night vision for the cameras), `remote-reboot` (a unit's menu;
+also frees a seized unit), `route-control` (`block` / `unblock`),
+`firmware-stabilizer` (software drifts half as fast), `night-watch` (the
+night crew does the chores too; more wear overnight), `overclock` (units 30%
+faster; more wear, faster drift). Check for one in code with
+`Supervisor.has_software("id")`.
 
 ## Using robots in the game
 
 ```
-RobotView (on the rail network)      game/robot_view.gd: rides routes, faces travel, catches up after a Wait
+RobotView (on the rail network)      game/robot_view.gd: rides routes, faces travel, catches up after time jumps, performs story clips
 └── Swing                            pendulum pivot (sway when it speeds up, brakes or turns)
     └── RobotActor                   robot_id = "hauler", scaled by traits.visual_scale
 ```
